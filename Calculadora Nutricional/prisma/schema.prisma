@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  tables    GeneratedTable[]
+  customIngredients CustomIngredient[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ingredient {
+  id        String   @id @default(cuid())
+  name      String
+  energy    Float    // kcal
+  carbs     Float    // g
+  protein   Float    // g
+  fatTotal  Float    // g
+  fatSat    Float    // g
+  fatTrans  Float    // g
+  fiber     Float    // g
+  sodium    Float    // mg
+  sugarTotal Float?  // g
+  origin    String?  // "TACO", etc.
+}
+
+model CustomIngredient {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  energy    Float
+  carbs     Float
+  protein   Float
+  fatTotal  Float
+  fatSat    Float
+  fatTrans  Float
+  fiber     Float
+  sodium    Float
+  sugarTotal Float
+  createdAt DateTime @default(now())
+}
+
+model GeneratedTable {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  portion   Float
+  uom       String   // "g" or "ml"
+  householdMeasure String
+  popGroup  String   // "adultos", etc.
+  items     TableItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TableItem {
+  id        String   @id @default(cuid())
+  tableId   String
+  table     GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  
+  name      String
+  quantity  Float    // g
+  isAddedSugar Boolean @default(false)
+  
+  // Snapshotted nutritional values (per 100g)
+  energy    Float
+  carbs     Float
+  protein   Float
+  fatTotal  Float
+  fatSat    Float
+  fatTrans  Float
+  fiber     Float
+  sodium    Float
+  sugarTotal Float?
+}
