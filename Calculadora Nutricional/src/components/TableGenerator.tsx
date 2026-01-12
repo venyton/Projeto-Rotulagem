@@ -42,6 +42,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const [portionSize, setPortionSize] = useState<number>(initialData?.portionSize || 0);
     const [householdMeasure, setHouseholdMeasure] = useState(initialData?.householdMeasure || "");
     const [popGroup, setPopGroup] = useState<PopGroup>((initialData?.popGroup as PopGroup) || POPULATION_GROUPS.ADULTS);
+    const [isSupplement, setIsSupplement] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const [result, setResult] = useState<{
@@ -104,6 +105,37 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         }
     };
 
+    const fixColorsOnClone = (clonedDoc: Document) => {
+        const style = clonedDoc.createElement('style');
+        style.innerHTML = `
+            :root {
+                --background: #ffffff !important;
+                --foreground: #000000 !important;
+                --card: #ffffff !important;
+                --card-foreground: #000000 !important;
+                --popover: #ffffff !important;
+                --popover-foreground: #000000 !important;
+                --primary: #000000 !important;
+                --primary-foreground: #ffffff !important;
+                --secondary: #f3f4f6 !important;
+                --secondary-foreground: #111827 !important;
+                --muted: #f3f4f6 !important;
+                --muted-foreground: #6b7280 !important;
+                --accent: #f3f4f6 !important;
+                --accent-foreground: #111827 !important;
+                --destructive: #ef4444 !important;
+                --border: #e5e7eb !important;
+                --input: #e5e7eb !important;
+                --ring: #000000 !important;
+            }
+            .bg-white { background-color: #ffffff !important; }
+            .bg-gray-100 { background-color: #f3f4f6 !important; }
+            .border-black { border-color: #000000 !important; }
+            .text-black { color: #000000 !important; }
+        `;
+        clonedDoc.head.appendChild(style);
+    };
+
     const handleExportPNG = async () => {
         const element = document.getElementById("nutrition-label-container");
         if (!element) {
@@ -112,12 +144,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         }
 
         try {
-            // Using a lower scale if it was crashing, or ensure fonts are ready
             const canvas = await html2canvas(element, {
                 scale: 3,
                 useCORS: true,
                 logging: false,
-                backgroundColor: "#ffffff"
+                backgroundColor: "#ffffff",
+                onclone: fixColorsOnClone
             } as any);
 
             const dataUrl = canvas.toDataURL("image/png");
@@ -134,25 +166,19 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         }
     };
 
-    const handleExportLupaVertical = async () => {
-        const element = document.getElementById("lupa-vertical");
-        if (!element) return;
-        await exportLupaElement(element, "vertical");
-    };
 
-    const handleExportLupaHorizontal = async () => {
-        const element = document.getElementById("lupa-horizontal");
-        if (!element) return;
-        await exportLupaElement(element, "horizontal");
-    };
 
-    const exportLupaElement = async (element: HTMLElement, suffix: string) => {
+    const exportLupaElement = async (elementId: string, suffix: string) => {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
         try {
             const canvas = await html2canvas(element, {
                 scale: 4,
                 useCORS: true,
                 logging: false,
-                backgroundColor: null
+                backgroundColor: null, // Transparent background
+                onclone: fixColorsOnClone
             } as any);
 
             const dataUrl = canvas.toDataURL("image/png");
@@ -181,7 +207,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     perPortion: result.perPortion,
                     portionSize,
                     householdMeasure,
-                    popGroup
+                    popGroup,
+                    isSupplement
                 })
             });
 
@@ -241,7 +268,22 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Grupo Populacional</Label>
+                            <div className="flex items-center justify-between">
+                                <Label>Grupo Populacional</Label>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="is-supplement"
+                                        checked={isSupplement}
+                                        onCheckedChange={(c) => setIsSupplement(!!c)}
+                                    />
+                                    <label
+                                        htmlFor="is-supplement"
+                                        className="text-sm font-medium leading-none cursor-pointer"
+                                    >
+                                        Suplemento Alimentar
+                                    </label>
+                                </div>
+                            </div>
                             <Select value={popGroup} onValueChange={(v) => setPopGroup(v as PopGroup)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione" />
@@ -265,7 +307,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                         <div className="space-y-2">
                             {ingredients.map((item, idx) => (
-                                <div key={idx} className="flex items-end gap-3 p-3 border rounded-md bg-white">
+                                <div key={idx} className="flex items-end gap-3 p-3 border rounded-md bg-card">
                                     <div className="flex-1 space-y-1">
                                         <div className="font-medium text-sm">{item.ingredient.name}</div>
                                         <div className="flex items-center gap-2">
@@ -288,7 +330,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                     htmlFor={`added-sugar-${idx}`}
                                                     className="text-xs font-medium leading-none cursor-pointer"
                                                 >
-                                                    Açúcar +
+                                                    É açúcar adicionado
                                                 </label>
                                             </div>
                                         </div>
@@ -304,6 +346,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 </div>
                             )}
                         </div>
+                        {ingredients.length > 0 && (
+                            <div className="mt-4 pt-4 border-t flex justify-between items-center bg-muted/50 p-4 rounded-md">
+                                <span className="font-semibold text-sm">Peso Total dos Ingredientes:</span>
+                                <span className="font-bold text-lg text-primary">{ingredients.reduce((acc, item) => acc + (item.quantity || 0), 0).toFixed(1)} g</span>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -326,23 +374,21 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 <div className="flex flex-col items-center gap-4 w-full">
                                     <div className="text-sm font-semibold text-gray-500 w-full text-center border-t pt-4">Modelos de Lupa (ANVISA)</div>
 
-                                    <div className="flex flex-wrap justify-center gap-8 items-start">
+                                    <div className="flex flex-wrap justify-center gap-8 items-end">
                                         <div className="flex flex-col items-center gap-2">
-                                            <span className="text-xs text-muted-foreground">Vertical / Empilhado</span>
-                                            <MagnifyingGlassLabel
-                                                {...checkFOP(result.per100g)}
-                                                layout="vertical"
-                                                id="lupa-vertical"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-col items-center gap-2">
-                                            <span className="text-xs text-muted-foreground">Horizontal</span>
-                                            <MagnifyingGlassLabel
-                                                {...checkFOP(result.per100g)}
-                                                layout="horizontal"
-                                                id="lupa-horizontal"
-                                            />
+                                            <div className="flex items-center gap-2">
+                                                <div
+                                                    id="wrapper-lupa-horizontal"
+                                                    className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
+                                                    style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
+                                                >
+                                                    <MagnifyingGlassLabel
+                                                        {...checkFOP(result.per100g)}
+                                                        layout="horizontal"
+                                                        id="lupa-horizontal"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -360,16 +406,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 <Button variant="outline" onClick={handleExportPNG} className="w-full">
                                     <Download className="mr-2 h-4 w-4" /> Exportar Tabela
                                 </Button>
-                                {Object.values(checkFOP(result.per100g)).some(Boolean) && (
-                                    <>
-                                        <Button variant="outline" onClick={handleExportLupaVertical} className="w-full">
-                                            <Download className="mr-2 h-4 w-4" /> Lupa Vertical
-                                        </Button>
-                                        <Button variant="outline" onClick={handleExportLupaHorizontal} className="w-full">
-                                            <Download className="mr-2 h-4 w-4" /> Lupa Horizontal
-                                        </Button>
-                                    </>
-                                )}
                                 <Button variant="outline" onClick={handleExportExcel} className="w-full">
                                     <Download className="mr-2 h-4 w-4" /> Exportar Excel
                                 </Button>

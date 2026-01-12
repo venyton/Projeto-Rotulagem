@@ -21,9 +21,9 @@ export function NutritionalLabel({
     const vdr = VDR[popGroup];
 
     const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { label: string, val100: string, valPortion: string, vd: string, sub?: boolean, bold?: boolean }) => (
-        <div className={cn("flex justify-between border-b border-gray-300 py-1 text-sm bg-white", sub && "pl-4")}>
+        <div className={cn("flex justify-between border-b py-1 text-sm", sub && "pl-4")} style={{ borderColor: '#d1d5db', backgroundColor: '#ffffff' }}>
             <span className={cn(bold && "font-bold")}>{label}</span>
-            <div className="flex gap-4 min-w-[140px] justify-end bg-white">
+            <div className="flex gap-4 min-w-[140px] justify-end" style={{ backgroundColor: '#ffffff' }}>
                 <span className="w-12 text-right">{val100}</span>
                 <span className="w-12 text-right">{valPortion}</span>
                 <span className="w-8 text-right font-bold ml-2">{vd}</span>
@@ -34,14 +34,14 @@ export function NutritionalLabel({
     const getVD = (val: number, ref: number | null) => calculateVD(val, ref);
 
     return (
-        <div className="bg-white p-4 border-2 border-black max-w-md font-sans text-black" id="nutrition-label-container">
-            <h2 className="text-xl font-bold border-b-4 border-black pb-1">INFORMAÇÃO NUTRICIONAL</h2>
+        <div className="p-4 border-2 max-w-md font-sans" id="nutrition-label-container" style={{ backgroundColor: '#ffffff', borderColor: '#000000', color: '#000000' }}>
+            <h2 className="text-xl font-bold border-b-4 pb-1" style={{ borderColor: '#000000' }}>INFORMAÇÃO NUTRICIONAL</h2>
             <div className="text-sm mb-2">
                 <p>Porção de {portionSize}g ({householdMeasure})</p>
             </div>
 
-            <div className="border-t-2 border-black">
-                <div className="flex justify-between font-bold text-xs border-b border-black py-1 bg-gray-100">
+            <div className="border-t-2" style={{ borderColor: '#000000' }}>
+                <div className="flex justify-between font-bold text-xs border-b py-1" style={{ backgroundColor: '#f3f4f6', borderColor: '#000000' }}>
                     <span></span>
                     <div className="flex gap-4 min-w-[140px] justify-end">
                         <span className="w-12 text-right">100g</span>
@@ -124,7 +124,7 @@ export function NutritionalLabel({
                 />
 
             </div>
-            <div className="text-xs mt-2 border-t border-black pt-1">
+            <div className="text-xs mt-2 border-t pt-1" style={{ borderColor: '#000000' }}>
                 *Percentual de valores diários fornecidos pela porção.
                 {vdr.fatSat === null && " (Gorduras saturadas: VDR não estabelecido para este grupo)."}
             </div>

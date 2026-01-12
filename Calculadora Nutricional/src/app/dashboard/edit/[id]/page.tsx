@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { TableGenerator } from "@/components/TableGenerator";
 import { SelectedIngredient } from "@/lib/nutrients";
 
-export default async function EditTablePage({ params }: { params: { id: string } }) {
+export default async function EditTablePage(props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) redirect("/login");
 
