@@ -54,7 +54,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         setIngredients(prev => [...prev, { ingredient: ing, quantity: 0, isAddedSugar: false }]);
     };
 
-    const updateIngredient = (index: number, field: keyof SelectedIngredient, val: any) => {
+    const updateIngredient = (index: number, field: keyof SelectedIngredient, val: string | number | boolean) => {
         setIngredients(prev => {
             const draft = [...prev];
             draft[index] = { ...draft[index], [field]: val };
@@ -150,7 +150,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 logging: false,
                 backgroundColor: "#ffffff",
                 onclone: fixColorsOnClone
-            } as any);
+            } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
             const dataUrl = canvas.toDataURL("image/png");
             const link = document.createElement("a");
@@ -168,6 +168,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
 
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const exportLupaElement = async (elementId: string, suffix: string) => {
         const element = document.getElementById(elementId);
         if (!element) return;
@@ -179,7 +180,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 logging: false,
                 backgroundColor: null, // Transparent background
                 onclone: fixColorsOnClone
-            } as any);
+            } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
             const dataUrl = canvas.toDataURL("image/png");
             const link = document.createElement("a");

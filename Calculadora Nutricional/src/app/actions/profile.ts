@@ -4,9 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { hash, compare } from "bcryptjs";
-import { revalidatePath } from "next/cache";
 
-export async function changePassword(prevState: any, formData: FormData): Promise<{ error?: string; success?: string }> {
+export async function changePassword(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: string }> {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 

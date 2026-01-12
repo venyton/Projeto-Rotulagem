@@ -17,6 +17,7 @@ export function AddIngredientForm() {
     const [state, formAction] = useActionState(createCustomIngredient, initialState);
     const [open, setOpen] = useState(false);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (state?.error) {
             toast.error(state.error);

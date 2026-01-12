@@ -4,9 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
-export async function createCustomIngredient(prevState: any, formData: FormData): Promise<{ error?: string; success?: boolean }> {
+export async function createCustomIngredient(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 
@@ -45,7 +44,7 @@ export async function createCustomIngredient(prevState: any, formData: FormData)
 
         revalidatePath("/dashboard/ingredients");
         return { success: true };
-    } catch (e) {
+    } catch (_e) {
         return { error: "Erro ao criar ingrediente" };
     }
 }
@@ -65,7 +64,7 @@ export async function deleteCustomIngredient(id: string) {
         await prisma.customIngredient.delete({ where: { id } });
         revalidatePath("/dashboard/ingredients");
         return { success: true };
-    } catch (e) {
+    } catch (_e) {
         return { error: "Erro ao deletar" };
     }
 }

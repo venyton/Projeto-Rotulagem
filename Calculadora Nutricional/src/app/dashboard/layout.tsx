@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
-import { UserCircle, FileText, Database, LogOut } from "lucide-react";
+import { UserCircle, LogOut } from "lucide-react";
 
 export default function DashboardLayout({
     children,
@@ -14,21 +14,7 @@ export default function DashboardLayout({
 }) {
     const pathname = usePathname();
 
-    const NavItem = ({ href, label, icon: Icon }: { href: string, label: string, icon: any }) => {
-        const isActive = pathname === href;
-        return (
-            <Button
-                asChild
-                variant={isActive ? "secondary" : "ghost"}
-                className="w-full justify-start gap-2"
-            >
-                <Link href={href}>
-                    <Icon className="h-4 w-4" />
-                    {label}
-                </Link>
-            </Button>
-        );
-    };
+
 
     return (
         <div className="flex min-h-screen flex-col">

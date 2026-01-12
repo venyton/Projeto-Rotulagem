@@ -3,6 +3,17 @@ import { calculateVD, roundEnergy, roundMacro, roundSodium, roundSugars, roundSa
 import { VDR, PopGroup, POPULATION_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { label: string, val100: string, valPortion: string, vd: string, sub?: boolean, bold?: boolean }) => (
+    <div className={cn("flex justify-between border-b py-1 text-sm", sub && "pl-4")} style={{ borderColor: '#d1d5db', backgroundColor: '#ffffff' }}>
+        <span className={cn(bold && "font-bold")}>{label}</span>
+        <div className="flex gap-4 min-w-[140px] justify-end" style={{ backgroundColor: '#ffffff' }}>
+            <span className="w-12 text-right">{val100}</span>
+            <span className="w-12 text-right">{valPortion}</span>
+            <span className="w-8 text-right font-bold ml-2">{vd}</span>
+        </div>
+    </div>
+);
+
 interface NutritionalLabelProps {
     per100g: CalculatedNutrients;
     perPortion: CalculatedNutrients;
@@ -19,17 +30,6 @@ export function NutritionalLabel({
     popGroup,
 }: NutritionalLabelProps) {
     const vdr = VDR[popGroup];
-
-    const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { label: string, val100: string, valPortion: string, vd: string, sub?: boolean, bold?: boolean }) => (
-        <div className={cn("flex justify-between border-b py-1 text-sm", sub && "pl-4")} style={{ borderColor: '#d1d5db', backgroundColor: '#ffffff' }}>
-            <span className={cn(bold && "font-bold")}>{label}</span>
-            <div className="flex gap-4 min-w-[140px] justify-end" style={{ backgroundColor: '#ffffff' }}>
-                <span className="w-12 text-right">{val100}</span>
-                <span className="w-12 text-right">{valPortion}</span>
-                <span className="w-8 text-right font-bold ml-2">{vd}</span>
-            </div>
-        </div>
-    );
 
     const getVD = (val: number, ref: number | null) => calculateVD(val, ref);
 

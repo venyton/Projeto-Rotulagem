@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch Custom Ingredients for User
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let customIngredients: any[] = [];
     if (session && session.user?.email) {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
