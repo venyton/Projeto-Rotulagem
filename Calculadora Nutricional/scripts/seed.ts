@@ -127,7 +127,7 @@ async function main() {
         const fiber = parseVal(row[idxFiber]);
         const sodium = parseVal(row[idxSodium]);
 
-        const fats = fatMap.get(tacoId.toString()) || { sat: 0, trans: 0 };
+        const fats = fatMap.get((tacoId || "").toString()) || { sat: 0, trans: 0 };
 
         try {
             await prisma.ingredient.create({
