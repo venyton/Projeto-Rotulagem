@@ -72,7 +72,7 @@ export default function LoginPage() {
                             </Link>
                         </div>
                         <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? "Entrando..." : "Entrar"}
+                            {loading ? "Entrando..." : "ENTRAR"}
                         </Button>
                         <div className="mt-4 text-center text-sm">
                             Não tem uma conta?{" "}
