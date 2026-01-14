@@ -23,6 +23,8 @@ export const authOptions: NextAuthOptions = {
             },
             async authorize(credentials) {
                 try {
+                    const dbUrl = process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL || "MISSING";
+                    console.log("DB URL PREFIX:", dbUrl.substring(0, 10));
                     console.log("Authorizing user:", credentials?.email);
                     if (!credentials?.email || !credentials.password) {
                         return null;
