@@ -46,6 +46,9 @@ export default function LoginPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="bg-red-500 text-white text-4xl font-bold p-4 text-center mb-4 border-4 border-yellow-400 animate-pulse">
+                        TESTE - SE VER ISSO O DEPLOY FUNCIONOU
+                    </div>
                     <form onSubmit={handleSubmit} className="grid gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
