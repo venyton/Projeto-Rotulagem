@@ -59,12 +59,7 @@ export default function LoginPage() {
                             />
                         </div>
                         <div className="grid gap-2">
-                            <div className="flex items-center">
-                                <Label htmlFor="password">Senha</Label>
-                                <Link href="#" className="ml-auto inline-block text-sm underline">
-                                    Esqueceu a senha?
-                                </Link>
-                            </div>
+                            <Label htmlFor="password">Senha</Label>
                             <Input
                                 id="password"
                                 type="password"
@@ -72,6 +67,9 @@ export default function LoginPage() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />
+                            <Link href="#" className="ml-auto inline-block text-sm underline text-muted-foreground hover:text-primary">
+                                Esqueceu a senha?
+                            </Link>
                         </div>
                         <Button type="submit" className="w-full" disabled={loading}>
                             {loading ? "Entrando..." : "Entrar"}

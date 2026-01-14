@@ -23,12 +23,16 @@ export default function DashboardLayout({
                     <span className="text-green-600">Nutri</span>Label
                 </Link>
                 <nav className="flex items-center gap-4 ml-6 text-sm font-medium">
-                    <Link href="/dashboard" className={cn("transition-colors hover:text-foreground/80", pathname === "/dashboard" ? "text-foreground" : "text-foreground/60")}>
-                        Tabelas
-                    </Link>
-                    <Link href="/dashboard/ingredients" className={cn("transition-colors hover:text-foreground/80", pathname === "/dashboard/ingredients" ? "text-foreground" : "text-foreground/60")}>
-                        Ingredientes
-                    </Link>
+                    <Button variant={pathname === "/dashboard" ? "default" : "ghost"} asChild>
+                        <Link href="/dashboard">
+                            Tabelas
+                        </Link>
+                    </Button>
+                    <Button variant={pathname === "/dashboard/ingredients" ? "default" : "ghost"} asChild>
+                        <Link href="/dashboard/ingredients">
+                            Ingredientes
+                        </Link>
+                    </Button>
                 </nav>
                 <div className="ml-auto flex items-center gap-4">
                     <Button variant="ghost" size="icon" asChild>
