@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { registerUser } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ const initialState: { error?: string } = {};
 
 export default function RegisterPage() {
     const [state, formAction] = useActionState(registerUser, initialState);
+    const [showPassword, setShowPassword] = useState(false);
 
     return (
         <div className="flex h-screen w-full items-center justify-center px-4">
@@ -40,7 +41,30 @@ export default function RegisterPage() {
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="password">Senha</Label>
-                            <Input id="password" name="password" type="password" required />
+                            <div className="relative">
+                                <Input
+                                    id="password"
+                                    name="password"
+                                    type={showPassword ? "text" : "password"}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? "Ocultar" : "Exibir"}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                            <Input
+                                id="confirmPassword"
+                                name="confirmPassword"
+                                type={showPassword ? "text" : "password"}
+                                required
+                            />
                         </div>
                         {state?.error && (
                             <p className="text-sm text-red-500">{state.error}</p>

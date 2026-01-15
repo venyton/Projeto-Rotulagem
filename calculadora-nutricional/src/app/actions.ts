@@ -8,9 +8,14 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirmPassword") as string;
 
     if (!email || !password || !name) {
         return { error: "Todos os campos são obrigatórios." };
+    }
+
+    if (password !== confirmPassword) {
+        return { error: "As senhas não coincidem." };
     }
 
     const existingUser = await prisma.user.findUnique({
