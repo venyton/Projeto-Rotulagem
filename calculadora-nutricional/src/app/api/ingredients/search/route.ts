@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const q = searchParams.get("query");
+    const q = searchParams.get("query")?.trim();
     const session = await getServerSession(authOptions);
 
     if (!q || q.length < 2) {
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
             customIngredients = await prisma.customIngredient.findMany({
                 where: {
                     userId: user.id,
-                    name: { contains: q }
+                    name: { contains: q, mode: 'insensitive' }
                 },
                 take: 10
             });
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
         where: {
             name: {
                 contains: q,
+                mode: 'insensitive',
             },
         },
         take: 20 - customIngredients.length,

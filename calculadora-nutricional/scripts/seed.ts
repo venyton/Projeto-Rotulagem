@@ -107,8 +107,7 @@ async function main() {
         return parseFloat(s);
     };
 
-    let count = 0;
-    let errors = 0;
+    const ingredients = [];
 
     for (let i = h1RowIndex + 1; i < data1.length; i++) {
         const row = data1[i];
@@ -129,32 +128,40 @@ async function main() {
 
         const fats = fatMap.get((tacoId || "").toString()) || { sat: 0, trans: 0 };
 
+        ingredients.push({
+            name,
+            energy,
+            protein,
+            carbs,
+            fatTotal,
+            fatSat: fats.sat,
+            fatTrans: fats.trans,
+            fiber,
+            sodium,
+            sugarTotal: 0,
+            origin: 'TACO'
+        });
+    }
+
+    console.log(`Prepared ${ingredients.length} ingredients. Bulk inserting...`);
+
+    // Insert in chunks of 50 to avoid packet size limits if necessary, though createMany handles large batches well.
+    // Given the issues, let's play it safe with chunks.
+    const chunkSize = 50;
+    for (let i = 0; i < ingredients.length; i += chunkSize) {
+        const chunk = ingredients.slice(i, i + chunkSize);
         try {
-            await prisma.ingredient.create({
-                data: {
-                    name,
-                    energy,
-                    protein,
-                    carbs,
-                    fatTotal,
-                    fiber,
-                    sodium,
-                    fatSat: fats.sat,
-                    fatTrans: fats.trans,
-                    sugarTotal: 0,
-                    origin: 'TACO'
-                }
+            await prisma.ingredient.createMany({
+                data: chunk,
+                skipDuplicates: true,
             });
-            count++;
-            if (count % 50 === 0) process.stdout.write(".");
+            process.stdout.write(".");
         } catch (err: any) {
-            process.stdout.write("E");
-            errors++;
-            console.error(`\nERR [ID:${tacoId}]: ${err.message}`);
+            console.error(`\nError inserting chunk ${i / chunkSize}: ${err.message}`);
         }
     }
 
-    console.log(`\nSeeding finished. Inserted ${count}. Errors ${errors}.`);
+    console.log(`\nSeeding finished. Processed ${ingredients.length} items.`);
 }
 
 main()
