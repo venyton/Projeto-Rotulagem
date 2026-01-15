@@ -136,14 +136,14 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
             </div>
 
             {/* Edit Dialog */}
-            {ingredients.map(ing => (
+            {editingId && (
                 <AddIngredientForm
-                    key={ing.id}
-                    initialData={ing}
-                    open={editingId === ing.id}
+                    key={editingId}
+                    initialData={ingredients.find(i => i.id === editingId)}
+                    open={true}
                     onOpenChange={(open) => !open && setEditingId(null)}
                 />
-            ))}
+            )}
         </div>
     )
 }

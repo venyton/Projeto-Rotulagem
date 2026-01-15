@@ -54,9 +54,11 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger || <Button><Plus className="mr-2 h-4 w-4" /> Novo Ingrediente</Button>}
-            </DialogTrigger>
+            {(trigger || !isControlled) && (
+                <DialogTrigger asChild>
+                    {trigger || <Button><Plus className="mr-2 h-4 w-4" /> Novo Ingrediente</Button>}
+                </DialogTrigger>
+            )}
             <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{initialData ? "Editar Ingrediente" : "Adicionar Ingrediente"}</DialogTitle>
