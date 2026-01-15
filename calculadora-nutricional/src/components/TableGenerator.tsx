@@ -24,6 +24,7 @@ import { Trash2, Download, Save } from "lucide-react";
 import { saveTable } from "@/app/actions/table";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
+import * as XLSX from "xlsx";
 import { MICRONUTRIENTS } from "@/lib/micronutrients";
 import { FOOD_GROUPS } from "@/lib/foodGroups";
 
@@ -57,8 +58,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         perPortion: CalculatedNutrients;
     } | null>(null);
 
-    // ... (existing handlers)
-
     const handleGroupChange = (group: string) => {
         setSelectedGroup(group);
         setSelectedProduct(""); // Reset product when group changes
@@ -84,7 +83,70 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         );
     };
 
-    // ... (handleExportExcel etc)
+    const handleAddIngredient = (ing: Ingredient) => {
+        setIngredients(prev => [...prev, { ingredient: ing, quantity: 0, isAddedSugar: false }]);
+    };
+
+    const updateIngredient = (index: number, field: keyof SelectedIngredient, value: any) => {
+        setIngredients(prev => {
+            const newIngredients = [...prev];
+            newIngredients[index] = { ...newIngredients[index], [field]: value };
+            return newIngredients;
+        });
+    };
+
+    const removeIngredient = (index: number) => {
+        setIngredients(prev => prev.filter((_, i) => i !== index));
+    };
+
+    useEffect(() => {
+        const res = calculateRecipe(ingredients, portionSize);
+        setResult(res);
+    }, [ingredients, portionSize]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await saveTable({
+                id: initialData?.id,
+                title,
+                portion: portionSize,
+                uom: "g",
+                householdMeasure,
+                popGroup,
+                ingredients
+            });
+            toast.success("Tabela salva com sucesso!");
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao salvar tabela.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleExportPNG = async () => {
+        const element = document.getElementById('nutrition-label-container');
+        if (!element) return;
+        const canvas = await html2canvas(element);
+        const data = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = data;
+        link.download = 'tabela-nutricional.png';
+        link.click();
+    };
+
+    const handleExportExcel = () => {
+        const data = ingredients.map(item => ({
+            Ingredient: item.ingredient.name,
+            Quantity: item.quantity,
+            IsAddedSugar: item.isAddedSugar ? "Yes" : "No"
+        }));
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Recipe");
+        XLSX.writeFile(wb, "recipe.xlsx");
+    };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
