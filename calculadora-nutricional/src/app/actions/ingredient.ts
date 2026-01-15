@@ -68,3 +68,39 @@ export async function deleteCustomIngredient(id: string) {
         return { error: "Erro ao deletar" };
     }
 }
+
+export async function updateCustomIngredient(id: string, prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.email) return { error: "Não autorizado" };
+
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (!user) return { error: "Usuário não encontrado" };
+
+    const name = formData.get("name") as string;
+    const energy = parseFloat(formData.get("energy") as string) || 0;
+    const carbs = parseFloat(formData.get("carbs") as string) || 0;
+    const protein = parseFloat(formData.get("protein") as string) || 0;
+    const fatTotal = parseFloat(formData.get("fatTotal") as string) || 0;
+    const fatSat = parseFloat(formData.get("fatSat") as string) || 0;
+    const fatTrans = parseFloat(formData.get("fatTrans") as string) || 0;
+    const fiber = parseFloat(formData.get("fiber") as string) || 0;
+    const sodium = parseFloat(formData.get("sodium") as string) || 0;
+    const sugarTotal = parseFloat(formData.get("sugarTotal") as string) || 0;
+
+    if (!name) return { error: "Nome é obrigatório" };
+
+    try {
+        const ing = await prisma.customIngredient.findUnique({ where: { id } });
+        if (!ing || ing.userId !== user.id) return { error: "Não encontrado ou sem permissão" };
+
+        await prisma.customIngredient.update({
+            where: { id },
+            data: { name, energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal }
+        });
+
+        revalidatePath("/dashboard/ingredients");
+        return { success: true };
+    } catch (_e) {
+        return { error: "Erro ao atualizar ingrediente" };
+    }
+}

@@ -9,9 +9,13 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Download, FileDown } from "lucide-react"
+import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
 import * as XLSX from 'xlsx';
+import { AddIngredientForm } from "./AddIngredientForm";
+import { deleteCustomIngredient } from "@/app/actions/ingredient";
+import { useState } from "react";
+import { toast } from "sonner";
 
 type Ingredient = {
     id: string;
@@ -26,9 +30,11 @@ type Ingredient = {
     sodium: number;
     sugarTotal: number;
     createdAt: Date;
+    userId: string;
 }
 
 export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] }) {
+    const [editingId, setEditingId] = useState<string | null>(null);
 
     const handleExport = () => {
         const data = ingredients.map(ing => ({
@@ -42,13 +48,23 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
             'Fibra': ing.fiber,
             'Sódio': ing.sodium,
             'Açúcares': ing.sugarTotal,
-            // 'Data de Criação': new Date(ing.createdAt).toLocaleDateString()
         }));
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(data);
         XLSX.utils.book_append_sheet(wb, ws, "Meus Ingredientes");
         XLSX.writeFile(wb, "meus-ingredientes.xlsx");
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        if (confirm(`Tem certeza que deseja excluir "${name}"?`)) {
+            const res = await deleteCustomIngredient(id);
+            if (res.error) {
+                toast.error(res.error);
+            } else {
+                toast.success("Ingrediente excluído.");
+            }
+        }
     };
 
     return (
@@ -74,12 +90,13 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                             <TableHead>Proteínas (g)</TableHead>
                             <TableHead>Gord. Totais (g)</TableHead>
                             <TableHead>Sódio (mg)</TableHead>
+                            <TableHead className="w-[100px]">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {ingredients.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">
+                                <TableCell colSpan={7} className="text-center h-24">
                                     Nenhum ingrediente cadastrado. Importe ou adicione o primeiro!
                                 </TableCell>
                             </TableRow>
@@ -92,12 +109,41 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                                     <TableCell>{ingredient.protein}</TableCell>
                                     <TableCell>{ingredient.fatTotal}</TableCell>
                                     <TableCell>{ingredient.sodium}</TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => setEditingId(ingredient.id)}
+                                            >
+                                                <Edit2 className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                onClick={() => handleDelete(ingredient.id, ingredient.name)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
                             ))
                         )}
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Edit Dialog */}
+            {ingredients.map(ing => (
+                <AddIngredientForm
+                    key={ing.id}
+                    initialData={ing}
+                    open={editingId === ing.id}
+                    onOpenChange={(open) => !open && setEditingId(null)}
+                />
+            ))}
         </div>
     )
 }
