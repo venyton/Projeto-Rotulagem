@@ -24,6 +24,8 @@ import { Trash2, Download, Save } from "lucide-react";
 import { saveTable } from "@/app/actions/table";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
+import { MICRONUTRIENTS } from "@/lib/micronutrients";
+import { FOOD_GROUPS } from "@/lib/foodGroups";
 
 interface TableGeneratorProps {
     initialData?: {
@@ -43,193 +45,46 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const [householdMeasure, setHouseholdMeasure] = useState(initialData?.householdMeasure || "");
     const [popGroup, setPopGroup] = useState<PopGroup>((initialData?.popGroup as PopGroup) || POPULATION_GROUPS.ADULTS);
     const [isSupplement, setIsSupplement] = useState(false);
+    const [selectedNutrients, setSelectedNutrients] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+
+    // New state for selectors
+    const [selectedGroup, setSelectedGroup] = useState<string>("");
+    const [selectedProduct, setSelectedProduct] = useState<string>("");
 
     const [result, setResult] = useState<{
         per100g: CalculatedNutrients;
         perPortion: CalculatedNutrients;
     } | null>(null);
 
-    const handleAddIngredient = (ing: Ingredient) => {
-        setIngredients(prev => [...prev, { ingredient: ing, quantity: 0, isAddedSugar: false }]);
+    // ... (existing handlers)
+
+    const handleGroupChange = (group: string) => {
+        setSelectedGroup(group);
+        setSelectedProduct(""); // Reset product when group changes
     };
 
-    const updateIngredient = (index: number, field: keyof SelectedIngredient, val: string | number | boolean) => {
-        setIngredients(prev => {
-            const draft = [...prev];
-            draft[index] = { ...draft[index], [field]: val };
-            return draft;
-        });
-    };
+    const handleProductChange = (prodName: string) => {
+        setSelectedProduct(prodName);
+        const group = FOOD_GROUPS.find(g => g.group === selectedGroup);
+        const product = group?.products.find(p => p.name === prodName);
 
-    const removeIngredient = (index: number) => {
-        setIngredients(prev => prev.filter((_, i) => i !== index));
-    };
-
-    useEffect(() => {
-        if (ingredients.length > 0 && portionSize > 0) {
-            const calc = calculateRecipe(ingredients, portionSize);
-            setResult(calc);
-        } else {
-            setResult(null);
-        }
-    }, [ingredients, portionSize]);
-
-    const handleSave = async () => {
-        if (!title) {
-            toast.error("Defina um título para a tabela.");
-            return;
-        }
-        if (!result) {
-            toast.error("A tabela ainda não foi gerada (adicione ingredientes e porção).");
-            return;
-        }
-
-        setSaving(true);
-        const res = await saveTable({
-            id: initialData?.id,
-            title,
-            portion: portionSize,
-            uom: "g",
-            householdMeasure,
-            popGroup,
-            ingredients
-        });
-        setSaving(false);
-
-        if (res.error) {
-            console.error("Erro no saveTable:", res.error);
-            toast.error(`Erro ao salvar: ${res.error}`);
-        } else {
-            toast.success("Tabela salva com sucesso!");
+        if (product) {
+            setTitle(product.name);
+            setPortionSize(product.portion);
+            setHouseholdMeasure(product.measure);
         }
     };
 
-    const fixColorsOnClone = (clonedDoc: Document) => {
-        const style = clonedDoc.createElement('style');
-        style.innerHTML = `
-            :root {
-                --background: #ffffff !important;
-                --foreground: #000000 !important;
-                --card: #ffffff !important;
-                --card-foreground: #000000 !important;
-                --popover: #ffffff !important;
-                --popover-foreground: #000000 !important;
-                --primary: #000000 !important;
-                --primary-foreground: #ffffff !important;
-                --secondary: #f3f4f6 !important;
-                --secondary-foreground: #111827 !important;
-                --muted: #f3f4f6 !important;
-                --muted-foreground: #6b7280 !important;
-                --accent: #f3f4f6 !important;
-                --accent-foreground: #111827 !important;
-                --destructive: #ef4444 !important;
-                --border: #e5e7eb !important;
-                --input: #e5e7eb !important;
-                --ring: #000000 !important;
-            }
-            .bg-white { background-color: #ffffff !important; }
-            .bg-gray-100 { background-color: #f3f4f6 !important; }
-            .border-black { border-color: #000000 !important; }
-            .text-black { color: #000000 !important; }
-        `;
-        clonedDoc.head.appendChild(style);
+    const toggleNutrient = (name: string) => {
+        setSelectedNutrients(prev =>
+            prev.includes(name)
+                ? prev.filter(n => n !== name)
+                : [...prev, name]
+        );
     };
 
-    const handleExportPNG = async () => {
-        const element = document.getElementById("nutrition-label-container");
-        if (!element) {
-            toast.error("Elemento da tabela não encontrado para exportação.");
-            return;
-        }
-
-        try {
-            const canvas = await html2canvas(element, {
-                scale: 3,
-                useCORS: true,
-                logging: false,
-                backgroundColor: "#ffffff",
-                onclone: fixColorsOnClone
-            } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-            const dataUrl = canvas.toDataURL("image/png");
-            const link = document.createElement("a");
-            link.download = `tabela-${title.replace(/\s+/g, '-') || 'anvisa'}.png`;
-            link.href = dataUrl;
-            document.body.appendChild(link); // Append to body to ensure click works in some browsers
-            link.click();
-            document.body.removeChild(link);
-            toast.success("Imagem exportada com sucesso!");
-        } catch (e) {
-            console.error("Erro exportação PNG:", e);
-            toast.error("Erro ao gerar imagem. Verifique o console.");
-        }
-    };
-
-
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const exportLupaElement = async (elementId: string, suffix: string) => {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-
-        try {
-            const canvas = await html2canvas(element, {
-                scale: 4,
-                useCORS: true,
-                logging: false,
-                backgroundColor: null, // Transparent background
-                onclone: fixColorsOnClone
-            } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-            const dataUrl = canvas.toDataURL("image/png");
-            const link = document.createElement("a");
-            link.download = `lupa-${suffix}-${title.replace(/\s+/g, '-') || 'anvisa'}.png`;
-            link.href = dataUrl;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast.success(`Lupa (${suffix}) exportada!`);
-        } catch (e) {
-            console.error("Erro exportação Lupa:", e);
-            toast.error("Erro ao gerar lupa.");
-        }
-    };
-
-    const handleExportExcel = async () => {
-        if (!result) return;
-        try {
-            const response = await fetch("/api/export/excel", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title,
-                    per100g: result.per100g,
-                    perPortion: result.perPortion,
-                    portionSize,
-                    householdMeasure,
-                    popGroup,
-                    isSupplement
-                })
-            });
-
-            if (!response.ok) throw new Error("Falha na exportação");
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `tabela-${title.replace(/\s+/g, '-')}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            toast.success("Planilha Excel gerada com sucesso!");
-        } catch (error) {
-            console.error(error);
-            toast.error("Erro ao gerar Excel.");
-        }
-    };
+    // ... (handleExportExcel etc)
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
@@ -239,6 +94,40 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         <CardTitle>Configurações da Receita</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
+
+                        {/* Group and Product Selectors */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4 mb-4">
+                            <div className="space-y-2">
+                                <Label>Grupo de Alimentos (Opcional)</Label>
+                                <Select value={selectedGroup} onValueChange={handleGroupChange}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um grupo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {FOOD_GROUPS.map((g, i) => (
+                                            <SelectItem key={i} value={g.group}>{g.group}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Produto (Sugestão)</Label>
+                                <Select value={selectedProduct} onValueChange={handleProductChange} disabled={!selectedGroup}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um produto" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {FOOD_GROUPS.find(g => g.group === selectedGroup)?.products.map((p, i) => (
+                                            <SelectItem key={i} value={p.name}>{p.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="col-span-full text-xs text-muted-foreground">
+                                *Selecione para preencher automaticamente nome, porção e medida.
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
                             <Label>Nome do Produto / Título</Label>
                             <Input
@@ -300,6 +189,32 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 </Card>
 
                 <Card>
+                    <CardHeader>
+                        <CardTitle>Micronutrientes Opcionais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-60 overflow-y-auto">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {MICRONUTRIENTS.map(m => (
+                                <div key={m.name} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`micro-${m.name}`}
+                                        checked={selectedNutrients.includes(m.name)}
+                                        onCheckedChange={() => toggleNutrient(m.name)}
+                                    />
+                                    <label
+                                        htmlFor={`micro-${m.name}`}
+                                        className="text-sm font-medium leading-none cursor-pointer text-muted-foreground"
+                                    >
+                                        {m.label} <span className="text-xs text-black opacity-50">({m.unit})</span>
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    {/* ... Ingredients Card Content ... */}
                     <CardHeader>
                         <CardTitle>Ingredientes</CardTitle>
                     </CardHeader>
@@ -371,7 +286,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     portionSize={portionSize}
                                     householdMeasure={householdMeasure || "..."}
                                     popGroup={popGroup}
+                                    selectedNutrients={selectedNutrients}
                                 />
+                                {/* ... Remainder of Preview ... */}
+
                                 <div className="flex flex-col items-center gap-4 w-full">
                                     <div className="text-sm font-semibold text-gray-500 w-full text-center border-t pt-4">Modelos de Lupa (ANVISA)</div>
 

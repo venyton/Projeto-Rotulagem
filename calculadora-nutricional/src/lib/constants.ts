@@ -29,9 +29,46 @@ export const VDR: Record<PopGroup, {
     fatTotal: number;
     fatSat: number | null;
     fiber: number | null;
-    sodium: number;
+    sodium: number; // mg
+
+    // Vitamins
+    vitaminA?: number;
+    vitaminD?: number;
+    vitaminE?: number;
+    vitaminK?: number;
+    vitaminC?: number;
+    thiamin?: number;
+    riboflavin?: number;
+    niacin?: number;
+    vitaminB6?: number;
+    biotin?: number;
+    folicAcid?: number;
+    pantothenicAcid?: number;
+    vitaminB12?: number;
+
+    // Minerals
+    calcium?: number;
+    chloride?: number;
+    copper?: number;
+    chromium?: number;
+    iron?: number;
+    fluoride?: number;
+    phosphorus?: number;
+    iodine?: number;
+    magnesium?: number;
+    manganese?: number;
+    molybdenum?: number;
+    potassium?: number;
+    selenium?: number;
+    zinc?: number;
+    choline?: number;
 }> = {
-    [POPULATION_GROUPS.ADULTS]: { energy: 2000, carbs: 300, protein: 50, fatTotal: 55, fatSat: 22, fiber: 25, sodium: 2000 },
+    [POPULATION_GROUPS.ADULTS]: {
+        energy: 2000, carbs: 300, protein: 50, fatTotal: 55, fatSat: 22, fiber: 25, sodium: 2000,
+        vitaminA: 800, vitaminD: 15, vitaminE: 15, vitaminK: 120, vitaminC: 100,
+        thiamin: 1.2, riboflavin: 1.2, niacin: 15, vitaminB6: 1.3, biotin: 30, folicAcid: 400, pantothenicAcid: 5, vitaminB12: 2.4,
+        calcium: 1000, chloride: 2300, copper: 900, chromium: 35, iron: 14, fluoride: 4, phosphorus: 700, iodine: 150, magnesium: 420, manganese: 3, molybdenum: 45, potassium: 3500, selenium: 60, zinc: 11, choline: 550
+    },
     [POPULATION_GROUPS.PREGNANT]: { energy: 2150, carbs: 300, protein: 71, fatTotal: 55, fatSat: 22, fiber: 28, sodium: 2000 },
     [POPULATION_GROUPS.LACTATING]: { energy: 2350, carbs: 300, protein: 71, fatTotal: 55, fatSat: 22, fiber: 29, sodium: 2000 },
     [POPULATION_GROUPS.INFANTS]: { energy: 570, carbs: 60, protein: 11, fatTotal: 30, fatSat: null, fiber: null, sodium: 370 },

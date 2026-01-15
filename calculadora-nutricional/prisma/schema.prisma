@@ -33,6 +33,43 @@ model Ingredient {
   sodium    Float    // mg
   sugarTotal Float?  // g
   origin    String?  // "TACO", etc.
+
+  // Micronutrients
+  fatMono           Float?   @default(0)
+  fatPoly           Float?   @default(0)
+  omega6            Float?   @default(0)
+  omega3            Float?   @default(0)
+  cholesterol       Float?   @default(0)
+  
+  vitaminA          Float?   @default(0)
+  vitaminD          Float?   @default(0)
+  vitaminE          Float?   @default(0)
+  vitaminK          Float?   @default(0)
+  vitaminC          Float?   @default(0)
+  thiamin           Float?   @default(0)
+  riboflavin        Float?   @default(0)
+  niacin            Float?   @default(0)
+  vitaminB6         Float?   @default(0)
+  biotin            Float?   @default(0)
+  folicAcid         Float?   @default(0) // folate
+  pantothenicAcid   Float?   @default(0)
+  vitaminB12        Float?   @default(0)
+
+  calcium           Float?   @default(0)
+  chloride          Float?   @default(0)
+  copper            Float?   @default(0)
+  chromium          Float?   @default(0)
+  iron              Float?   @default(0)
+  fluoride          Float?   @default(0)
+  phosphorus        Float?   @default(0)
+  iodine            Float?   @default(0)
+  magnesium         Float?   @default(0)
+  manganese         Float?   @default(0)
+  molybdenum        Float?   @default(0)
+  potassium         Float?   @default(0)
+  selenium          Float?   @default(0)
+  zinc              Float?   @default(0)
+  choline           Float?   @default(0)
 }
 
 model CustomIngredient {
@@ -49,6 +86,45 @@ model CustomIngredient {
   fiber     Float
   sodium    Float
   sugarTotal Float
+  sugarAdded Float    @default(0)
+
+  // Micronutrients
+  fatMono           Float?   @default(0)
+  fatPoly           Float?   @default(0)
+  omega6            Float?   @default(0)
+  omega3            Float?   @default(0)
+  cholesterol       Float?   @default(0)
+  
+  vitaminA          Float?   @default(0)
+  vitaminD          Float?   @default(0)
+  vitaminE          Float?   @default(0)
+  vitaminK          Float?   @default(0)
+  vitaminC          Float?   @default(0)
+  thiamin           Float?   @default(0)
+  riboflavin        Float?   @default(0)
+  niacin            Float?   @default(0)
+  vitaminB6         Float?   @default(0)
+  biotin            Float?   @default(0)
+  folicAcid         Float?   @default(0) // folate
+  pantothenicAcid   Float?   @default(0)
+  vitaminB12        Float?   @default(0)
+
+  calcium           Float?   @default(0)
+  chloride          Float?   @default(0)
+  copper            Float?   @default(0)
+  chromium          Float?   @default(0)
+  iron              Float?   @default(0)
+  fluoride          Float?   @default(0)
+  phosphorus        Float?   @default(0)
+  iodine            Float?   @default(0)
+  magnesium         Float?   @default(0)
+  manganese         Float?   @default(0)
+  molybdenum        Float?   @default(0)
+  potassium         Float?   @default(0)
+  selenium          Float?   @default(0)
+  zinc              Float?   @default(0)
+  choline           Float?   @default(0)
+
   createdAt DateTime @default(now())
 }
 

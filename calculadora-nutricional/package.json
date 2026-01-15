@@ -8,7 +8,9 @@
     "build": "npx prisma generate --schema=./prisma/schema.prisma && next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx -y tsx scripts/seed.ts"
+    "seed": "npx -y tsx scripts/seed.ts",
+    "seed-user": "npx -y tsx scripts/seed-test-user.js",
+    "test-db": "npx -y tsx scripts/test-db.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

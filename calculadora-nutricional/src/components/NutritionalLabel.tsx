@@ -14,12 +14,15 @@ const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { lab
     </div>
 );
 
+import { MICRONUTRIENTS } from "@/lib/micronutrients";
+
 interface NutritionalLabelProps {
     per100g: CalculatedNutrients;
     perPortion: CalculatedNutrients;
     portionSize: number; // g
     householdMeasure: string;
     popGroup: PopGroup;
+    selectedNutrients?: string[];
 }
 
 export function NutritionalLabel({
@@ -28,10 +31,19 @@ export function NutritionalLabel({
     portionSize,
     householdMeasure,
     popGroup,
+    selectedNutrients = [],
 }: NutritionalLabelProps) {
     const vdr = VDR[popGroup];
 
-    const getVD = (val: number, ref: number | null) => calculateVD(val, ref);
+    const getVD = (val: number, ref: number | null | undefined) => calculateVD(val, ref || null);
+
+    // Helper to format micro values (simple rounding for now)
+    const formatMicro = (val: number) => {
+        if (val === 0) return "0";
+        if (val < 1) return val.toFixed(1).replace('.', ','); // Small values
+        return Math.round(val).toString(); // Integer for > 1 (e.g. 500mg calcium, 800mcg Vit A)
+        // Adjust logic if needed for decimals in mg
+    };
 
     return (
         <div className="p-4 border-2 max-w-md font-sans" id="nutrition-label-container" style={{ backgroundColor: '#ffffff', borderColor: '#000000', color: '#000000' }}>
@@ -106,6 +118,28 @@ export function NutritionalLabel({
                     valPortion={roundSaturatedTrans(perPortion.fatTrans)}
                     vd="-" sub
                 />
+
+                {/* Dynamic Micronutrients */}
+                {MICRONUTRIENTS.map(micro => {
+                    if (!selectedNutrients.includes(micro.name)) return null;
+                    // @ts-ignore
+                    const val100 = per100g[micro.name] || 0;
+                    // @ts-ignore
+                    const valPortion = perPortion[micro.name] || 0;
+                    // @ts-ignore
+                    const ref = vdr[micro.name];
+
+                    return (
+                        <Row
+                            key={micro.name}
+                            label={`${micro.label} (${micro.unit})`}
+                            val100={formatMicro(val100)}
+                            valPortion={formatMicro(valPortion)}
+                            vd={getVD(valPortion, ref)}
+                            bold={false} // Micros usually regular font
+                        />
+                    );
+                })}
 
                 <Row
                     label="Fibra alimentar (g)"

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
 import * as XLSX from 'xlsx';
+import { InspectIngredientDialog } from "./InspectIngredientDialog";
 import { AddIngredientForm } from "./AddIngredientForm";
 import { deleteCustomIngredient } from "@/app/actions/ingredient";
 import { useState } from "react";
@@ -29,6 +30,7 @@ type Ingredient = {
     fiber: number;
     sodium: number;
     sugarTotal: number;
+    sugarAdded: number;
     createdAt: Date;
     userId: string;
 }
@@ -38,7 +40,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
 
     const handleExport = () => {
         const data = ingredients.map(ing => ({
-            'Nome': ing.name,
+            'Nome': ing.name.replace(/^\[Meu\]\s*/, ''),
             'Energia': ing.energy,
             'Proteína': ing.protein,
             'Carboidratos': ing.carbs,
@@ -47,7 +49,8 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
             'Gorduras Trans': ing.fatTrans,
             'Fibra': ing.fiber,
             'Sódio': ing.sodium,
-            'Açúcares': ing.sugarTotal,
+            'Açúcares Totais': ing.sugarTotal,
+            'Açúcares Adicionados': ing.sugarAdded,
         }));
 
         const wb = XLSX.utils.book_new();
@@ -111,6 +114,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                                     <TableCell>{ingredient.sodium}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">
+                                            <InspectIngredientDialog ingredient={ingredient} />
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
