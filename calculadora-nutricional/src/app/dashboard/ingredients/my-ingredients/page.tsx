@@ -3,6 +3,7 @@ import { IngredientsTable } from "@/components/IngredientsTable";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { DatabaseFixButton } from "@/components/DatabaseFixButton";
 
 export default async function MyIngredientsPage() {
     const session = await getServerSession(authOptions);
@@ -27,7 +28,8 @@ export default async function MyIngredientsPage() {
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
                     <strong className="font-bold">Erro!</strong>
                     <span className="block sm:inline"> {error}</span>
-                    <p className="text-sm mt-2">Tente rodar a migração do banco de dados.</p>
+                    <p className="text-sm mt-2">Pode ser necessário atualizar o banco de dados.</p>
+                    <DatabaseFixButton />
                 </div>
             </div>
         );

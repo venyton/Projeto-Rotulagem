@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AddIngredientForm } from "@/components/AddIngredientForm";
 import { Ingredient } from "@prisma/client";
+import { DatabaseFixButton } from "@/components/DatabaseFixButton";
 
 export default async function MyIngredientsPage() {
     const session = await getServerSession(authOptions);
@@ -30,8 +31,9 @@ export default async function MyIngredientsPage() {
                     <strong className="font-bold">Erro!</strong>
                     <span className="block sm:inline"> {error}</span>
                     <p className="text-sm mt-2">
-                        Pode ser necessário atualizar o banco de dados. Tente rodar a migração.
+                        Pode ser necessário atualizar o banco de dados.
                     </p>
+                    <DatabaseFixButton />
                 </div>
             </div>
         );
