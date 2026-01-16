@@ -21,21 +21,17 @@ export async function GET() {
     const tables = ["CustomIngredient", "Ingredient"];
 
     for (const table of tables) {
-        for (const col of micronutrients) {
-            try {
-                // Check if column exists is too complex in raw SQL x-db, so just try ADD COLUMN IF NOT EXISTS logic
-                // Postgres doesn't support IF NOT EXISTS in ADD COLUMN natively in all versions easily without a block
-                // So we wrap in try/catch for "duplicate column" error
+        try {
+            // Updated to use a single batched ALTER TABLE statement
+            // This prevents Vercel timeout by doing 1 DB call instead of 30+
+            const columnsSql = micronutrients
+                .map(col => `ADD COLUMN IF NOT EXISTS "${col}" DOUBLE PRECISION DEFAULT 0`)
+                .join(", ");
 
-                await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${col}" DOUBLE PRECISION DEFAULT 0;`);
-                results.push(`Success: Added ${col} to ${table}`);
-            } catch (e: any) {
-                if (e.message.includes("already exists")) {
-                    results.push(`Skipped: ${col} already exists in ${table}`);
-                } else {
-                    errors.push(`Error adding ${col} to ${table}: ${e.message}`);
-                }
-            }
+            await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ${columnsSql};`);
+            results.push(`Success: Updated table ${table}`);
+        } catch (e: any) {
+            errors.push(`Error updating table ${table}: ${e.message}`);
         }
     }
 

@@ -13,21 +13,43 @@ export function DatabaseFixButton() {
     const handleFix = async () => {
         setLoading(true);
         setMessage(null);
+
+        // Setup manual timeout using AbortController
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
         try {
-            const res = await fetch('/api/debug/force-migrate');
+            const res = await fetch('/api/debug/force-migrate', {
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                const text = await res.text();
+                // Slice error text to prevent massive layout shifts
+                throw new Error(`Erro ${res.status}: ${text.slice(0, 100)}`);
+            }
+
             const data = await res.json();
 
             if (data.success) {
                 setMessage("Banco de dados corrigido! Recarregando...");
+                // Reload page to reflect database changes
                 setTimeout(() => {
                     router.refresh();
                 }, 2000);
             } else {
-                setMessage("Erro ao corrigir. Tente novamente ou contate o suporte.");
+                const errorDetails = data.errors?.join(", ") || "Erro desconhecido";
+                setMessage(`Falha parcial: ${errorDetails.slice(0, 100)}...`);
             }
-        } catch (error) {
-            console.error(error);
-            setMessage("Erro na conexão.");
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                setMessage("Tempo limite esgotado. O servidor demorou muito.");
+            } else {
+                console.error(error);
+                setMessage("Erro: " + error.message);
+            }
         } finally {
             setLoading(false);
         }
@@ -45,7 +67,7 @@ export function DatabaseFixButton() {
                 {loading ? "Corrigindo..." : "Corrigir Banco de Dados Automaticamente"}
             </Button>
             {message && (
-                <p className="mt-2 text-sm font-medium">{message}</p>
+                <p className="mt-2 text-sm font-medium animate-in fade-in">{message}</p>
             )}
         </div>
     );
