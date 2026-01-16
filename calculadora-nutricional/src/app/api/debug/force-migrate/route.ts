@@ -9,6 +9,7 @@ export async function GET() {
     const errors = [];
 
     const micronutrients = [
+        "sugarTotal", "sugarAdded", // Added missing core columns
         "fatMono", "fatPoly", "omega6", "omega3", "cholesterol",
         "vitaminA", "vitaminD", "vitaminE", "vitaminK", "vitaminC",
         "thiamin", "riboflavin", "niacin", "vitaminB6", "biotin",
