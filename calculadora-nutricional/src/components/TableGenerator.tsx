@@ -158,7 +158,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     <CardContent className="space-y-4">
 
                         {/* Group and Product Selectors */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b pb-4 mb-4">
+                        {/* Group and Product Selectors */}
+                        <div className="grid grid-cols-1 gap-4 border-b pb-4 mb-4">
                             <div className="space-y-2">
                                 <Label>Grupo de Alimentos (Opcional)</Label>
                                 <Select value={selectedGroup} onValueChange={handleGroupChange}>
@@ -251,31 +252,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 </Card>
 
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Micronutrientes Opcionais</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-60 overflow-y-auto">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {MICRONUTRIENTS.map(m => (
-                                <div key={m.name} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`micro-${m.name}`}
-                                        checked={selectedNutrients.includes(m.name)}
-                                        onCheckedChange={() => toggleNutrient(m.name)}
-                                    />
-                                    <label
-                                        htmlFor={`micro-${m.name}`}
-                                        className="text-sm font-medium leading-none cursor-pointer text-muted-foreground"
-                                    >
-                                        {m.label} <span className="text-xs text-black opacity-50">({m.unit})</span>
-                                    </label>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
                     {/* ... Ingredients Card Content ... */}
                     <CardHeader>
                         <CardTitle>Ingredientes</CardTitle>
@@ -330,6 +306,31 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 <span className="font-bold text-lg text-primary">{ingredients.reduce((acc, item) => acc + (item.quantity || 0), 0).toFixed(1)} g</span>
                             </div>
                         )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Micronutrientes Opcionais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-60 overflow-y-auto">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {MICRONUTRIENTS.map(m => (
+                                <div key={m.name} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`micro-${m.name}`}
+                                        checked={selectedNutrients.includes(m.name)}
+                                        onCheckedChange={() => toggleNutrient(m.name)}
+                                    />
+                                    <label
+                                        htmlFor={`micro-${m.name}`}
+                                        className="text-sm font-medium leading-none cursor-pointer text-muted-foreground"
+                                    >
+                                        {m.label} <span className="text-xs text-black opacity-50">({m.unit})</span>
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
