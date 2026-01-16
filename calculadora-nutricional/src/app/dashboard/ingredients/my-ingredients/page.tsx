@@ -1,34 +1,43 @@
-import { getUserIngredients } from "@/app/actions/ingredients";
+'use client';
+
+import { useEffect, useState } from 'react';
 import { IngredientsTable } from "@/components/IngredientsTable";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { DatabaseFixButton } from "@/components/DatabaseFixButton";
+import { Loader2 } from "lucide-react";
 
-export default async function MyIngredientsPage() {
-    const session = await getServerSession(authOptions);
+export default function MyIngredientsPage() {
+    const [ingredients, setIngredients] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    if (!session) {
-        redirect("/login");
-    }
+    useEffect(() => {
+        const fetchIngredients = async () => {
+            try {
+                const res = await fetch('/api/ingredients/list');
+                const data = await res.json();
 
-    let ingredients: any[] = [];
-    let error = null;
+                if (data.success) {
+                    setIngredients(data.ingredients);
+                } else {
+                    setError(data.error || "Erro desconhecido ao carregar ingredientes.");
+                }
+            } catch (err: any) {
+                console.error(err);
+                setError(err.message || "Erro na conexão com o servidor.");
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    try {
-        ingredients = await getUserIngredients();
-    } catch (e) {
-        console.error("Failed to fetch ingredients:", e);
-        error = "Erro ao carregar ingredientes.";
-    }
+        fetchIngredients();
+    }, []);
 
     if (error) {
         return (
             <div className="container mx-auto py-10 px-4">
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-                    <strong className="font-bold">Erro!</strong>
-                    <span className="block sm:inline"> {error}</span>
-                    <p className="text-sm mt-2">Pode ser necessário atualizar o banco de dados.</p>
+                    <strong className="font-bold block mb-1">Erro ao carregar!</strong>
+                    <span className="block sm:inline mb-4">{error}</span>
                     <DatabaseFixButton />
                 </div>
             </div>
@@ -42,7 +51,13 @@ export default async function MyIngredientsPage() {
                 Gerencie seus ingredientes personalizados. Você pode cadastrar novos importando uma planilha Excel.
             </p>
 
-            <IngredientsTable ingredients={ingredients} />
+            {loading ? (
+                <div className="flex justify-center py-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            ) : (
+                <IngredientsTable ingredients={ingredients || []} />
+            )}
         </div>
     );
 }
