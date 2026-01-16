@@ -49,58 +49,59 @@
 :root {
   --radius: 0.5rem;
 
-  /* So IZI Colors */
-  /* Blue Main: #1c6b8c (approx from 'IZI') -> oklch(0.51 0.12 235) */
-  /* Green Main: #7ccb5e (approx from leaf/fork) -> oklch(0.75 0.18 135) */
-  /* Orange: #f4a261 (table lines) -> oklch(0.75 0.15 65) */
+  /* Redesign: White, Green, Gray, Black (Tabela e Ficha inspired) */
 
-  /* Nutrition Theme: Light Brown/Beige #F9F7F2 (approx) */
-  --background: oklch(0.97 0.02 85);
-  --foreground: oklch(0.145 0 0);
+  /* Background: Pure White */
+  --background: oklch(1 0 0);
+  /* Foreground: Dark Gray / Black Text */
+  --foreground: oklch(0.20 0 0);
 
+  /* Cards: White with subtle shadow/border usually, keeping white */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.20 0 0);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.20 0 0);
 
-  /* Primary: So IZI Blue */
-  --primary: oklch(0.51 0.12 235);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Primary: Strong Green (Nutrition/Health) */
+  /* Approx #22c55e (Tailwind Green 500) -> oklch(0.72 0.18 142) */
+  --primary: oklch(0.62 0.19 145);
+  --primary-foreground: oklch(1 0 0);
 
-  /* Secondary: So IZI Green */
-  --secondary: oklch(0.75 0.18 135);
-  --secondary-foreground: oklch(0.145 0 0);
+  /* Secondary: Light Gray or a softer Green */
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.20 0 0);
 
-  --muted: oklch(0.95 0.02 85);
-  --muted-foreground: oklch(0.40 0.05 50);
+  /* Muted: Light Gray for backgrounds/subtle text */
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.55 0 0);
 
-  /* Accent: Warm tint */
-  --accent: oklch(0.95 0.02 85);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Accent: Very light green for hovers */
+  --accent: oklch(0.97 0.05 145);
+  --accent-foreground: oklch(0.20 0 0);
 
   --destructive: oklch(0.577 0.245 27.325);
 
-  --border: oklch(0.85 0.05 85);
-  /* Slightly darker brown/beige for borders */
-  --input: oklch(1 0 0);
-  /* White inputs for contrast */
-  --ring: oklch(0.51 0.12 235);
+  /* Border: Light Gray */
+  --border: oklch(0.92 0 0);
+  /* Input: White with Gray border */
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.62 0.19 145);
 
-  --chart-1: oklch(0.51 0.12 235);
-  --chart-2: oklch(0.75 0.18 135);
-  --chart-3: oklch(0.75 0.15 65);
+  --chart-1: oklch(0.62 0.19 145);
+  --chart-2: oklch(0.55 0 0);
+  --chart-3: oklch(0.80 0 0);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
 
   --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-foreground: oklch(0.20 0 0);
+  --sidebar-primary: oklch(0.62 0.19 145);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0 0);
+  --sidebar-accent-foreground: oklch(0.20 0 0);
+  --sidebar-border: oklch(0.92 0 0);
+  --sidebar-ring: oklch(0.62 0.19 145);
 }
 
 /* Dark mode removed/disabled as requested */
