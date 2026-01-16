@@ -22,9 +22,12 @@ export default function Home() {
         </div>
       </main>
 
-      <footer className="flex items-center justify-center w-full h-24 border-t">
+      <footer className="flex flex-col items-center justify-center w-full h-24 border-t gap-1">
         <p className="text-sm text-muted-foreground">
           © 2024 NutriLabel. Todos os direitos reservados.
+        </p>
+        <p className="text-xs text-gray-400">
+          Build: {new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
         </p>
       </footer>
     </div>
