@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from "react";
-import { changePassword } from "@/app/actions/profile";
+import { changePassword } from "@/features/profile/actions/profile-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
