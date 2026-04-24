@@ -1,7 +1,8 @@
-import { CalculatedNutrients } from "@/lib/nutrients";
-import { calculateVD, roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans } from "@/lib/anvisa";
-import { VDR, PopGroup, POPULATION_LABELS } from "@/lib/constants";
+import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
+import { calculateVD, roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans } from "@/features/tables/domain/anvisa";
+import { VDR, PopGroup } from "@/features/tables/domain/constants";
 import { cn } from "@/lib/utils";
+import { MagnifyingGlassLabel } from "@/features/tables/components/MagnifyingGlassLabel";
 
 const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { label: string, val100: string, valPortion: string, vd: string, sub?: boolean, bold?: boolean }) => (
     <div className={cn("flex justify-between border-b py-1 text-sm", sub && "pl-4")} style={{ borderColor: '#d1d5db', backgroundColor: '#ffffff' }}>
@@ -14,7 +15,7 @@ const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { lab
     </div>
 );
 
-import { MICRONUTRIENTS } from "@/lib/micronutrients";
+import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 
 interface NutritionalLabelProps {
     per100g: CalculatedNutrients;
@@ -23,6 +24,11 @@ interface NutritionalLabelProps {
     householdMeasure: string;
     popGroup: PopGroup;
     selectedNutrients?: string[];
+    fop?: {
+        highSugar: boolean;
+        highFat: boolean;
+        highSodium: boolean;
+    };
 }
 
 export function NutritionalLabel({
@@ -32,8 +38,12 @@ export function NutritionalLabel({
     householdMeasure,
     popGroup,
     selectedNutrients = [],
+    fop,
 }: NutritionalLabelProps) {
     const vdr = VDR[popGroup];
+    const per100gValues = per100g as Record<string, number>;
+    const perPortionValues = perPortion as Record<string, number>;
+    const vdrValues = vdr as Record<string, number | null | undefined>;
 
     const getVD = (val: number, ref: number | null | undefined) => calculateVD(val, ref || null);
 
@@ -44,6 +54,8 @@ export function NutritionalLabel({
         return Math.round(val).toString(); // Integer for > 1 (e.g. 500mg calcium, 800mcg Vit A)
         // Adjust logic if needed for decimals in mg
     };
+
+    const hasFop = !!(fop?.highSugar || fop?.highFat || fop?.highSodium);
 
     return (
         <div className="p-4 border-2 max-w-md font-sans" id="nutrition-label-container" style={{ backgroundColor: '#ffffff', borderColor: '#000000', color: '#000000' }}>
@@ -122,12 +134,9 @@ export function NutritionalLabel({
                 {/* Dynamic Micronutrients */}
                 {MICRONUTRIENTS.map(micro => {
                     if (!selectedNutrients.includes(micro.name)) return null;
-                    // @ts-ignore
-                    const val100 = per100g[micro.name] || 0;
-                    // @ts-ignore
-                    const valPortion = perPortion[micro.name] || 0;
-                    // @ts-ignore
-                    const ref = vdr[micro.name];
+                    const val100 = per100gValues[micro.name] || 0;
+                    const valPortion = perPortionValues[micro.name] || 0;
+                    const ref = vdrValues[micro.name];
 
                     return (
                         <Row
@@ -162,6 +171,22 @@ export function NutritionalLabel({
                 *Percentual de valores diários fornecidos pela porção.
                 {vdr.fatSat === null && " (Gorduras saturadas: VDR não estabelecido para este grupo)."}
             </div>
+            {hasFop && fop && (
+                <div className="mt-3 pt-2 border-t flex justify-center" style={{ borderColor: '#000000' }}>
+                    <div
+                        className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
+                        style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
+                    >
+                        <MagnifyingGlassLabel
+                            highSugar={fop.highSugar}
+                            highFat={fop.highFat}
+                            highSodium={fop.highSodium}
+                            layout="horizontal"
+                            id="lupa-integrada-tabela"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

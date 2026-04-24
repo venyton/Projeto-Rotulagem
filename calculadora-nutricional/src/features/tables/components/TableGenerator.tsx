@@ -1,12 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from "react";
-import { IngredientSelector } from "./IngredientSelector";
-import { SelectedIngredient, calculateRecipe, CalculatedNutrients } from "@/lib/nutrients";
-import { NutritionalLabel } from "./NutritionalLabel";
-import { MagnifyingGlassLabel } from "./MagnifyingGlassLabel";
-import { POPULATION_GROUPS, PopGroup, POPULATION_LABELS } from "@/lib/constants";
-import { checkFOP } from "@/lib/anvisa";
+import { IngredientSelector } from "@/features/ingredients/components/IngredientSelector";
+import { SelectedIngredient, calculateRecipe, CalculatedNutrients } from "@/features/tables/domain/nutrients";
+import { NutritionalLabel } from "@/features/tables/components/NutritionalLabel";
+import { MagnifyingGlassLabel } from "@/features/tables/components/MagnifyingGlassLabel";
+import { POPULATION_GROUPS, PopGroup, POPULATION_LABELS } from "@/features/tables/domain/constants";
+import { checkFOP } from "@/features/tables/domain/anvisa";
 import { Ingredient } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,12 +21,12 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Download, Save } from "lucide-react";
-import { saveTable } from "@/app/actions/table";
+import { saveTable } from "@/features/tables/actions/table-actions";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import * as XLSX from "xlsx";
-import { MICRONUTRIENTS } from "@/lib/micronutrients";
-import { FOOD_GROUPS } from "@/lib/foodGroups";
+import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { FOOD_GROUPS } from "@/features/tables/domain/food-groups";
 
 interface TableGeneratorProps {
     initialData?: {
@@ -58,6 +58,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         perPortion: CalculatedNutrients;
     } | null>(null);
 
+    const fopStatus = result ? checkFOP(result.per100g) : null;
+
     const handleGroupChange = (group: string) => {
         setSelectedGroup(group);
         setSelectedProduct(""); // Reset product when group changes
@@ -87,7 +89,11 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         setIngredients(prev => [...prev, { ingredient: ing, quantity: 0, isAddedSugar: false }]);
     };
 
-    const updateIngredient = (index: number, field: keyof SelectedIngredient, value: any) => {
+    const updateIngredient = <K extends keyof SelectedIngredient>(
+        index: number,
+        field: K,
+        value: SelectedIngredient[K]
+    ) => {
         setIngredients(prev => {
             const newIngredients = [...prev];
             newIngredients[index] = { ...newIngredients[index], [field]: value };
@@ -350,29 +356,31 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     householdMeasure={householdMeasure || "..."}
                                     popGroup={popGroup}
                                     selectedNutrients={selectedNutrients}
+                                    fop={fopStatus || undefined}
                                 />
-                                {/* ... Remainder of Preview ... */}
-
-                                <div className="flex flex-col items-center gap-4 w-full">
-                                    <div className="text-sm font-semibold text-gray-500 w-full text-center border-t pt-4">Modelos de Lupa (ANVISA)</div>
-
-                                    <div className="flex flex-wrap justify-center gap-8 items-end">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <div
-                                                    id="wrapper-lupa-horizontal"
-                                                    className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
-                                                    style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
-                                                >
-                                                    <MagnifyingGlassLabel
-                                                        {...checkFOP(result.per100g)}
-                                                        layout="horizontal"
-                                                        id="lupa-horizontal"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                <div className="flex flex-col items-center gap-3 w-full">
+                                    <div className="text-sm font-semibold text-gray-500 w-full text-center border-t pt-4">
+                                        Selos Frontais (prévia)
                                     </div>
+                                    {(fopStatus?.highSugar || fopStatus?.highFat || fopStatus?.highSodium) ? (
+                                        <div
+                                            id="wrapper-lupa-horizontal"
+                                            className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
+                                            style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
+                                        >
+                                            <MagnifyingGlassLabel
+                                                highSugar={!!fopStatus?.highSugar}
+                                                highFat={!!fopStatus?.highFat}
+                                                highSodium={!!fopStatus?.highSodium}
+                                                layout="horizontal"
+                                                id="lupa-horizontal"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-muted-foreground">
+                                            Sem selos ativos para os valores atuais.
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (

@@ -1,4 +1,4 @@
-import { TableGenerator } from "@/components/TableGenerator";
+import { TableGenerator } from "@/features/tables/components/TableGenerator";
 
 export default function NewTablePage() {
     return (

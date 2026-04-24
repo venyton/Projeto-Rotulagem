@@ -2,9 +2,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { CalculatedNutrients } from "@/lib/nutrients";
-import { roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans, calculateVD } from "@/lib/anvisa";
-import { VDR, POPULATION_GROUPS } from "@/lib/constants";
+import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
+import { roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans, calculateVD } from "@/features/tables/domain/anvisa";
+import { VDR, POPULATION_GROUPS } from "@/features/tables/domain/constants";
 
 export async function POST(req: NextRequest) {
     try {

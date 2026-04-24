@@ -3,8 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { SelectedIngredient } from "@/lib/nutrients";
-import { PopGroup } from "@/lib/constants";
+import { SelectedIngredient } from "@/features/tables/domain/nutrients";
+import { PopGroup } from "@/features/tables/domain/constants";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
