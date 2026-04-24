@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, '../Dataset', 'Tabela-TACO-Excel-com-Dashboard-2.0.xlsx');
+const filePath = path.join(__dirname, '../Dataset/runtime', 'tabela-taco.xlsx');
 
 if (!fs.existsSync(filePath)) {
   console.error('File not found:', filePath);
@@ -22,4 +22,3 @@ if (ws) {
     console.log(`Row ${i}:`, JSON.stringify(d[i]));
   }
 }
-

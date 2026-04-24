@@ -12,7 +12,7 @@ const prisma = new PrismaClient({
     }
 });
 
-const filePath = path.join(__dirname, '../Dataset', 'Tabela-TACO-Excel-com-Dashboard-2.0.xlsx');
+const filePath = path.join(__dirname, '../Dataset/runtime', 'tabela-taco.xlsx');
 
 async function main() {
     console.log("Starting seed...");
