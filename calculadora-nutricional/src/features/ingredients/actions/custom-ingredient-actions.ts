@@ -180,3 +180,45 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
         return { error: "Erro ao atualizar ingrediente" };
     }
 }
+
+export async function searchIngredients(query: string) {
+    const q = query.trim();
+    if (!q || q.length < 2) {
+        return [];
+    }
+
+    const session = await getServerSession(authOptions);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let customIngredients: any[] = [];
+    if (session && session.user?.email) {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (user) {
+            customIngredients = await prisma.customIngredient.findMany({
+                where: {
+                    userId: user.id,
+                    name: { contains: q, mode: 'insensitive' }
+                },
+                take: 10
+            });
+        }
+    }
+
+    const tacoIngredients = await prisma.ingredient.findMany({
+        where: {
+            name: {
+                contains: q,
+                mode: 'insensitive',
+            },
+        },
+        take: Math.max(20 - customIngredients.length, 0),
+        orderBy: {
+            name: 'asc'
+        }
+    });
+
+    return [
+        ...customIngredients.map(c => ({ ...c, origin: "CUSTOM" })),
+        ...tacoIngredients
+    ];
+}

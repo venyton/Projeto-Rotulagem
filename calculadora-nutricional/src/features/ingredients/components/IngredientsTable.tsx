@@ -14,7 +14,7 @@ import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
 import * as XLSX from 'xlsx';
 import { InspectIngredientDialog } from "./InspectIngredientDialog";
 import { AddIngredientForm } from "./AddIngredientForm";
-import { deleteCustomIngredient } from "@/app/actions/ingredient";
+import { deleteCustomIngredient } from "@/features/ingredients/actions/custom-ingredient-actions";
 import { useState } from "react";
 import { toast } from "sonner";
 

@@ -19,6 +19,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { Ingredient } from "@prisma/client"
+import { searchIngredients } from "@/features/ingredients/actions/custom-ingredient-actions";
 
 export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) => void }) {
     const [open, setOpen] = React.useState(false)
@@ -36,8 +37,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
             }
             setLoading(true)
             try {
-                const res = await fetch(`/api/ingredients/search?query=${encodeURIComponent(query)}`)
-                const data = await res.json()
+                const data = await searchIngredients(query)
                 setResults(data)
             } catch (e) {
                 console.error(e)

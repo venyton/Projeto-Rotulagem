@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from "react";
-import { createCustomIngredient, updateCustomIngredient } from "@/app/actions/ingredient";
+import { createCustomIngredient, updateCustomIngredient } from "@/features/ingredients/actions/custom-ingredient-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

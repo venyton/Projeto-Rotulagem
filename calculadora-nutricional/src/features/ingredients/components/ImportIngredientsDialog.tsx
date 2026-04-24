@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { importIngredients, IngredientData } from '@/app/actions/ingredients';
+import { importIngredients, IngredientData } from '@/features/ingredients/actions/import-ingredient-actions';
 import * as XLSX from 'xlsx';
 import { toast } from "sonner";
 import { Loader2, Upload } from 'lucide-react';
