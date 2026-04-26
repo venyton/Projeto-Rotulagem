@@ -594,7 +594,7 @@ export async function POST(req: NextRequest) {
 
     const buffer = await workbook.xlsx.writeBuffer();
 
-    return new NextResponse(buffer as Uint8Array, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

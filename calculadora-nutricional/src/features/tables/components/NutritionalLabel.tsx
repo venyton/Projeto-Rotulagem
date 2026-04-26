@@ -33,6 +33,19 @@ const getSafeVD = (value: number, vdr?: number | null) => {
     return calculateVD(value || 0, vdr || null);
 };
 
+type NutrientKey = keyof CalculatedNutrients;
+type VdrValues = (typeof VDR)[PopGroup];
+type VdrKey = keyof VdrValues;
+
+const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => nutrients[key] || 0;
+
+const getVdrValue = (vdr: VdrValues, key: NutrientKey): number | null | undefined => {
+    if (key in vdr) {
+        return vdr[key as VdrKey] as number | null | undefined;
+    }
+    return undefined;
+};
+
 const Row4 = ({ label, v1, v2, v3, sub, bold }: { label: string; v1: string; v2: string; v3: string; sub?: boolean; bold?: boolean }) => (
     <tr className="border-b text-[11px]" style={{ borderColor: "#d1d5db" }}>
         <td className={cn("py-[3px] pr-2 leading-tight", sub && "pl-4", bold && "font-bold")}>{label}</td>
@@ -70,15 +83,13 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
 }) => {
     const vdr = VDR[popGroup] || VDR[POPULATION_GROUPS.ADULTS];
     const adultsVdr = VDR[POPULATION_GROUPS.ADULTS];
-
-    const per100gValues = per100g as unknown as Record<string, number>;
-    const perPortionValues = perPortion as unknown as Record<string, number>;
-    const vdrValues = vdr as unknown as Record<string, number>;
-    const adultsVdrValues = adultsVdr as unknown as Record<string, number>;
+    const firstGroupLabel = POPULATION_LABELS[popGroup] || POPULATION_LABELS[POPULATION_GROUPS.ADULTS];
+    const secondGroupLabel = POPULATION_LABELS[POPULATION_GROUPS.ADULTS];
 
     const baseRows = [
         { 
             label: "Valor energético (kcal)", 
+            nutrientKey: "energy" as NutrientKey,
             per100: roundEnergy(per100g.energy || 0).replace(".", ","), 
             portion: roundEnergy(perPortion.energy || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.energy || 0, vdr.energy), 
@@ -87,6 +98,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Carboidratos (g)", 
+            nutrientKey: "carbs" as NutrientKey,
             per100: roundMacro(per100g.carbs || 0).replace(".", ","), 
             portion: roundMacro(perPortion.carbs || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.carbs || 0, vdr.carbs), 
@@ -95,6 +107,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Açúcares totais (g)", 
+            nutrientKey: "sugarTotal" as NutrientKey,
             per100: roundSugars(per100g.sugarTotal || 0).replace(".", ","), 
             portion: roundSugars(perPortion.sugarTotal || 0).replace(".", ","), 
             vdPortion: "-", 
@@ -103,14 +116,16 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Açúcares adicionados (g)", 
+            nutrientKey: "sugarAdded" as NutrientKey,
             per100: roundSugars(per100g.sugarAdded || 0).replace(".", ","), 
             portion: roundSugars(perPortion.sugarAdded || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.sugarAdded || 0, vdr.sugarAdded), 
-            vd100: getSafeVD(per100g.sugarAdded || 0, vdr.sugarAdded), 
+            vdPortion: getSafeVD(perPortion.sugarAdded || 0, getVdrValue(vdr, "sugarAdded")), 
+            vd100: getSafeVD(per100g.sugarAdded || 0, getVdrValue(vdr, "sugarAdded")), 
             sub: true 
         },
         { 
             label: "Proteínas (g)", 
+            nutrientKey: "protein" as NutrientKey,
             per100: roundMacro(per100g.protein || 0).replace(".", ","), 
             portion: roundMacro(perPortion.protein || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.protein || 0, vdr.protein), 
@@ -119,6 +134,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Gorduras totais (g)", 
+            nutrientKey: "fatTotal" as NutrientKey,
             per100: roundMacro(per100g.fatTotal || 0).replace(".", ","), 
             portion: roundMacro(perPortion.fatTotal || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.fatTotal || 0, vdr.fatTotal), 
@@ -127,6 +143,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Gorduras saturadas (g)", 
+            nutrientKey: "fatSat" as NutrientKey,
             per100: roundSaturatedTrans(per100g.fatSat || 0).replace(".", ","), 
             portion: roundSaturatedTrans(perPortion.fatSat || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.fatSat || 0, vdr.fatSat), 
@@ -136,6 +153,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Gorduras trans (g)", 
+            nutrientKey: "fatTrans" as NutrientKey,
             per100: roundSaturatedTrans(per100g.fatTrans || 0).replace(".", ","), 
             portion: roundSaturatedTrans(perPortion.fatTrans || 0).replace(".", ","), 
             vdPortion: "-", 
@@ -145,6 +163,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Fibras alimentares (g)", 
+            nutrientKey: "fiber" as NutrientKey,
             per100: roundMacro(per100g.fiber || 0).replace(".", ","), 
             portion: roundMacro(perPortion.fiber || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.fiber || 0, vdr.fiber), 
@@ -153,6 +172,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
         { 
             label: "Sódio (mg)", 
+            nutrientKey: "sodium" as NutrientKey,
             per100: roundSodium(per100g.sodium || 0).replace(".", ","), 
             portion: roundSodium(perPortion.sodium || 0).replace(".", ","), 
             vdPortion: getSafeVD(perPortion.sodium || 0, vdr.sodium), 
@@ -163,9 +183,10 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
 
     MICRONUTRIENTS.forEach((m) => {
         if (selectedNutrients.includes(m.name)) {
-            const val100 = per100gValues[m.name] || 0;
-            const valPortion = perPortionValues[m.name] || 0;
-            const ref = vdrValues[m.name];
+            const nutrientKey = m.name as NutrientKey;
+            const val100 = getNutrientValue(per100g, nutrientKey);
+            const valPortion = getNutrientValue(perPortion, nutrientKey);
+            const ref = getVdrValue(vdr, nutrientKey);
             
             const format = (v: number) => {
                 if (v === 0) return "0";
@@ -175,6 +196,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
 
             baseRows.push({
                 label: `${m.label} (${m.unit})`,
+                nutrientKey,
                 per100: format(val100),
                 portion: format(valPortion),
                 vdPortion: getSafeVD(valPortion, ref),
@@ -347,7 +369,9 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                     <td className="py-[3px] px-2 text-right">{row.portion}</td>
                                     <td className="py-[3px] px-2 text-right font-bold">{row.vdPortion}</td>
                                     <td className="py-[3px] px-2 text-right">{row.portion}</td>
-                                    <td className="py-[3px] px-2 text-right font-bold">{getVD(Number(row.portion), adultsVdrValues[MICRONUTRIENTS.find(m => row.label.startsWith(m.label))?.name || ""])}</td>
+                                    <td className="py-[3px] px-2 text-right font-bold">
+                                        {getSafeVD(getNutrientValue(perPortion, row.nutrientKey), getVdrValue(adultsVdr, row.nutrientKey))}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
