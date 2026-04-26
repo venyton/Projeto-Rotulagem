@@ -47,7 +47,7 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.85rem;
 
   /* Redesign: White, Green, Gray, Black (Tabela e Ficha inspired) */
 
@@ -65,7 +65,7 @@
 
   /* Primary: Strong Green (Nutrition/Health) */
   /* Approx #22c55e (Tailwind Green 500) -> oklch(0.72 0.18 142) */
-  --primary: oklch(0.62 0.19 145);
+  --primary: oklch(60.385% 0.11082 142.38);
   --primary-foreground: oklch(1 0 0);
 
   /* Secondary: Light Gray or a softer Green */
@@ -104,15 +104,76 @@
   --sidebar-ring: oklch(0.62 0.19 145);
 }
 
-/* Dark mode removed/disabled as requested */
-/* .dark { ... } */
+.dark,
+[data-theme="dark"] {
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.96 0 0);
+
+  --card: oklch(0.20 0.01 260);
+  --card-foreground: oklch(0.96 0 0);
+
+  --popover: oklch(0.20 0.01 260);
+  --popover-foreground: oklch(0.96 0 0);
+
+  --primary: oklch(0.70 0.17 145);
+  --primary-foreground: oklch(0.17 0.01 260);
+
+  --secondary: oklch(0.28 0.01 260);
+  --secondary-foreground: oklch(0.96 0 0);
+
+  --muted: oklch(0.25 0.01 260);
+  --muted-foreground: oklch(0.78 0 0);
+
+  --accent: oklch(0.30 0.03 145);
+  --accent-foreground: oklch(0.96 0 0);
+
+  --destructive: oklch(0.66 0.23 25);
+
+  --border: oklch(0.30 0.01 260);
+  --input: oklch(0.30 0.01 260);
+  --ring: oklch(0.70 0.17 145);
+
+  --chart-1: oklch(0.70 0.17 145);
+  --chart-2: oklch(0.73 0.12 230);
+  --chart-3: oklch(0.77 0.14 85);
+  --chart-4: oklch(0.65 0.19 29);
+  --chart-5: oklch(0.72 0.12 300);
+
+  --sidebar: oklch(0.18 0.01 260);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.70 0.17 145);
+  --sidebar-primary-foreground: oklch(0.17 0.01 260);
+  --sidebar-accent: oklch(0.25 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(0.30 0.01 260);
+  --sidebar-ring: oklch(0.70 0.17 145);
+}
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at 8% 5%, rgba(34, 197, 94, 0.14) 0%, transparent 36%),
+      radial-gradient(circle at 92% 96%, rgba(16, 185, 129, 0.09) 0%, transparent 28%);
+    background-attachment: fixed;
+    transition:
+      background-color 240ms ease,
+      color 240ms ease,
+      border-color 240ms ease;
+  }
+
+  .dark body,
+  [data-theme="dark"] body {
+    background-image:
+      radial-gradient(circle at 10% 0%, rgba(34, 197, 94, 0.18) 0%, transparent 40%),
+      radial-gradient(circle at 88% 100%, rgba(16, 185, 129, 0.12) 0%, transparent 34%);
   }
 }

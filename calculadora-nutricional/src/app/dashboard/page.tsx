@@ -21,6 +21,11 @@ export default async function Dashboard() {
         orderBy: { createdAt: 'desc' }
     });
 
+    const formatDateBR = (value: Date) =>
+        new Date(value).toLocaleDateString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+        });
+
     return (
         <div className="container mx-auto py-8">
             <div className="flex justify-between items-center mb-6">
@@ -52,7 +57,7 @@ export default async function Dashboard() {
                             <CardContent className="text-sm text-muted-foreground">
                                 <p>Porção: {table.portion}{table.uom}</p>
                                 <p>Grupo: {table.popGroup}</p>
-                                <p>Criado em: {new Date(table.createdAt).toLocaleDateString()}</p>
+                                <p>Criado em: {formatDateBR(table.createdAt)}</p>
                             </CardContent>
                             <CardFooter>
                                 <Button variant="secondary" className="w-full" asChild>
