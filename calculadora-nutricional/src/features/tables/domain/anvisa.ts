@@ -2,6 +2,8 @@
  * Rules from IN 75/2020 ANVISA
  */
 
+export type FOPFoodType = "solid" | "liquid";
+
 export function roundEnergy(val: number): string {
     if (val < 5) return "0";
     if (val <= 50) return (Math.round(val / 5) * 5).toString();
@@ -44,21 +46,48 @@ export function calculateVD(val: number, vdr: number | null): string {
     return Math.round(pct).toString();
 }
 
-export function checkFOP(per100g: { sugarAdded: number, fatSat: number, sodium: number }): {
+export function inferFopFoodType(householdMeasure?: string): FOPFoodType {
+    const measure = (householdMeasure || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Heuristic used only when explicit product classification is unavailable.
+    // If no liquid indicator is detected, keep default as "solid" (safer by current data model).
+    const liquidHints = [
+        "ml",
+        "mililitro",
+        "mililitros",
+        "litro",
+        "litros",
+        "copo",
+        "copos",
+        "xicara",
+        "xicaras",
+        "xic.",
+        "cha",
+        "suco",
+        "bebida",
+    ];
+
+    return liquidHints.some((hint) => measure.includes(hint)) ? "liquid" : "solid";
+}
+
+export function checkFOP(
+    perReference: { sugarAdded: number, fatSat: number, sodium: number },
+    foodType: FOPFoodType = "solid"
+): {
     highSugar: boolean;
     highFat: boolean;
     highSodium: boolean;
 } {
-    // Limits per 100g (Solids) - Assuming solid food for now. Liquids have different limits (7.5g sugar, 3g fat, 300mg sodium)
-    // NOTE: The user prompt asked for specific limits:
-    // Sugar Added >= 15g
-    // Fat Sat >= 6g
-    // Sodium >= 600mg
-    // These match SOLID food limits. I will use these.
+    // IN 75/2020 - Anexo XV:
+    // Solids/Semisolid (por 100 g): sugar 15 g, sat fat 6 g, sodium 600 mg
+    // Liquids (por 100 ml): sugar 7.5 g, sat fat 3 g, sodium 300 mg
+    const limits = foodType === "liquid"
+        ? { sugarAdded: 7.5, fatSat: 3, sodium: 300 }
+        : { sugarAdded: 15, fatSat: 6, sodium: 600 };
 
     return {
-        highSugar: per100g.sugarAdded >= 15,
-        highFat: per100g.fatSat >= 6,
-        highSodium: per100g.sodium >= 600,
+        highSugar: perReference.sugarAdded >= limits.sugarAdded,
+        highFat: perReference.fatSat >= limits.fatSat,
+        highSodium: perReference.sodium >= limits.sodium,
     };
 }

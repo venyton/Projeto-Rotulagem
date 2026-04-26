@@ -35,4 +35,8 @@ export const MICRONUTRIENTS = [
     { name: "choline", label: "Colina", unit: "mg" },
 ] as const;
 
-export const MICRO_KEYS = MICRONUTRIENTS.map(m => m.name);
+export const MICRONUTRIENTS_A_TO_Z = [...MICRONUTRIENTS].sort((a, b) =>
+    a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" })
+);
+
+export const MICRO_KEYS = MICRONUTRIENTS_A_TO_Z.map(m => m.name);

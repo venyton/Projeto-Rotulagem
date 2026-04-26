@@ -1,192 +1,423 @@
-import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
-import { calculateVD, roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans } from "@/features/tables/domain/anvisa";
-import { VDR, PopGroup } from "@/features/tables/domain/constants";
+import React from "react";
 import { cn } from "@/lib/utils";
-import { MagnifyingGlassLabel } from "@/features/tables/components/MagnifyingGlassLabel";
+import { MICRONUTRIENTS_A_TO_Z as MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
+import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
+import { MagnifyingGlassLabel } from "./MagnifyingGlassLabel";
+import { 
+    roundEnergy, 
+    roundMacro, 
+    roundSaturatedTrans, 
+    roundSodium, 
+    roundSugars,
+    calculateVD
+} from "@/features/tables/domain/anvisa";
 
-const Row = ({ label, val100, valPortion, vd, sub = false, bold = false }: { label: string, val100: string, valPortion: string, vd: string, sub?: boolean, bold?: boolean }) => (
-    <div className={cn("flex justify-between border-b py-1 text-sm", sub && "pl-4")} style={{ borderColor: '#d1d5db', backgroundColor: '#ffffff' }}>
-        <span className={cn(bold && "font-bold")}>{label}</span>
-        <div className="flex gap-4 min-w-[140px] justify-end" style={{ backgroundColor: '#ffffff' }}>
-            <span className="w-12 text-right">{val100}</span>
-            <span className="w-12 text-right">{valPortion}</span>
-            <span className="w-8 text-right font-bold ml-2">{vd}</span>
-        </div>
-    </div>
-);
-
-import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
-
-interface NutritionalLabelProps {
+export interface NutritionalLabelProps {
     per100g: CalculatedNutrients;
     perPortion: CalculatedNutrients;
-    portionSize: number; // g
+    portionSize: number;
     householdMeasure: string;
     popGroup: PopGroup;
-    selectedNutrients?: string[];
+    selectedNutrients: string[];
     fop?: {
         highSugar: boolean;
         highFat: boolean;
         highSodium: boolean;
     };
+    previewType?: string;
+    id?: string;
 }
 
-export function NutritionalLabel({
+const getSafeVD = (value: number, vdr?: number | null) => {
+    return calculateVD(value || 0, vdr || null);
+};
+
+const Row4 = ({ label, v1, v2, v3, sub, bold }: { label: string; v1: string; v2: string; v3: string; sub?: boolean; bold?: boolean }) => (
+    <tr className="border-b text-[11px]" style={{ borderColor: "#d1d5db" }}>
+        <td className={cn("py-[3px] pr-2 leading-tight", sub && "pl-4", bold && "font-bold")}>{label}</td>
+        <td className="py-[3px] px-2 text-right">{v1}</td>
+        <td className="py-[3px] px-2 text-right">{v2}</td>
+        <td className="py-[3px] px-2 text-right font-bold">{v3}</td>
+    </tr>
+);
+
+const Row3 = ({ label, v1, v2, sub, bold }: { label: string; v1: string; v2: string; sub?: boolean; bold?: boolean }) => (
+    <tr className="border-b text-[11px]" style={{ borderColor: "#d1d5db" }}>
+        <td className={cn("py-[3px] pr-2 leading-tight", sub && "pl-4", bold && "font-bold")}>{label}</td>
+        <td className="py-[3px] px-2 text-right">{v1}</td>
+        <td className="py-[3px] px-2 text-right font-bold">{v2}</td>
+    </tr>
+);
+
+const Row2 = ({ label, v1, sub, bold }: { label: string; v1: string; sub?: boolean; bold?: boolean }) => (
+    <tr className="border-b text-[11px]" style={{ borderColor: "#d1d5db" }}>
+        <td className={cn("py-[3px] pr-2 leading-tight", sub && "pl-4", bold && "font-bold")}>{label}</td>
+        <td className="py-[3px] px-2 text-right">{v1}</td>
+    </tr>
+);
+
+export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     per100g,
     perPortion,
     portionSize,
     householdMeasure,
     popGroup,
-    selectedNutrients = [],
+    selectedNutrients,
     fop,
-}: NutritionalLabelProps) {
-    const vdr = VDR[popGroup];
-    const per100gValues = per100g as Record<string, number>;
-    const perPortionValues = perPortion as Record<string, number>;
-    const vdrValues = vdr as Record<string, number | null | undefined>;
+    previewType = "VERT",
+    id = "nutrition-label-container",
+}) => {
+    const vdr = VDR[popGroup] || VDR[POPULATION_GROUPS.ADULTS];
+    const adultsVdr = VDR[POPULATION_GROUPS.ADULTS];
 
-    const getVD = (val: number, ref: number | null | undefined) => calculateVD(val, ref || null);
+    const per100gValues = per100g as unknown as Record<string, number>;
+    const perPortionValues = perPortion as unknown as Record<string, number>;
+    const vdrValues = vdr as unknown as Record<string, number>;
+    const adultsVdrValues = adultsVdr as unknown as Record<string, number>;
 
-    // Helper to format micro values (simple rounding for now)
-    const formatMicro = (val: number) => {
-        if (val === 0) return "0";
-        if (val < 1) return val.toFixed(1).replace('.', ','); // Small values
-        return Math.round(val).toString(); // Integer for > 1 (e.g. 500mg calcium, 800mcg Vit A)
-        // Adjust logic if needed for decimals in mg
-    };
+    const baseRows = [
+        { 
+            label: "Valor energético (kcal)", 
+            per100: roundEnergy(per100g.energy || 0).replace(".", ","), 
+            portion: roundEnergy(perPortion.energy || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.energy || 0, vdr.energy), 
+            vd100: getSafeVD(per100g.energy || 0, vdr.energy), 
+            bold: true 
+        },
+        { 
+            label: "Carboidratos (g)", 
+            per100: roundMacro(per100g.carbs || 0).replace(".", ","), 
+            portion: roundMacro(perPortion.carbs || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.carbs || 0, vdr.carbs), 
+            vd100: getSafeVD(per100g.carbs || 0, vdr.carbs), 
+            bold: true 
+        },
+        { 
+            label: "Açúcares totais (g)", 
+            per100: roundSugars(per100g.sugarTotal || 0).replace(".", ","), 
+            portion: roundSugars(perPortion.sugarTotal || 0).replace(".", ","), 
+            vdPortion: "-", 
+            vd100: "-", 
+            sub: true 
+        },
+        { 
+            label: "Açúcares adicionados (g)", 
+            per100: roundSugars(per100g.sugarAdded || 0).replace(".", ","), 
+            portion: roundSugars(perPortion.sugarAdded || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.sugarAdded || 0, vdr.sugarAdded), 
+            vd100: getSafeVD(per100g.sugarAdded || 0, vdr.sugarAdded), 
+            sub: true 
+        },
+        { 
+            label: "Proteínas (g)", 
+            per100: roundMacro(per100g.protein || 0).replace(".", ","), 
+            portion: roundMacro(perPortion.protein || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.protein || 0, vdr.protein), 
+            vd100: getSafeVD(per100g.protein || 0, vdr.protein), 
+            bold: true 
+        },
+        { 
+            label: "Gorduras totais (g)", 
+            per100: roundMacro(per100g.fatTotal || 0).replace(".", ","), 
+            portion: roundMacro(perPortion.fatTotal || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.fatTotal || 0, vdr.fatTotal), 
+            vd100: getSafeVD(per100g.fatTotal || 0, vdr.fatTotal), 
+            bold: true 
+        },
+        { 
+            label: "Gorduras saturadas (g)", 
+            per100: roundSaturatedTrans(per100g.fatSat || 0).replace(".", ","), 
+            portion: roundSaturatedTrans(perPortion.fatSat || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.fatSat || 0, vdr.fatSat), 
+            vd100: getSafeVD(per100g.fatSat || 0, vdr.fatSat), 
+            sub: true, 
+            bold: true 
+        },
+        { 
+            label: "Gorduras trans (g)", 
+            per100: roundSaturatedTrans(per100g.fatTrans || 0).replace(".", ","), 
+            portion: roundSaturatedTrans(perPortion.fatTrans || 0).replace(".", ","), 
+            vdPortion: "-", 
+            vd100: "-", 
+            sub: true, 
+            bold: true 
+        },
+        { 
+            label: "Fibras alimentares (g)", 
+            per100: roundMacro(per100g.fiber || 0).replace(".", ","), 
+            portion: roundMacro(perPortion.fiber || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.fiber || 0, vdr.fiber), 
+            vd100: getSafeVD(per100g.fiber || 0, vdr.fiber), 
+            bold: true 
+        },
+        { 
+            label: "Sódio (mg)", 
+            per100: roundSodium(per100g.sodium || 0).replace(".", ","), 
+            portion: roundSodium(perPortion.sodium || 0).replace(".", ","), 
+            vdPortion: getSafeVD(perPortion.sodium || 0, vdr.sodium), 
+            vd100: getSafeVD(per100g.sodium || 0, vdr.sodium), 
+            bold: true 
+        },
+    ];
 
-    const hasFop = !!(fop?.highSugar || fop?.highFat || fop?.highSodium);
+    MICRONUTRIENTS.forEach((m) => {
+        if (selectedNutrients.includes(m.name)) {
+            const val100 = per100gValues[m.name] || 0;
+            const valPortion = perPortionValues[m.name] || 0;
+            const ref = vdrValues[m.name];
+            
+            const format = (v: number) => {
+                if (v === 0) return "0";
+                if (v < 1) return v.toFixed(1).replace(".", ",");
+                return Math.round(v).toString();
+            };
+
+            baseRows.push({
+                label: `${m.label} (${m.unit})`,
+                per100: format(val100),
+                portion: format(valPortion),
+                vdPortion: getSafeVD(valPortion, ref),
+                vd100: getSafeVD(val100, ref),
+                bold: false
+            });
+        }
+    });
+
+    const linearText = baseRows
+        .map((r) => `${r.label.split(" (")[0]} ${r.portion} (${r.vdPortion}% VD*)`)
+        .join("; ");
 
     return (
-        <div className="p-4 border-2 max-w-md font-sans" id="nutrition-label-container" style={{ backgroundColor: '#ffffff', borderColor: '#000000', color: '#000000' }}>
-            <h2 className="text-xl font-bold border-b-4 pb-1" style={{ borderColor: '#000000' }}>INFORMAÇÃO NUTRICIONAL</h2>
-            <div className="text-sm mb-2">
-                <p>Porção de {portionSize}g ({householdMeasure})</p>
+        <div
+            className="p-4 border-2 inline-block w-fit min-w-[22rem] max-w-[64rem]"
+            id={id}
+            style={{ backgroundColor: "#ffffff", borderColor: "#000000", color: "#000000", fontFamily: "Arial, Helvetica, sans-serif" }}
+        >
+            <style dangerouslySetInnerHTML={{ __html: `
+              #${id} td, #${id} th, #${id} p, #${id} span, #${id} div, #${id} h1, #${id} h2, #${id} h3 {
+                white-space: nowrap !important;
+                letter-spacing: normal !important;
+                word-spacing: normal !important;
+              }
+              #${id} td {
+                vertical-align: middle !important;
+                line-height: 1.4 !important;
+                padding-top: 4px !important;
+                padding-bottom: 4px !important;
+              }
+            `}} />
+            <h2 className="text-[13px] font-bold" style={{ margin: 0, paddingBottom: '4px', borderBottom: '4px solid #000000' }}>
+                INFORMAÇÃO NUTRICIONAL
+            </h2>
+            <div className="text-[11px] mt-2 mb-2 leading-tight">
+                <p style={{ margin: 0 }}>Porção de {portionSize}g ({householdMeasure})</p>
             </div>
 
-            <div className="border-t-2" style={{ borderColor: '#000000' }}>
-                <div className="flex justify-between font-bold text-xs border-b py-1" style={{ backgroundColor: '#f3f4f6', borderColor: '#000000' }}>
-                    <span></span>
-                    <div className="flex gap-4 min-w-[140px] justify-end">
-                        <span className="w-12 text-right">100g</span>
-                        <span className="w-12 text-right">Porção</span>
-                        <span className="w-8 text-right">%VD*</span>
+            {previewType === "LINEAR" ? (
+                <div className="text-[11px] leading-relaxed border-t-2 pt-2" style={{ borderColor: "#000000" }}>
+                    {linearText}
+                </div>
+            ) : previewType === "SIMPLIF" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse">
+                        <thead>
+                            <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] pl-4 text-right">100g</th>
+                                <th className="py-[3px] pl-4 text-right">Porção</th>
+                                <th className="py-[3px] pl-4 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <Row4 label="Carboidratos (g)" v1={baseRows[1].per100} v2={baseRows[1].portion} v3={baseRows[1].vdPortion} bold />
+                            <tr className="border-b text-[11px]" style={{ borderColor: "#d1d5db" }}>
+                                <td className="py-[3px] leading-[1.2]" colSpan={4}>
+                                    Não contém quantidades significativas dos demais nutrientes obrigatórios.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "B2B" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse">
+                        <thead>
+                            <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] pl-4 text-right">100g</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <Row2 key={`b2b-${row.label}`} label={row.label} v1={row.per100} sub={row.sub} bold={row.bold} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "100" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse">
+                        <thead>
+                            <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] pl-4 text-right">100g</th>
+                                <th className="py-[3px] pl-4 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <Row3 key={`100-${row.label}`} label={row.label} v1={row.per100} v2={row.vd100} sub={row.sub} bold={row.bold} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "SUPLEM" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse">
+                        <thead>
+                            <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] pl-4 text-right">Porção</th>
+                                <th className="py-[3px] pl-4 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <Row3 key={`sup-${row.label}`} label={row.label} v1={row.portion} v2={row.vdPortion} sub={row.sub} bold={row.bold} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "AGREGADO" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse text-[11px]">
+                        <thead>
+                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] px-2 text-center" colSpan={3}>Produto 1</th>
+                                <th className="py-[3px] px-2 text-center" colSpan={3}>Produto 2</th>
+                            </tr>
+                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] px-2 text-right">100g</th>
+                                <th className="py-[3px] px-2 text-right">Porção</th>
+                                <th className="py-[3px] px-2 text-right">%VD*</th>
+                                <th className="py-[3px] px-2 text-right">100g</th>
+                                <th className="py-[3px] px-2 text-right">Porção</th>
+                                <th className="py-[3px] px-2 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <tr key={`agg-${row.label}`} className="border-b" style={{ borderColor: "#d1d5db" }}>
+                                    <td className={cn("py-[3px] pr-2", row.sub && "pl-4", row.bold && "font-bold")}>{row.label}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.per100}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.portion}</td>
+                                    <td className="py-[3px] px-2 text-right font-bold">{row.vdPortion}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.per100}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.portion}</td>
+                                    <td className="py-[3px] px-2 text-right font-bold">{row.vdPortion}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "SUPLEM-POP" ? (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse text-[11px]">
+                        <thead>
+                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] px-2 text-center" colSpan={2}>{firstGroupLabel}</th>
+                                <th className="py-[3px] px-2 text-center" colSpan={2}>{secondGroupLabel}</th>
+                            </tr>
+                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] px-2 text-right">Porção</th>
+                                <th className="py-[3px] px-2 text-right">%VD*</th>
+                                <th className="py-[3px] px-2 text-right">Porção</th>
+                                <th className="py-[3px] px-2 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <tr key={`pop-${row.label}`} className="border-b" style={{ borderColor: "#d1d5db" }}>
+                                    <td className={cn("py-[3px] pr-2", row.sub && "pl-4", row.bold && "font-bold")}>{row.label}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.portion}</td>
+                                    <td className="py-[3px] px-2 text-right font-bold">{row.vdPortion}</td>
+                                    <td className="py-[3px] px-2 text-right">{row.portion}</td>
+                                    <td className="py-[3px] px-2 text-right font-bold">{getVD(Number(row.portion), adultsVdrValues[MICRONUTRIENTS.find(m => row.label.startsWith(m.label))?.name || ""])}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : previewType === "HORIZ" ? (
+                <div className="border-t-2 pt-2" style={{ borderColor: "#000000" }}>
+                    <div className="grid grid-cols-[12rem_auto] gap-4 items-start">
+                        <div className="text-[11px] border rounded-sm p-2" style={{ borderColor: "#d1d5db" }}>
+                            <div className="font-bold">INFORMAÇÃO NUTRICIONAL</div>
+                            <div className="mt-1">Porções por emb.: ...</div>
+                            <div>Porção: {portionSize} g</div>
+                            <div>({householdMeasure})</div>
+                        </div>
+                        <table className="w-auto border-collapse">
+                            <thead>
+                                <tr className="font-bold text-[11px] border-b" style={{ backgroundColor: "#f3f4f6", borderColor: "#000000" }}>
+                                    <th className="py-[3px] text-left font-bold"></th>
+                                    <th className="py-[3px] pl-4 text-right font-bold whitespace-nowrap">100g</th>
+                                    <th className="py-[3px] pl-4 text-right font-bold whitespace-nowrap">Porção</th>
+                                    <th className="py-[3px] pl-4 text-right font-bold whitespace-nowrap">%VD*</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {baseRows.map((row) => (
+                                    <Row4 key={`horiz-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} sub={row.sub} bold={row.bold} />
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            ) : (
+                <div className="border-t-2" style={{ borderColor: "#000000" }}>
+                    <table className="w-auto border-collapse">
+                        <thead>
+                            <tr className="font-bold text-[11px] border-b" style={{ backgroundColor: "#f3f4f6", borderColor: "#000000" }}>
+                                <th className="py-[3px] text-left"></th>
+                                <th className="py-[3px] pl-4 text-right">100g</th>
+                                <th className="py-[3px] pl-4 text-right">Porção</th>
+                                <th className="py-[3px] pl-4 text-right">%VD*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {baseRows.map((row) => (
+                                <Row4 key={`vert-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} sub={row.sub} bold={row.bold} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
 
-                <Row
-                    label="Valor energético (kcal)"
-                    val100={roundEnergy(per100g.energy)}
-                    valPortion={roundEnergy(perPortion.energy)}
-                    vd={getVD(perPortion.energy, vdr.energy)}
-                    bold
-                />
-
-                <Row
-                    label="Carboidratos totais (g)"
-                    val100={roundMacro(per100g.carbs)}
-                    valPortion={roundMacro(perPortion.carbs)}
-                    vd={getVD(perPortion.carbs, vdr.carbs)}
-                    bold
-                />
-                <Row
-                    label="Açúcares totais (g)"
-                    val100={roundSugars(per100g.sugarTotal)}
-                    valPortion={roundSugars(perPortion.sugarTotal)}
-                    vd="-" sub
-                />
-                <Row
-                    label="Açúcares adicion. (g)"
-                    val100={roundSugars(per100g.sugarAdded)}
-                    valPortion={roundSugars(perPortion.sugarAdded)}
-                    vd="-" sub
-                />
-
-                <Row
-                    label="Proteínas (g)"
-                    val100={roundMacro(per100g.protein)}
-                    valPortion={roundMacro(perPortion.protein)}
-                    vd={getVD(perPortion.protein, vdr.protein)}
-                    bold
-                />
-
-                <Row
-                    label="Gorduras totais (g)"
-                    val100={roundMacro(per100g.fatTotal)}
-                    valPortion={roundMacro(perPortion.fatTotal)}
-                    vd={getVD(perPortion.fatTotal, vdr.fatTotal)}
-                    bold
-                />
-                <Row
-                    label="Gorduras saturadas (g)"
-                    val100={roundSaturatedTrans(per100g.fatSat)}
-                    valPortion={roundSaturatedTrans(perPortion.fatSat)}
-                    vd={getVD(perPortion.fatSat, vdr.fatSat)}
-                    sub
-                />
-                <Row
-                    label="Gorduras trans (g)"
-                    val100={roundSaturatedTrans(per100g.fatTrans)}
-                    valPortion={roundSaturatedTrans(perPortion.fatTrans)}
-                    vd="-" sub
-                />
-
-                {/* Dynamic Micronutrients */}
-                {MICRONUTRIENTS.map(micro => {
-                    if (!selectedNutrients.includes(micro.name)) return null;
-                    const val100 = per100gValues[micro.name] || 0;
-                    const valPortion = perPortionValues[micro.name] || 0;
-                    const ref = vdrValues[micro.name];
-
-                    return (
-                        <Row
-                            key={micro.name}
-                            label={`${micro.label} (${micro.unit})`}
-                            val100={formatMicro(val100)}
-                            valPortion={formatMicro(valPortion)}
-                            vd={getVD(valPortion, ref)}
-                            bold={false} // Micros usually regular font
-                        />
-                    );
-                })}
-
-                <Row
-                    label="Fibra alimentar (g)"
-                    val100={roundMacro(per100g.fiber)}
-                    valPortion={roundMacro(perPortion.fiber)}
-                    vd={getVD(perPortion.fiber, vdr.fiber)}
-                    bold
-                />
-
-                <Row
-                    label="Sódio (mg)"
-                    val100={roundSodium(per100g.sodium)}
-                    valPortion={roundSodium(perPortion.sodium)}
-                    vd={getVD(perPortion.sodium, vdr.sodium)}
-                    bold
-                />
-
+            <div className="mt-4 text-[10px] italic">
+                * Percentual de valores diários fornecidos pela porção.
             </div>
-            <div className="text-xs mt-2 border-t pt-1" style={{ borderColor: '#000000' }}>
-                *Percentual de valores diários fornecidos pela porção.
-                {vdr.fatSat === null && " (Gorduras saturadas: VDR não estabelecido para este grupo)."}
-            </div>
-            {hasFop && fop && (
-                <div className="mt-3 pt-2 border-t flex justify-center" style={{ borderColor: '#000000' }}>
+
+            {fop && (fop.highSugar || fop.highFat || fop.highSodium) && (
+                <div className="mt-4 flex justify-center w-full border-t border-border/40 pt-4">
                     <div
                         className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
                         style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
                     >
                         <MagnifyingGlassLabel
-                            highSugar={fop.highSugar}
-                            highFat={fop.highFat}
-                            highSodium={fop.highSodium}
+                            highSugar={!!fop.highSugar}
+                            highFat={!!fop.highFat}
+                            highSodium={!!fop.highSodium}
                             layout="horizontal"
-                            id="lupa-integrada-tabela"
                         />
                     </div>
                 </div>
             )}
         </div>
     );
-}
+};
