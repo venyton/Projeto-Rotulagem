@@ -17,26 +17,38 @@ const bodyFont = Manrope({
 });
 
 const BENEFITS = [
-  "Fluxo claro para montar a tabela sem perder tempo.",
-  "Baseado em regras oficiais para reduzir retrabalho.",
-  "Exportação prática para operação, revisão e produção.",
+  "Monta a tabela nutricional com cálculo automático por 100 g e por porção.",
+  "Permite pré-visualizar modelos oficiais para revisar antes de publicar.",
+  "Exporta em PNG e Excel para time técnico, comercial e produção.",
+];
+
+const PLATFORM_FEATURES = [
+  "Cadastro e seleção de ingredientes com composição nutricional.",
+  "Cálculo automático de energia, macros e micronutrientes.",
+  "Cálculo por 100 g/ml e por porção com medida caseira.",
+  "Aplicação de regras ANVISA com arredondamentos e %VD.",
+  "Detecção de rotulagem frontal (lupa) para açúcar adicionado, gordura saturada e sódio.",
+  "Pré-visualização de modelos: vertical, horizontal, linear, simplificada, suplemento e variações.",
+  "Exportação em PNG/JPEG/WEBP para apresentação e revisão.",
+  "Exportação em Excel oficial e pacote completo em ZIP.",
+  "Salvamento e edição de tabelas no painel do usuário.",
 ];
 
 const AUDIENCE = [
   {
     icon: Factory,
     title: "Indústrias e fábricas",
-    text: "Mais consistência para o time técnico e mais velocidade na entrega.",
+    text: "Padroniza processos internos e reduz retrabalho entre desenvolvimento, qualidade e regulatório.",
   },
   {
     icon: Leaf,
     title: "Marcas de alimentos",
-    text: "Lançamentos com mais segurança e apresentação profissional.",
+    text: "Transforma dados técnicos em materiais claros para lançamento de produtos e atualização de portfólio.",
   },
   {
     icon: Users2,
     title: "Consultorias",
-    text: "Processo organizado para atender múltiplos clientes com qualidade.",
+    text: "Organiza o atendimento de múltiplos clientes com mais agilidade, consistência e rastreabilidade.",
   },
 ];
 
@@ -147,12 +159,20 @@ export default async function Home() {
               Sobre nós
             </p>
             <h2 className={`${titleFont.className} mt-3 text-4xl leading-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl`}>
-              Um sistema criado para simplificar a rotina da rotulagem
+              Rotulagem nutricional com processo claro, do cálculo à entrega
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              A SoIZI nasceu para dar apoio real para quem trabalha com tabela nutricional todos os dias, reduzindo
-              retrabalho e organizando o processo de ponta a ponta.
+              A plataforma foi pensada para quem precisa ganhar tempo sem abrir mão da qualidade técnica: você calcula,
+              revisa, ajusta e exporta a tabela em um fluxo único, com mais segurança operacional.
             </p>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              A SoIZI conecta conhecimento regulatório e execução prática para transformar dados de ingredientes em
+              informação nutricional padronizada, revisável e pronta para uso nos diferentes setores do negócio.
+            </p>
+            <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              <span>RDC 429/2020 como referência operacional</span>
+              <ArrowRight className="h-4 w-4" />
+            </div>
             <ul className="mt-6 space-y-4 text-sm text-zinc-700 dark:text-zinc-300 sm:text-base">
               {BENEFITS.map((benefit) => (
                 <li key={benefit} className="flex items-start gap-3">
@@ -164,32 +184,37 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="sobre-a-soizi" className="mt-18 scroll-mt-24 rounded-[2.3rem] border border-border/70 bg-card/70 p-8 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] sm:p-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-            Sobre a SoIZI
-          </p>
-          <h2 className={`${titleFont.className} mt-3 text-4xl leading-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl`}>
-            Tecnologia e nutrição caminhando juntas
-          </h2>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            A SoIZI é uma plataforma focada em tornar a construção da informação nutricional mais clara e mais humana.
-            O objetivo é oferecer uma experiência técnica, mas leve, para quem precisa entregar qualidade sem
-            complicação.
-          </p>
-          <div className="mt-7 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-            <span>RDC 429/2020 como referência operacional</span>
-            <ArrowRight className="h-4 w-4" />
-          </div>
-        </section>
+        <section id="o-que-fazemos" className="mt-18 scroll-mt-24">
+          <div className="rounded-[2.3rem] border border-border/70 bg-card/70 p-8 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] sm:p-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+              Plataforma
+            </p>
+            <h2 className={`${titleFont.className} mt-3 text-4xl leading-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl`}>
+              O que você encontra na prática
+            </h2>
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Tudo o que você precisa para montar, revisar, salvar e exportar tabelas nutricionais com consistência.
+            </p>
 
-        <section id="plataforma" className="mt-18 scroll-mt-24 grid gap-8 md:grid-cols-3">
-          {AUDIENCE.map((item) => (
-            <article key={item.title} className="rounded-[1.8rem] border border-border/70 bg-card/80 p-6 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] backdrop-blur">
-              <item.icon className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
-              <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.text}</p>
-            </article>
-          ))}
+            <ul className="mt-6 grid gap-3 text-sm text-zinc-700 dark:text-zinc-300 sm:grid-cols-2 sm:text-base">
+              {PLATFORM_FEATURES.map((feature) => (
+                <li key={feature} className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 flex-none text-emerald-600 dark:text-emerald-300" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-8 grid gap-8 md:grid-cols-3">
+            {AUDIENCE.map((item) => (
+              <article key={item.title} className="rounded-[1.8rem] border border-border/70 bg-card/80 p-6 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] backdrop-blur">
+                <item.icon className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.text}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section id="dayane" className="mt-18 scroll-mt-24 overflow-hidden rounded-[2.3rem] border border-emerald-500/25 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-8 sm:p-10">

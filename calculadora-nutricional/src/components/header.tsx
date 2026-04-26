@@ -13,9 +13,8 @@ interface HeaderProps {
 
 const HOME_SECTIONS = [
     { id: "sobre-nos", label: "Sobre nós" },
-    { id: "sobre-a-soizi", label: "Sobre a SoIZI" },
-    { id: "plataforma", label: "Plataforma" },
-    { id: "quem-e-dayane", label: "Quem é Dayane" },
+    { id: "o-que-fazemos", label: "O que fazemos" },
+    { id: "dayane", label: "Quem é Dayane" },
     { id: "acesso", label: "Acesso" },
 ];
 
