@@ -6,7 +6,6 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
@@ -23,6 +22,18 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const getCellValue = (row: Record<string, unknown>, ...keys: string[]) => {
+        for (const key of keys) {
+            const value = row[key];
+            if (value !== undefined && value !== null && String(value).trim() !== "") {
+                return value;
+            }
+        }
+        return "";
+    };
+
+    const toNumber = (value: unknown) => Number(value || 0);
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -34,59 +45,59 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
             const workbook = XLSX.read(data);
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet) as any[];
+            const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
             // Validate and map data
             const ingredients: IngredientData[] = jsonData.map((row) => ({
-                name: row['Nome'] || row['name'] || '',
-                energy: Number(row['Energia'] || row['energy'] || 0),
-                protein: Number(row['Proteína'] || row['protein'] || 0),
-                carbs: Number(row['Carboidratos'] || row['carbs'] || 0),
-                fatTotal: Number(row['Gorduras Totais'] || row['fatTotal'] || 0),
-                fatSat: Number(row['Gorduras Saturadas'] || row['fatSat'] || 0),
-                fatTrans: Number(row['Gorduras Trans'] || row['fatTrans'] || 0),
-                sugarTotal: Number(row['Açúcares'] || row['Açúcares Totais'] || row['acucares'] || row['Sugar'] || 0),
-                sugarAdded: Number(row['Açúcares Adicionados'] || row['acucares adicionados'] || 0),
+                name: String(getCellValue(row, 'Nome', 'name')),
+                energy: toNumber(getCellValue(row, 'Energia', 'energy')),
+                protein: toNumber(getCellValue(row, 'Proteína', 'protein')),
+                carbs: toNumber(getCellValue(row, 'Carboidratos', 'carbs')),
+                fatTotal: toNumber(getCellValue(row, 'Gorduras Totais', 'fatTotal')),
+                fatSat: toNumber(getCellValue(row, 'Gorduras Saturadas', 'fatSat')),
+                fatTrans: toNumber(getCellValue(row, 'Gorduras Trans', 'fatTrans')),
+                sugarTotal: toNumber(getCellValue(row, 'Açúcares', 'Açúcares Totais', 'acucares', 'Sugar')),
+                sugarAdded: toNumber(getCellValue(row, 'Açúcares Adicionados', 'acucares adicionados')),
 
                 // Micronutrients
-                fatMono: Number(row['Gorduras monoinsaturadas'] || 0),
-                fatPoly: Number(row['Gorduras poli-insaturadas'] || 0),
-                omega6: Number(row['Ômega 6'] || 0),
-                omega3: Number(row['Ômega 3'] || 0),
-                cholesterol: Number(row['Colesterol'] || 0),
+                fatMono: toNumber(getCellValue(row, 'Gorduras monoinsaturadas')),
+                fatPoly: toNumber(getCellValue(row, 'Gorduras poli-insaturadas')),
+                omega6: toNumber(getCellValue(row, 'Ômega 6')),
+                omega3: toNumber(getCellValue(row, 'Ômega 3')),
+                cholesterol: toNumber(getCellValue(row, 'Colesterol')),
 
-                fiber: Number(row['Fibras alimentares'] || row['Fibra'] || row['fiber'] || 0),
-                sodium: Number(row['Sódio'] || row['sodio'] || row['Sodium'] || 0),
+                fiber: toNumber(getCellValue(row, 'Fibras alimentares', 'Fibra', 'fiber')),
+                sodium: toNumber(getCellValue(row, 'Sódio', 'sodio', 'Sodium')),
 
-                vitaminA: Number(row['Vitamina A'] || 0),
-                vitaminD: Number(row['Vitamina D'] || 0),
-                vitaminE: Number(row['Vitamina E'] || 0),
-                vitaminK: Number(row['Vitamina K'] || 0),
-                vitaminC: Number(row['Vitamina C'] || 0),
-                thiamin: Number(row['Tiamina'] || 0),
-                riboflavin: Number(row['Riboflavina'] || 0),
-                niacin: Number(row['Niacina'] || 0),
-                vitaminB6: Number(row['Vitamina B6'] || 0),
-                biotin: Number(row['Biotina'] || 0),
-                folicAcid: Number(row['Ácido fólico'] || 0),
-                pantothenicAcid: Number(row['Ácido pantotênico'] || 0),
-                vitaminB12: Number(row['Vitamina B12'] || 0),
+                vitaminA: toNumber(getCellValue(row, 'Vitamina A')),
+                vitaminD: toNumber(getCellValue(row, 'Vitamina D')),
+                vitaminE: toNumber(getCellValue(row, 'Vitamina E')),
+                vitaminK: toNumber(getCellValue(row, 'Vitamina K')),
+                vitaminC: toNumber(getCellValue(row, 'Vitamina C')),
+                thiamin: toNumber(getCellValue(row, 'Tiamina')),
+                riboflavin: toNumber(getCellValue(row, 'Riboflavina')),
+                niacin: toNumber(getCellValue(row, 'Niacina')),
+                vitaminB6: toNumber(getCellValue(row, 'Vitamina B6')),
+                biotin: toNumber(getCellValue(row, 'Biotina')),
+                folicAcid: toNumber(getCellValue(row, 'Ácido fólico')),
+                pantothenicAcid: toNumber(getCellValue(row, 'Ácido pantotênico')),
+                vitaminB12: toNumber(getCellValue(row, 'Vitamina B12')),
 
-                calcium: Number(row['Cálcio'] || 0),
-                chloride: Number(row['Cloreto'] || 0),
-                copper: Number(row['Cobre'] || 0),
-                chromium: Number(row['Cromo'] || 0),
-                iron: Number(row['Ferro'] || 0),
-                fluoride: Number(row['Flúor'] || 0),
-                phosphorus: Number(row['Fósforo'] || 0),
-                iodine: Number(row['Iodo'] || 0),
-                magnesium: Number(row['Magnésio'] || 0),
-                manganese: Number(row['Manganês'] || 0),
-                molybdenum: Number(row['Molibdênio'] || 0),
-                potassium: Number(row['Potássio'] || 0),
-                selenium: Number(row['Selênio'] || 0),
-                zinc: Number(row['Zinco'] || 0),
-                choline: Number(row['Colina'] || 0),
+                calcium: toNumber(getCellValue(row, 'Cálcio')),
+                chloride: toNumber(getCellValue(row, 'Cloreto')),
+                copper: toNumber(getCellValue(row, 'Cobre')),
+                chromium: toNumber(getCellValue(row, 'Cromo')),
+                iron: toNumber(getCellValue(row, 'Ferro')),
+                fluoride: toNumber(getCellValue(row, 'Flúor')),
+                phosphorus: toNumber(getCellValue(row, 'Fósforo')),
+                iodine: toNumber(getCellValue(row, 'Iodo')),
+                magnesium: toNumber(getCellValue(row, 'Magnésio')),
+                manganese: toNumber(getCellValue(row, 'Manganês')),
+                molybdenum: toNumber(getCellValue(row, 'Molibdênio')),
+                potassium: toNumber(getCellValue(row, 'Potássio')),
+                selenium: toNumber(getCellValue(row, 'Selênio')),
+                zinc: toNumber(getCellValue(row, 'Zinco')),
+                choline: toNumber(getCellValue(row, 'Colina')),
             })).filter(i => i.name.length > 0);
 
             if (ingredients.length === 0) {
@@ -144,7 +155,7 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
                     {loading && (
                         <div className="flex items-center justify-center py-2">
                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                            <span className="ml-2 text-sm text-gray-500">Processando...</span>
+                            <span className="ml-2 text-sm text-muted-foreground">Processando...</span>
                         </div>
                     )}
                 </div>

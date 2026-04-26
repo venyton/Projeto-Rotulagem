@@ -26,7 +26,10 @@ export async function IngredientsPageContent({
   if (error) {
     return (
       <div className="container mx-auto py-10 px-4">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+        <div
+          className="relative rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive"
+          role="alert"
+        >
           <strong className="font-bold block mb-1">Erro ao carregar!</strong>
           <span className="block sm:inline mb-4">{error}</span>
           <p className="text-sm">Se o erro persistir, tente corrigir o banco:</p>

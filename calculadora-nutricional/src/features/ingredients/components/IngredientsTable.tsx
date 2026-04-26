@@ -83,10 +83,10 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                 </div>
             </div>
 
-            <div className="rounded-md border">
+            <div className="overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-sm">
                 <Table>
                     <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-muted/[0.22]">
                             <TableHead className="w-[300px]">Nome</TableHead>
                             <TableHead>Energia (kcal)</TableHead>
                             <TableHead>Carboidratos (g)</TableHead>
@@ -125,7 +125,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
                                                 onClick={() => handleDelete(ingredient.id, ingredient.name)}
                                             >
                                                 <Trash2 className="h-4 w-4" />

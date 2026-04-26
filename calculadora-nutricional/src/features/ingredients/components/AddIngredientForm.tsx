@@ -27,7 +27,7 @@ export type IngredientFormProps = {
         sodium: number;
         sugarTotal: number;
         sugarAdded: number;
-        [key: string]: any; // Allow dynamic access for micronutrients
+        [key: string]: unknown; // Allow dynamic access for micronutrients
     };
     trigger?: React.ReactNode;
     open?: boolean;
@@ -80,7 +80,6 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
     const open = isControlled ? controlledOpen : internalOpen;
     const setOpen = isControlled ? onOpenChange! : setInternalOpen;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (state?.error) {
             toast.error(state.error);
@@ -89,7 +88,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
             toast.success(initialData ? "Ingrediente atualizado!" : "Ingrediente criado com sucesso!");
             setOpen(false);
         }
-    }, [state]);
+    }, [initialData, setOpen, state]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -108,7 +107,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                         <Input name="name" defaultValue={initialData?.name} required />
                     </div>
 
-                    <h3 className="font-semibold border-b pb-2 mt-4 text-sm text-gray-700">Macronutrientes (por 100g)</h3>
+                    <h3 className="mt-4 border-b border-border/70 pb-2 text-sm font-semibold text-foreground">Macronutrientes (por 100g)</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div className="space-y-2"><Label>Energia (kcal)</Label><Input name="energy" type="number" step="0.1" defaultValue={initialData?.energy} /></div>
                         <div className="space-y-2"><Label>Carboidratos (g)</Label><Input name="carbs" type="number" step="0.1" defaultValue={initialData?.carbs} /></div>
@@ -119,7 +118,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                         <div className="space-y-2"><Label>Sódio (mg)</Label><Input name="sodium" type="number" step="1" defaultValue={initialData?.sodium} /></div>
                     </div>
 
-                    <h3 className="font-semibold border-b pb-2 mt-4 text-sm text-gray-700">Gorduras (por 100g)</h3>
+                    <h3 className="mt-4 border-b border-border/70 pb-2 text-sm font-semibold text-foreground">Gorduras (por 100g)</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         <div className="space-y-2"><Label>Gord. Totais (g)</Label><Input name="fatTotal" type="number" step="0.1" defaultValue={initialData?.fatTotal} /></div>
                         <div className="space-y-2"><Label>Gord. Sat. (g)</Label><Input name="fatSat" type="number" step="0.1" defaultValue={initialData?.fatSat} /></div>
@@ -133,7 +132,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                     </div>
 
                     {showMicros && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border">
+                        <div className="grid grid-cols-2 gap-4 rounded-xl border border-border/70 bg-muted/[0.25] p-4 sm:grid-cols-3 md:grid-cols-4">
                             {MICRONUTRIENTS.map((m) => (
                                 <div key={m.name} className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">{m.label}</Label>
@@ -141,7 +140,10 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                                         name={m.name}
                                         type="number"
                                         step="0.001"
-                                        defaultValue={initialData?.[m.name] || ''}
+                                        defaultValue={(() => {
+                                            const raw = initialData?.[m.name];
+                                            return typeof raw === "number" || typeof raw === "string" ? raw : "";
+                                        })()}
                                         className="h-8 text-sm"
                                         placeholder="0"
                                     />
@@ -151,9 +153,9 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                     )}
 
                     {!initialData && <p className="text-xs text-muted-foreground">Valores por 100g de alimento.</p>}
-                    {initialData && <p className="text-xs text-yellow-600">Atenção: As alterações afetam todas as tabelas.</p>}
+                    {initialData && <p className="text-xs text-amber-600 dark:text-amber-400">Atenção: As alterações afetam todas as tabelas.</p>}
 
-                    <div className="bg-yellow-50 p-3 rounded-md text-xs text-yellow-800 border border-yellow-200">
+                    <div className="rounded-md border border-amber-200/80 bg-amber-50/70 p-3 text-xs text-amber-800 dark:border-amber-600/30 dark:bg-amber-500/10 dark:text-amber-300">
                         <strong>Aviso:</strong> Verifique sempre as informações nas embalagens ou fontes confiáveis.
                     </div>
 

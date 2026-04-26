@@ -22,7 +22,7 @@ type Ingredient = {
     sodium: number;
     sugarTotal: number;
     sugarAdded: number;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 const MICRONUTRIENTS = [
@@ -63,7 +63,7 @@ const MICRONUTRIENTS = [
 
 export function InspectIngredientDialog({ ingredient }: { ingredient: Ingredient }) {
     // Check if ingredient has any micronutrients (values > 0)
-    const hasMicros = MICRONUTRIENTS.some(m => (ingredient[m.name] || 0) > 0);
+    const hasMicros = MICRONUTRIENTS.some((m) => Number(ingredient[m.name] ?? 0) > 0);
 
     return (
         <Dialog>
@@ -77,58 +77,58 @@ export function InspectIngredientDialog({ ingredient }: { ingredient: Ingredient
                     <DialogTitle>{ingredient.name.replace(/^\[Meu\]\s*/, '')}</DialogTitle>
                     <DialogDescription>Detalhes nutricionais (por 100g)</DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm mt-4">
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                <div className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Energia</span>
                         <span className="font-semibold">{ingredient.energy} kcal</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Carboidratos</span>
                         <span className="font-semibold">{ingredient.carbs} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Açúcares Totais</span>
                         <span className="font-semibold">{ingredient.sugarTotal || 0} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-blue-50 rounded border border-blue-100">
-                        <span className="text-blue-700 text-xs font-medium">Açúcares Adicionados</span>
-                        <span className="font-bold text-blue-900">{ingredient.sugarAdded || 0} g</span>
+                    <div className="flex flex-col rounded-lg border border-primary/25 bg-primary/10 p-2">
+                        <span className="text-xs font-medium text-primary">Açúcares Adicionados</span>
+                        <span className="font-bold text-primary">{ingredient.sugarAdded || 0} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Proteínas</span>
                         <span className="font-semibold">{ingredient.protein} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Gorduras Totais</span>
                         <span className="font-semibold">{ingredient.fatTotal} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Gorduras Saturadas</span>
                         <span className="font-semibold">{ingredient.fatSat} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Gorduras Trans</span>
                         <span className="font-semibold">{ingredient.fatTrans} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Fibra Alimentar</span>
                         <span className="font-semibold">{ingredient.fiber} g</span>
                     </div>
-                    <div className="flex flex-col p-2 bg-slate-50 rounded">
+                    <div className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                         <span className="text-muted-foreground text-xs">Sódio</span>
                         <span className="font-semibold">{ingredient.sodium} mg</span>
                     </div>
                 </div>
 
                 {hasMicros && (
-                    <div className="mt-6 border-t pt-4">
+                    <div className="mt-6 border-t border-border/70 pt-4">
                         <h4 className="font-medium mb-3 text-sm">Micronutrientes e Outros</h4>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                             {MICRONUTRIENTS.map(m => {
-                                const val = ingredient[m.name] || 0;
+                                const val = Number(ingredient[m.name] ?? 0);
                                 if (val <= 0) return null;
                                 return (
-                                    <div key={m.name} className="flex flex-col p-2 bg-slate-50 rounded border border-slate-100">
+                                    <div key={m.name} className="flex flex-col rounded-lg border border-border/70 bg-muted/[0.22] p-2">
                                         <span className="text-muted-foreground mb-1">{m.label}</span>
                                         <span className="font-medium">{val}</span>
                                     </div>

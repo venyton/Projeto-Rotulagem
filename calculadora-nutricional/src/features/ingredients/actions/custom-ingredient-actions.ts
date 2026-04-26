@@ -183,42 +183,143 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
 export async function searchIngredients(query: string) {
     const q = query.trim();
-    if (!q || q.length < 2) {
-        return [];
-    }
+    const normalizedQuery = normalizeForSearch(q);
+    const MAX_RESULTS = 30;
 
     const session = await getServerSession(authOptions);
+    const user = session?.user?.email
+        ? await prisma.user.findUnique({ where: { email: session.user.email } })
+        : null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let customIngredients: any[] = [];
-    if (session && session.user?.email) {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-        if (user) {
-            customIngredients = await prisma.customIngredient.findMany({
+    if (!normalizedQuery) {
+        const [customSuggestions, tacoSuggestions] = await Promise.all([
+            user
+                ? prisma.customIngredient.findMany({
+                    where: { userId: user.id },
+                    orderBy: { createdAt: 'desc' },
+                    take: 12
+                })
+                : Promise.resolve([]),
+            prisma.ingredient.findMany({
+                orderBy: { name: 'asc' },
+                take: 18
+            })
+        ]);
+
+        return dedupeById([
+            ...customSuggestions.map((c) => ({ ...c, origin: "CUSTOM" })),
+            ...tacoSuggestions
+        ]).slice(0, MAX_RESULTS);
+    }
+
+    const [customDirect, tacoDirect] = await Promise.all([
+        user
+            ? prisma.customIngredient.findMany({
                 where: {
                     userId: user.id,
                     name: { contains: q, mode: 'insensitive' }
                 },
-                take: 10
+                orderBy: { createdAt: 'desc' },
+                take: 16
+            })
+            : Promise.resolve([]),
+        prisma.ingredient.findMany({
+            where: {
+                name: {
+                    contains: q,
+                    mode: 'insensitive',
+                },
+            },
+            orderBy: { name: 'asc' },
+            take: 36
+        })
+    ]);
+
+    let combined = dedupeById([
+        ...customDirect.map((c) => ({ ...c, origin: "CUSTOM" })),
+        ...tacoDirect
+    ]);
+
+    // Fallback com normalização para cobrir busca com/sem acento.
+    if (combined.length < MAX_RESULTS) {
+        const [customPool, tacoPool] = await Promise.all([
+            user
+                ? prisma.customIngredient.findMany({
+                    where: { userId: user.id },
+                    orderBy: { createdAt: 'desc' },
+                    take: 200
+                })
+                : Promise.resolve([]),
+            prisma.ingredient.findMany({
+                orderBy: { name: 'asc' },
+                take: 900
+            })
+        ]);
+
+        const normalizedMatches = [
+            ...customPool.map((c) => ({ ...c, origin: "CUSTOM" as const })),
+            ...tacoPool
+        ]
+            .filter((item) => matchesNormalized(item.name, normalizedQuery))
+            .sort((a, b) => {
+                const rankA = matchRank(a.name, normalizedQuery);
+                const rankB = matchRank(b.name, normalizedQuery);
+                if (rankA !== rankB) return rankA - rankB;
+
+                const aCustom = isCustomLike(a);
+                const bCustom = isCustomLike(b);
+                if (aCustom !== bCustom) return aCustom ? -1 : 1;
+
+                return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
             });
-        }
+
+        combined = dedupeById([...combined, ...normalizedMatches]);
     }
 
-    const tacoIngredients = await prisma.ingredient.findMany({
-        where: {
-            name: {
-                contains: q,
-                mode: 'insensitive',
-            },
-        },
-        take: Math.max(20 - customIngredients.length, 0),
-        orderBy: {
-            name: 'asc'
-        }
-    });
+    return combined.slice(0, MAX_RESULTS);
+}
 
-    return [
-        ...customIngredients.map(c => ({ ...c, origin: "CUSTOM" })),
-        ...tacoIngredients
-    ];
+function normalizeForSearch(value: string) {
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, " ");
+}
+
+function matchesNormalized(name: string, normalizedQuery: string) {
+    const normalizedName = normalizeForSearch(name);
+    if (normalizedName.includes(normalizedQuery)) return true;
+
+    const tokens = normalizedQuery.split(" ").filter(Boolean);
+    if (tokens.length <= 1) return false;
+    return tokens.every((token) => normalizedName.includes(token));
+}
+
+function matchRank(name: string, normalizedQuery: string) {
+    const normalizedName = normalizeForSearch(name);
+    if (normalizedName.startsWith(normalizedQuery)) return 0;
+    if (normalizedName.includes(normalizedQuery)) return 1;
+
+    const tokens = normalizedQuery.split(" ").filter(Boolean);
+    if (tokens.length > 1 && tokens.every((token) => normalizedName.includes(token))) return 2;
+    return 3;
+}
+
+function isCustomLike(item: { origin?: string | null; name: string }) {
+    return item.origin === "CUSTOM" || item.name.startsWith("[Meu]");
+}
+
+function dedupeById<T extends { id: string }>(items: T[]) {
+    const seen = new Set<string>();
+    const deduped: T[] = [];
+
+    for (const item of items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        deduped.push(item);
+    }
+
+    return deduped;
 }
