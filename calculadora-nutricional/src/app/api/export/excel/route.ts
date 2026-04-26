@@ -1,532 +1,623 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from "next/server";
+import JSZip from "jszip";
 import ExcelJS from "exceljs";
+import { access, readFile } from "node:fs/promises";
+import path from "path";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
-import { roundEnergy, roundMacro, roundSodium, roundSugars, roundSaturatedTrans, calculateVD } from "@/features/tables/domain/anvisa";
-import { VDR, POPULATION_GROUPS } from "@/features/tables/domain/constants";
+import {
+  calculateVD,
+  roundEnergy,
+  roundMacro,
+  roundSaturatedTrans,
+  roundSodium,
+  roundSugars,
+} from "@/features/tables/domain/anvisa";
+import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
+import { MICRONUTRIENTS_A_TO_Z as MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+
+type SheetType =
+  | "VERT"
+  | "HORIZ"
+  | "VERT-QUEB"
+  | "HORIZ-QUEB"
+  | "LINEAR"
+  | "AGREGADO"
+  | "SIMPLIF"
+  | "B2B"
+  | "ADICAO"
+  | "100"
+  | "SUPLEM"
+  | "SUPLEM-POP";
+
+const ALL_SHEET_TYPES: SheetType[] = [
+  "VERT",
+  "HORIZ",
+  "VERT-QUEB",
+  "HORIZ-QUEB",
+  "LINEAR",
+  "AGREGADO",
+  "SIMPLIF",
+  "B2B",
+  "ADICAO",
+  "100",
+  "SUPLEM",
+  "SUPLEM-POP",
+];
+
+const SUPPLEMENT_SHEET_TYPES: SheetType[] = ["SUPLEM", "SUPLEM-POP"];
+
+type ExportBody = {
+  title?: string;
+  per100g: CalculatedNutrients;
+  perPortion: CalculatedNutrients;
+  portionSize: number;
+  householdMeasure: string;
+  popGroup: PopGroup;
+  isSupplement?: boolean;
+  servingsPerPackage?: string;
+  selectedNutrients?: string[];
+  selectedTableTypes?: SheetType[];
+};
+
+type Metric = {
+  per100: string;
+  portion: string;
+  vd100: string;
+  vdPortion: string;
+};
+
+type NutrientMap = {
+  energy: Metric;
+  carbs: Metric;
+  sugarTotal: Metric;
+  sugarAdded: Metric;
+  protein: Metric;
+  fatTotal: Metric;
+  fatSat: Metric;
+  fatTrans: Metric;
+  fiber: Metric;
+  sodium: Metric;
+};
+
+type SelectedMicroRow = {
+  label: string;
+  per100: string;
+  portion: string;
+  vd100: string;
+  vdPortion: string;
+};
+
+type CellValueMap = Record<string, string>;
+
+const TEMPLATE_PATH_CANDIDATES = [
+  path.join(process.cwd(), "Dataset", "reference", "table-examples", "modelos_oficiais_tabelas_excel.xlsx"),
+  path.join(
+    process.cwd(),
+    "calculadora-nutricional",
+    "Dataset",
+    "reference",
+    "table-examples",
+    "modelos_oficiais_tabelas_excel.xlsx"
+  ),
+];
+
+function withFallbackVdr(popGroup: PopGroup) {
+  return VDR[popGroup] ?? VDR[POPULATION_GROUPS.ADULTS];
+}
+
+function getServingsValue(servingsPerPackage?: string) {
+  const text = servingsPerPackage?.trim();
+  return text || "Cerca de ...";
+}
+
+function getPortionLine(portionSize: number, householdMeasure: string) {
+  const measure = householdMeasure?.trim() || "medida caseira";
+  return `Porção: ${portionSize} g (${measure})`;
+}
+
+function formatMicro(val: number): string {
+  if (val === 0) return "0";
+  if (val < 1) return val.toFixed(1).replace(".", ",");
+  return Math.round(val).toString();
+}
+
+function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackVdr>): NutrientMap {
+  const per100 = (body.per100g ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
+  const perPortion = (body.perPortion ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
+  const safeNumber = (value: unknown) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+  const valueByKey = (key: keyof CalculatedNutrients) => ({
+    per100: safeNumber(per100[key]),
+    perPortion: safeNumber(perPortion[key]),
+  });
+  const getVD = (val: number, ref: number | null | undefined) => calculateVD(val, ref ?? null);
+
+  const metric = (
+    per100Raw: number,
+    portionRaw: number,
+    format: (val: number) => string,
+    ref: number | null | undefined,
+    hasVD = true
+  ): Metric => ({
+    per100: format(per100Raw),
+    portion: format(portionRaw),
+    vd100: hasVD ? getVD(per100Raw, ref) : "-",
+    vdPortion: hasVD ? getVD(portionRaw, ref) : "-",
+  });
+
+  return {
+    energy: metric(valueByKey("energy").per100, valueByKey("energy").perPortion, roundEnergy, vdr.energy),
+    carbs: metric(valueByKey("carbs").per100, valueByKey("carbs").perPortion, roundMacro, vdr.carbs),
+    sugarTotal: metric(
+      valueByKey("sugarTotal").per100,
+      valueByKey("sugarTotal").perPortion,
+      roundSugars,
+      null,
+      false
+    ),
+    sugarAdded: metric(
+      valueByKey("sugarAdded").per100,
+      valueByKey("sugarAdded").perPortion,
+      roundSugars,
+      null,
+      false
+    ),
+    protein: metric(valueByKey("protein").per100, valueByKey("protein").perPortion, roundMacro, vdr.protein),
+    fatTotal: metric(valueByKey("fatTotal").per100, valueByKey("fatTotal").perPortion, roundMacro, vdr.fatTotal),
+    fatSat: metric(
+      valueByKey("fatSat").per100,
+      valueByKey("fatSat").perPortion,
+      roundSaturatedTrans,
+      vdr.fatSat
+    ),
+    fatTrans: metric(
+      valueByKey("fatTrans").per100,
+      valueByKey("fatTrans").perPortion,
+      roundSaturatedTrans,
+      null,
+      false
+    ),
+    fiber: metric(valueByKey("fiber").per100, valueByKey("fiber").perPortion, roundMacro, vdr.fiber),
+    sodium: metric(valueByKey("sodium").per100, valueByKey("sodium").perPortion, roundSodium, vdr.sodium),
+  };
+}
+
+function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFallbackVdr>): SelectedMicroRow[] {
+  const selected = new Set(Array.isArray(body.selectedNutrients) ? body.selectedNutrients : []);
+  const per100Values = (body.per100g ?? {}) as unknown as Record<string, number>;
+  const portionValues = (body.perPortion ?? {}) as unknown as Record<string, number>;
+  const vdrValues = vdr as Record<string, number | null | undefined>;
+
+  return MICRONUTRIENTS.filter((micro) => selected.has(micro.name)).map((micro) => {
+    const per100Raw = per100Values[micro.name] ?? 0;
+    const portionRaw = portionValues[micro.name] ?? 0;
+    const ref = vdrValues[micro.name];
+
+    return {
+      label: `${micro.label} (${micro.unit})`,
+      per100: formatMicro(per100Raw),
+      portion: formatMicro(portionRaw),
+      vd100: calculateVD(per100Raw, ref ?? null),
+      vdPortion: calculateVD(portionRaw, ref ?? null),
+    };
+  });
+}
+
+function nutrientRows(n: NutrientMap): Metric[] {
+  return [
+    n.energy,
+    n.carbs,
+    n.sugarTotal,
+    n.sugarAdded,
+    n.protein,
+    n.fatTotal,
+    n.fatSat,
+    n.fatTrans,
+    n.fiber,
+    n.sodium,
+  ];
+}
+
+function setCell(cells: CellValueMap, ref: string, value: string) {
+  cells[ref] = value;
+}
+
+function setMicrosMetadata(cells: CellValueMap, micros: SelectedMicroRow[]) {
+  // Mantemos o template oficial intacto sem gravar metadados técnicos em células auxiliares.
+  void cells;
+  void micros;
+}
+
+function fillVertical(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "E11", `${body.portionSize} g`);
+
+  rows.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `D${row}`, values.per100);
+    setCell(cells, `E${row}`, values.portion);
+    setCell(cells, `F${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillHorizontal(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  setCell(cells, "C10", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C11", "");
+  setCell(cells, "C12", `Porção: ${body.portionSize} g`);
+  setCell(cells, "C13", `(${body.householdMeasure?.trim() || "medida caseira"})`);
+  setCell(cells, "G8", `${body.portionSize} g`);
+
+  rows.forEach((values, index) => {
+    const row = 9 + index;
+    setCell(cells, `F${row}`, values.per100);
+    setCell(cells, `G${row}`, values.portion);
+    setCell(cells, `H${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillVerticalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  const left = rows.slice(0, 5);
+  const right = rows.slice(5);
+
+  setCell(
+    cells,
+    "C8",
+    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} • ${getPortionLine(body.portionSize, body.householdMeasure)}`
+  );
+  setCell(cells, "E10", `${body.portionSize} g`);
+  setCell(cells, "J10", `${body.portionSize} g`);
+
+  left.forEach((values, index) => {
+    const row = 11 + index;
+    setCell(cells, `D${row}`, values.per100);
+    setCell(cells, `E${row}`, values.portion);
+    setCell(cells, `F${row}`, values.vdPortion);
+  });
+
+  right.forEach((values, index) => {
+    const row = 11 + index;
+    setCell(cells, `I${row}`, values.per100);
+    setCell(cells, `J${row}`, values.portion);
+    setCell(cells, `K${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  const left = rows.slice(0, 5);
+  const right = rows.slice(5);
+
+  setCell(cells, "C10", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C11", `${body.portionSize} • Porção: ${body.portionSize} g`);
+  setCell(cells, "C12", `(${body.householdMeasure?.trim() || "medida caseira"})`);
+  setCell(cells, "G8", `${body.portionSize} g`);
+  setCell(cells, "L8", `${body.portionSize} g`);
+
+  left.forEach((values, index) => {
+    const row = 9 + index;
+    setCell(cells, `F${row}`, values.per100);
+    setCell(cells, `G${row}`, values.portion);
+    setCell(cells, `H${row}`, values.vdPortion);
+  });
+
+  right.forEach((values, index) => {
+    const row = 9 + index;
+    setCell(cells, `K${row}`, values.per100);
+    setCell(cells, `L${row}`, values.portion);
+    setCell(cells, `M${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillLinear(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  setCell(
+    cells,
+    "C8",
+    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} ▪ ${getPortionLine(body.portionSize, body.householdMeasure)}`
+  );
+
+  const microsPhrase =
+    micros.length > 0
+      ? ` ▪ Micronutrientes selecionados: ${micros
+          .map((m) => `${m.label} ${m.portion} (${m.vdPortion}%VD)`)
+          .join("; ")}.`
+      : "";
+
+  const text =
+    `Por 100 g (${body.portionSize} g, %VD*): Valor energético ${n.energy.per100} kcal (${n.energy.portion} kcal, ${n.energy.vdPortion}%VD) ▪ ` +
+    `Carboidratos ${n.carbs.per100} g (${n.carbs.portion} g, ${n.carbs.vdPortion}%VD), dos quais Açúcares totais ${n.sugarTotal.per100} g (${n.sugarTotal.portion} g), ` +
+    `Açúcares adicionados ${n.sugarAdded.per100} g (${n.sugarAdded.portion} g) ▪ Proteínas ${n.protein.per100} g (${n.protein.portion} g, ${n.protein.vdPortion}%VD) ▪ ` +
+    `Gorduras totais ${n.fatTotal.per100} g (${n.fatTotal.portion} g, ${n.fatTotal.vdPortion}%VD), das quais Gorduras saturadas ${n.fatSat.per100} g (${n.fatSat.portion} g, ${n.fatSat.vdPortion}%VD), ` +
+    `Gorduras trans ${n.fatTrans.per100} g (${n.fatTrans.portion} g) ▪ Fibras alimentares ${n.fiber.per100} g (${n.fiber.portion} g, ${n.fiber.vdPortion}%VD) ▪ ` +
+    `Sódio ${n.sodium.per100} mg (${n.sodium.portion} mg, ${n.sodium.vdPortion}%VD).` +
+    microsPhrase;
+
+  setCell(cells, "C10", text);
+}
+
+function fillAgregado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  const title = body.title?.trim() || "Produto";
+
+  setCell(cells, "E7", title);
+  setCell(cells, "I7", `${title} (comparativo)`);
+  setCell(cells, "E8", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "I8", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "E9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "I9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "F11", `${body.portionSize} g`);
+  setCell(cells, "J11", `${body.portionSize} g`);
+
+  rows.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `E${row}`, values.per100);
+    setCell(cells, `F${row}`, values.portion);
+    setCell(cells, `G${row}`, values.vdPortion);
+
+    setCell(cells, `I${row}`, values.per100);
+    setCell(cells, `J${row}`, values.portion);
+    setCell(cells, `K${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillSimplificado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "E11", `${body.portionSize} g`);
+
+  setCell(cells, "D12", n.carbs.per100);
+  setCell(cells, "E12", n.carbs.portion);
+  setCell(cells, "F12", n.carbs.vdPortion);
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillB2B(cells: CellValueMap, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+  rows.forEach((values, index) => {
+    const row = 10 + index;
+    setCell(cells, `D${row}`, values.per100);
+  });
+  setMicrosMetadata(cells, micros);
+}
+
+function fillAdicao(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+
+  setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "E11", `${body.portionSize} g`);
+
+  rows.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `D${row}`, values.per100);
+    setCell(cells, `E${row}`, values.portion);
+    setCell(cells, `F${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fill100(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+
+  setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
+
+  rows.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `D${row}`, values.per100);
+    setCell(cells, `E${row}`, values.vd100);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillSuplemento(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+  const rows = nutrientRows(n);
+
+  setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "D11", `${body.portionSize} g`);
+
+  rows.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `D${row}`, values.portion);
+    setCell(cells, `E${row}`, values.vdPortion);
+  });
+
+  setMicrosMetadata(cells, micros);
+}
+
+function fillSuplementoPopulacional(
+  cells: CellValueMap,
+  body: ExportBody,
+  selected: NutrientMap,
+  adults: NutrientMap,
+  microsSelected: SelectedMicroRow[]
+) {
+  const rowsSelected = nutrientRows(selected);
+  const rowsAdults = nutrientRows(adults);
+
+  setCell(cells, "E7", POPULATION_LABELS[body.popGroup] ?? "Grupo populacional 1");
+  setCell(cells, "H7", POPULATION_LABELS[POPULATION_GROUPS.ADULTS]);
+
+  setCell(cells, "E8", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "H8", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
+  setCell(cells, "E9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "H9", getPortionLine(body.portionSize, body.householdMeasure));
+  setCell(cells, "E11", `${body.portionSize} g`);
+  setCell(cells, "H11", `${body.portionSize} g`);
+
+  rowsSelected.forEach((values, index) => {
+    const row = 12 + index;
+    setCell(cells, `E${row}`, values.portion);
+    setCell(cells, `F${row}`, values.vdPortion);
+
+    const adultsValues = rowsAdults[index];
+    setCell(cells, `H${row}`, adultsValues.portion);
+    setCell(cells, `I${row}`, adultsValues.vdPortion);
+  });
+
+  setMicrosMetadata(cells, microsSelected);
+}
+
+function isSheetType(value: string): value is SheetType {
+  return (ALL_SHEET_TYPES as string[]).includes(value);
+}
+
+function sanitizeSelectedTableTypes(selected: SheetType[] | undefined, isSupplement: boolean | undefined): SheetType[] {
+  const safe = (selected ?? []).filter((item): item is SheetType => ALL_SHEET_TYPES.includes(item));
+
+  if (isSupplement) {
+    const supplementOnly = safe.filter((item) => SUPPLEMENT_SHEET_TYPES.includes(item));
+    return supplementOnly.length > 0 ? supplementOnly : SUPPLEMENT_SHEET_TYPES;
+  }
+
+  const nonSupplement = safe.filter((item) => !SUPPLEMENT_SHEET_TYPES.includes(item));
+  const defaultNonSupplement = ALL_SHEET_TYPES.filter((item) => !SUPPLEMENT_SHEET_TYPES.includes(item));
+  return nonSupplement.length > 0 ? nonSupplement : defaultNonSupplement;
+}
 
 export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as Partial<ExportBody>;
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+    }
+
+    const exportBody: ExportBody = {
+      title: typeof body.title === "string" ? body.title : "",
+      per100g: (body.per100g ?? {}) as CalculatedNutrients,
+      perPortion: (body.perPortion ?? {}) as CalculatedNutrients,
+      portionSize: Number.isFinite(Number(body.portionSize)) ? Number(body.portionSize) : 0,
+      householdMeasure:
+        typeof body.householdMeasure === "string" && body.householdMeasure.trim().length > 0
+          ? body.householdMeasure
+          : "medida caseira",
+      popGroup: (body.popGroup as PopGroup) ?? POPULATION_GROUPS.ADULTS,
+      isSupplement: Boolean(body.isSupplement),
+      servingsPerPackage: typeof body.servingsPerPackage === "string" ? body.servingsPerPackage : undefined,
+      selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
+      selectedTableTypes: Array.isArray(body.selectedTableTypes) ? (body.selectedTableTypes as SheetType[]) : [],
+    };
+
+    const selectedTables = sanitizeSelectedTableTypes(exportBody.selectedTableTypes, exportBody.isSupplement);
+
+    const vdr = withFallbackVdr(exportBody.popGroup);
+    const nutrients = buildNutrientMap(exportBody, vdr);
+    const nutrientsAdults = buildNutrientMap(exportBody, withFallbackVdr(POPULATION_GROUPS.ADULTS));
+    const selectedMicros = buildSelectedMicroRows(exportBody, vdr);
+
+    const cellsBySheet: Partial<Record<SheetType, CellValueMap>> = {};
+    const setSheetCells = (sheet: SheetType, fill: (cells: CellValueMap) => void) => {
+      const cells: CellValueMap = {};
+      fill(cells);
+      cellsBySheet[sheet] = cells;
+    };
+
+    setSheetCells("VERT", (cells) => fillVertical(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("HORIZ", (cells) => fillHorizontal(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("VERT-QUEB", (cells) => fillVerticalQuebrado(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("HORIZ-QUEB", (cells) => fillHorizontalQuebrado(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("LINEAR", (cells) => fillLinear(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("AGREGADO", (cells) => fillAgregado(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("SIMPLIF", (cells) => fillSimplificado(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("B2B", (cells) => fillB2B(cells, nutrients, selectedMicros));
+    setSheetCells("ADICAO", (cells) => fillAdicao(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("100", (cells) => fill100(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("SUPLEM", (cells) => fillSuplemento(cells, exportBody, nutrients, selectedMicros));
+    setSheetCells("SUPLEM-POP", (cells) =>
+      fillSuplementoPopulacional(cells, exportBody, nutrients, nutrientsAdults, selectedMicros)
+    );
+
+    const templatePath = await resolveTemplatePath();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+
+    // Apply cell values to each sheet
+    for (const [sheetName, cellValues] of Object.entries(cellsBySheet)) {
+      const sheet = workbook.getWorksheet(sheetName);
+      if (!sheet) continue;
+
+      for (const [ref, value] of Object.entries(cellValues)) {
+        const cell = sheet.getCell(ref);
+        cell.value = value;
+      }
+    }
+
+    // Hide unselected sheets
+    workbook.eachSheet((sheet) => {
+      const name = sheet.name as SheetType;
+      if (ALL_SHEET_TYPES.includes(name)) {
+        const isSelected = selectedTables.includes(name);
+        sheet.state = isSelected ? "visible" : "hidden";
+      }
+    });
+
+    // Set the first visible sheet as active
+    const firstVisible = workbook.worksheets.find((s) => s.state === "visible");
+    if (firstVisible) {
+      workbook.views = [
+        {
+          x: 0,
+          y: 0,
+          width: 10000,
+          height: 20000,
+          firstSheet: 0,
+          activeTab: firstVisible.id - 1,
+          visibility: "visible",
+        },
+      ];
+    }
+
+    const safeTitle =
+      (exportBody.title || "nutricional")
+        .trim()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-zA-Z0-9_-]/g, "") || "nutricional";
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    return new NextResponse(buffer as Uint8Array, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="tabela-${safeTitle}.xlsx"`,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : "Failed to generate Excel";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+async function resolveTemplatePath() {
+  for (const candidate of TEMPLATE_PATH_CANDIDATES) {
     try {
-        const body = await req.json();
-        // body includes: title, per100g, perPortion, portionSize, householdMeasure, popGroup, isSupplement
-        const { title, isSupplement } = body;
-
-        const workbook = new ExcelJS.Workbook();
-
-        // 1. Suplemento (Conditional, First)
-        if (isSupplement) {
-            const sheet = workbook.addWorksheet("Suplemento");
-            generateSupplement(sheet, body);
-        }
-
-        // 2. Vertical
-        const sheetVert = workbook.addWorksheet("Vertical");
-        generateVertical(sheetVert, body);
-
-        // 3. Vertical Quebrado
-        const sheetVertBroken = workbook.addWorksheet("Vertical Quebrado");
-        generateVerticalBroken(sheetVertBroken, body);
-
-        // 4. Horizontal
-        const sheetHoriz = workbook.addWorksheet("Horizontal");
-        generateHorizontal(sheetHoriz, body);
-
-        // 5. Linear
-        const sheetLinear = workbook.addWorksheet("Linear");
-        generateLinear(sheetLinear, body);
-
-        // 6. 100g (Standard vertical but ensure 100g is clear)
-        const sheet100g = workbook.addWorksheet("100g");
-        generateVertical(sheet100g, body); // Reusing Vertical as it is the standard 100g+Portion table
-
-        const buffer = await workbook.xlsx.writeBuffer();
-
-        return new NextResponse(buffer, {
-            status: 200,
-            headers: {
-                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "Content-Disposition": `attachment; filename="tabela-${(title || 'nutricional').replace(/\s/g, '_')}.xlsx"`
-            }
-        });
-
-    } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: "Failed to generate Excel" }, { status: 500 });
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Try next candidate
     }
+  }
+  throw new Error(
+    `Template de Excel não encontrado. Caminhos verificados: ${TEMPLATE_PATH_CANDIDATES.join(" | ")}`
+  );
 }
-
-// --- Layout Generators ---
-
-// Common Styles
-const FONT_ARIAL = { name: 'Arial', size: 10 };
-const FONT_BOLD = { name: 'Arial', size: 10, bold: true };
-const FONT_TITLE = { name: 'Arial', size: 12, bold: true };
-const BORDER_THICK = { style: 'medium' as const, color: { argb: 'FF000000' } };
-const BORDER_THIN = { style: 'thin' as const, color: { argb: 'FF000000' } };
-
-// Helpers
-function getHelpers(popGroup: any) {
-    const vdrObj = (VDR as any)[popGroup] || VDR[POPULATION_GROUPS.ADULTS];
-    const getVD = (val: number, ref: number | null) => calculateVD(val, ref);
-    return { vdrObj, getVD };
-}
-
-// --- 1. Vertical (Standard - RDC 429/2020 Model) ---
-function generateVertical(sheet: ExcelJS.Worksheet, data: any) {
-    const { per100g, perPortion, portionSize, householdMeasure, popGroup } = data;
-    const { vdrObj, getVD } = getHelpers(popGroup);
-
-    sheet.columns = [{ width: 35 }, { width: 12 }, { width: 12 }, { width: 8 }];
-    let r = 1;
-
-    // Title: INFORMAÇÃO NUTRICIONAL
-    sheet.mergeCells(`A${r}:D${r}`);
-    const t = sheet.getCell(`A${r}`);
-    t.value = "INFORMAÇÃO NUTRICIONAL";
-    t.font = FONT_TITLE;
-    t.alignment = { horizontal: 'center', vertical: 'middle' };
-    t.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    // Porções por embalagem
-    sheet.mergeCells(`A${r}:D${r}`);
-    const serv = sheet.getCell(`A${r}`);
-    serv.value = "Porções por embalagem: Cerca de ...";
-    serv.font = FONT_ARIAL;
-    serv.alignment = { horizontal: 'left', vertical: 'middle' };
-    serv.border = { left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    // Portion Row
-    sheet.mergeCells(`A${r}:D${r}`);
-    const p = sheet.getCell(`A${r}`);
-    p.value = `Porção: ${portionSize} g (${householdMeasure})`;
-    p.font = FONT_ARIAL;
-    p.alignment = { horizontal: 'left', vertical: 'middle' };
-    p.border = { left: BORDER_THICK, right: BORDER_THICK, bottom: BORDER_THICK };
-    r++;
-
-    // Header Row: | | 100 g | [portion] g | %VD* |
-    const row = sheet.getRow(r);
-    row.values = ["", "100 g", `${portionSize} g`, "%VD*"];
-
-    // Cell A: empty
-    const c1 = row.getCell(1);
-    c1.border = { left: BORDER_THICK, right: BORDER_THIN, bottom: BORDER_THICK }; // Open? Usually grid is closed.
-
-    row.eachCell((c, i) => {
-        c.font = FONT_BOLD;
-        c.alignment = { horizontal: 'center', vertical: 'middle' };
-        c.border = {
-            bottom: BORDER_THICK,
-            top: BORDER_THICK, // Explicit top to match portion bottom?
-            left: i === 1 ? BORDER_THICK : BORDER_THIN,
-            right: i === 4 ? BORDER_THICK : BORDER_THIN
-        };
-    });
-    r++;
-
-    const addRow = (label: string, v100: string, vPortion: string, vd: string, bold = false, indent = false) => {
-        const row = sheet.getRow(r);
-        row.values = [label, v100, vPortion, vd];
-
-        // Col 1: Label
-        const c1 = row.getCell(1);
-        c1.font = bold ? FONT_BOLD : FONT_ARIAL;
-        c1.alignment = { indent: indent ? 2 : 0, vertical: 'middle' };
-        c1.border = { left: BORDER_THICK, bottom: BORDER_THIN, right: BORDER_THIN };
-
-        // Col 2,3,4: Values
-        [2, 3, 4].forEach(idx => {
-            const c = row.getCell(idx);
-            c.font = (bold && idx !== 4) ? FONT_BOLD : FONT_ARIAL;
-            c.alignment = { horizontal: 'center', vertical: 'middle' };
-            c.border = { bottom: BORDER_THIN, right: idx === 4 ? BORDER_THICK : BORDER_THIN, left: BORDER_THIN };
-        });
-
-        row.getCell(4).font = { ...FONT_BOLD, size: 9 };
-        r++;
-    };
-
-    addRow("Valor energético (kcal)", roundEnergy(per100g.energy), roundEnergy(perPortion.energy), getVD(perPortion.energy, vdrObj.energy), false);
-    addRow("Carboidratos (g)", roundMacro(per100g.carbs), roundMacro(perPortion.carbs), getVD(perPortion.carbs, vdrObj.carbs), false);
-    addRow("Açúcares totais (g)", roundSugars(per100g.sugarTotal), roundSugars(perPortion.sugarTotal), "", false, true);
-    addRow("Açúcares adicionados (g)", roundSugars(per100g.sugarAdded), roundSugars(perPortion.sugarAdded), "", false, true);
-    addRow("Proteínas (g)", roundMacro(per100g.protein), roundMacro(perPortion.protein), getVD(perPortion.protein, vdrObj.protein), false);
-    addRow("Gorduras totais (g)", roundMacro(per100g.fatTotal), roundMacro(perPortion.fatTotal), getVD(perPortion.fatTotal, vdrObj.fatTotal), false);
-    addRow("Gorduras saturadas (g)", roundSaturatedTrans(per100g.fatSat), roundSaturatedTrans(perPortion.fatSat), getVD(perPortion.fatSat, vdrObj.fatSat), false, true);
-    addRow("Gorduras trans (g)", roundSaturatedTrans(per100g.fatTrans), roundSaturatedTrans(perPortion.fatTrans), "", false, true);
-    addRow("Fibras alimentares (g)", roundMacro(per100g.fiber), roundMacro(perPortion.fiber), getVD(perPortion.fiber, vdrObj.fiber), false);
-    addRow("Sódio (mg)", roundSodium(per100g.sodium), roundSodium(perPortion.sodium), getVD(perPortion.sodium, vdrObj.sodium), false);
-
-    // Footer Borders Adjustment (Last row bottom thick)
-    const lastDataRow = r - 1;
-    [1, 2, 3, 4].forEach(c => {
-        const cell = sheet.getCell(lastDataRow, c);
-        cell.border = { ...cell.border, bottom: BORDER_THICK };
-    });
-
-    // Footer Note
-    sheet.mergeCells(`A${r}:D${r}`);
-    const f = sheet.getCell(`A${r}`);
-    f.value = "*Percentual de valores diários fornecidos pela porção.";
-    f.font = { name: 'Arial', size: 8 };
-    f.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-}
-
-// --- 2. Vertical Quebrado (Split Model) ---
-function generateVerticalBroken(sheet: ExcelJS.Worksheet, data: any) {
-    const { per100g, perPortion, portionSize, householdMeasure, popGroup } = data;
-    const { vdrObj, getVD } = getHelpers(popGroup);
-
-    // 6 Columns: | Item | 100g | Port | %VD | Item | 100g | Port | %VD | -- Too wide?
-    // ANVISA "Quebrado" usually splits rows. 
-    // Left: Energy, Carbs, Sugars, Protein. Right: Fats, Fibers, Sodium.
-    // Let's implement 2 columns of DATA blocks.
-
-    // Layout: 
-    // INFORMAÇÃO NUTRICIONAL (Merged)
-    // Porções... (Merged)
-    // Porção... (Merged)
-    // | Header Left | | | | Header Right | | |
-
-    sheet.columns = [
-        { width: 25 }, { width: 8 }, { width: 8 }, { width: 6 }, // Left Block
-        { width: 25 }, { width: 8 }, { width: 8 }, { width: 6 }  // Right Block
-    ];
-
-    let r = 1;
-
-    // Title & Info
-    sheet.mergeCells(`A${r}:H${r}`);
-    const t = sheet.getCell(`A${r}`);
-    t.value = "INFORMAÇÃO NUTRICIONAL";
-    t.font = FONT_TITLE;
-    t.alignment = { horizontal: 'center' };
-    t.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    sheet.mergeCells(`A${r}:H${r}`);
-    const serv = sheet.getCell(`A${r}`);
-    serv.value = "Porções por embalagem: Cerca de ...";
-    serv.font = FONT_ARIAL;
-    serv.alignment = { horizontal: 'left' };
-    serv.border = { left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    sheet.mergeCells(`A${r}:H${r}`);
-    const p = sheet.getCell(`A${r}`);
-    p.value = `Porção: ${portionSize} g (${householdMeasure})`;
-    p.font = FONT_ARIAL;
-    p.alignment = { horizontal: 'left' };
-    p.border = { left: BORDER_THICK, right: BORDER_THICK, bottom: BORDER_THICK };
-    r++;
-
-    // Headers
-    const row = sheet.getRow(r);
-    // Duplicate headers for left and right
-    const headers = ["", "100 g", `${portionSize} g`, "%VD*", "", "100 g", `${portionSize} g`, "%VD*"];
-    row.values = headers;
-
-    row.eachCell((c, i) => {
-        c.font = FONT_BOLD;
-        c.alignment = { horizontal: 'center' };
-        c.border = {
-            bottom: BORDER_THICK,
-            top: BORDER_THICK,
-            left: (i === 1 || i === 5) ? BORDER_THICK : BORDER_THIN,
-            right: (i === 4 || i === 8) ? BORDER_THICK : BORDER_THIN
-        };
-    });
-    r++;
-
-    const items = [
-        { l: "Valor energético (kcal)", v100: roundEnergy(per100g.energy), vP: roundEnergy(perPortion.energy), vd: getVD(perPortion.energy, vdrObj.energy) },
-        { l: "Carboidratos (g)", v100: roundMacro(per100g.carbs), vP: roundMacro(perPortion.carbs), vd: getVD(perPortion.carbs, vdrObj.carbs) },
-        { l: "Açúcares totais (g)", v100: roundSugars(per100g.sugarTotal), vP: roundSugars(perPortion.sugarTotal), vd: "", indent: true },
-        { l: "Açúcares adic. (g)", v100: roundSugars(per100g.sugarAdded), vP: roundSugars(perPortion.sugarAdded), vd: "", indent: true },
-        { l: "Proteínas (g)", v100: roundMacro(per100g.protein), vP: roundMacro(perPortion.protein), vd: getVD(perPortion.protein, vdrObj.protein) },
-        { l: "Gorduras totais (g)", v100: roundMacro(per100g.fatTotal), vP: roundMacro(perPortion.fatTotal), vd: getVD(perPortion.fatTotal, vdrObj.fatTotal) },
-        { l: "Gord. saturadas (g)", v100: roundSaturatedTrans(per100g.fatSat), vP: roundSaturatedTrans(perPortion.fatSat), vd: getVD(perPortion.fatSat, vdrObj.fatSat), indent: true },
-        { l: "Gorduras trans (g)", v100: roundSaturatedTrans(per100g.fatTrans), vP: roundSaturatedTrans(perPortion.fatTrans), vd: "", indent: true },
-        { l: "Fibras alim. (g)", v100: roundMacro(per100g.fiber), vP: roundMacro(perPortion.fiber), vd: getVD(perPortion.fiber, vdrObj.fiber) },
-        { l: "Sódio (mg)", v100: roundSodium(per100g.sodium), vP: roundSodium(perPortion.sodium), vd: getVD(perPortion.sodium, vdrObj.sodium) },
-    ];
-
-    // Split items: 5 on left, 5 on right
-    const half = Math.ceil(items.length / 2);
-    // Actually, ANVISA 429 permits flow. Let's do straight split.
-    // 10 items -> 5 rows.
-
-    for (let i = 0; i < 5; i++) {
-        const row = sheet.getRow(r);
-        const L = items[i]; // 0-4
-        const R = items[i + 5]; // 5-9
-
-        // Prepare values array
-        const vals = [
-            L?.l || "", L?.v100 || "", L?.vP || "", L?.vd || "",
-            R?.l || "", R?.v100 || "", R?.vP || "", R?.vd || ""
-        ];
-        row.values = vals;
-
-        // Styles Left
-        if (L) {
-            row.getCell(1).alignment = { indent: L.indent ? 2 : 0 };
-            row.getCell(4).font = { ...FONT_BOLD, size: 9 };
-        }
-        // Styles Right
-        if (R) {
-            row.getCell(5).alignment = { indent: R.indent ? 2 : 0 };
-            row.getCell(8).font = { ...FONT_BOLD, size: 9 };
-        }
-
-        // Borders
-        [1, 2, 3, 4, 5, 6, 7, 8].forEach(idx => {
-            const c = row.getCell(idx);
-            c.border = { bottom: BORDER_THIN, top: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
-            if (idx === 1 || idx === 5) c.border.left = BORDER_THICK;
-            if (idx === 4 || idx === 8) c.border.right = BORDER_THICK;
-        });
-        r++;
-    }
-
-    // Footer bottom thick
-    [1, 2, 3, 4, 5, 6, 7, 8].forEach(idx => {
-        sheet.getCell(r - 1, idx).border.bottom = BORDER_THICK;
-    });
-
-    sheet.mergeCells(`A${r}:H${r}`);
-    const f = sheet.getCell(`A${r}`);
-    f.value = "*Percentual de valores diários fornecidos pela porção.";
-    f.font = { name: 'Arial', size: 8 };
-    f.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-}
-
-// --- 3. Horizontal (Row Model) ---
-function generateHorizontal(sheet: ExcelJS.Worksheet, data: any) {
-    const { per100g, perPortion, portionSize, householdMeasure, popGroup } = data;
-    const { vdrObj, getVD } = getHelpers(popGroup);
-
-    // Horizontal usually implies nutrients are columns.
-    // Row 1: Title
-    // Row 2: Portions
-    // Row 3: Headers (Item, Ener, Carb...)
-    // Row 4: 100g values
-    // Row 5: Portion values
-    // Row 6: %VD
-
-    // Items
-    const nutrientLabels = [
-        "Valor Energético", "Carboidratos", "Açúcares Totais", "Açúcares Adic.",
-        "Proteínas", "Gorduras Totais", "Gord. Saturadas", "Gord. Trans",
-        "Fibra Alimentar", "Sódio"
-    ];
-
-    sheet.columns = [{ width: 25 }, ...nutrientLabels.map(() => ({ width: 12 }))];
-    let r = 1;
-    const totalCols = nutrientLabels.length + 1; // 11 cols
-
-    // Title
-    sheet.mergeCells(1, 1, 1, totalCols);
-    const t = sheet.getCell(1, 1);
-    t.value = "INFORMAÇÃO NUTRICIONAL";
-    t.font = FONT_TITLE;
-    t.alignment = { horizontal: 'center' };
-    t.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    // Portion
-    sheet.mergeCells(2, 1, 2, totalCols);
-    const p = sheet.getCell(2, 1);
-    p.value = `Porções por embalagem: ... | Porção: ${portionSize} g (${householdMeasure})`;
-    p.font = FONT_ARIAL;
-    p.alignment = { horizontal: 'center' };
-    p.border = { left: BORDER_THICK, right: BORDER_THICK, bottom: BORDER_THICK };
-    r++;
-
-    // Headers
-    const rowH = sheet.getRow(r);
-    rowH.values = ["", ...nutrientLabels];
-    rowH.eachCell((c, i) => {
-        c.font = { ...FONT_BOLD, size: 9 };
-        c.alignment = { horizontal: 'center', wrapText: true };
-        c.border = {
-            bottom: BORDER_THICK,
-            left: i === 1 ? BORDER_THICK : BORDER_THIN,
-            right: i === totalCols ? BORDER_THICK : BORDER_THIN
-        };
-    });
-    r++;
-
-    // 100g Row
-    const row100 = sheet.getRow(r);
-    const h100 = [
-        "100 g",
-        roundEnergy(per100g.energy) + " kcal",
-        roundMacro(per100g.carbs) + " g",
-        roundSugars(per100g.sugarTotal) + " g",
-        roundSugars(per100g.sugarAdded) + " g",
-        roundMacro(per100g.protein) + " g",
-        roundMacro(per100g.fatTotal) + " g",
-        roundSaturatedTrans(per100g.fatSat) + " g",
-        roundSaturatedTrans(per100g.fatTrans) + " g",
-        roundMacro(per100g.fiber) + " g",
-        roundSodium(per100g.sodium) + " mg"
-    ];
-    row100.values = h100;
-    row100.eachCell((c, i) => {
-        c.alignment = { horizontal: 'center' };
-        c.border = { left: i === 1 ? BORDER_THICK : BORDER_THIN, right: i === totalCols ? BORDER_THICK : BORDER_THIN, bottom: BORDER_THIN };
-        if (i === 1) c.font = FONT_BOLD;
-    });
-    r++;
-
-    // Portion Row
-    const rowP = sheet.getRow(r);
-    const hP = [
-        `${portionSize} g`,
-        roundEnergy(perPortion.energy) + " kcal",
-        roundMacro(perPortion.carbs) + " g",
-        roundSugars(perPortion.sugarTotal) + " g",
-        roundSugars(perPortion.sugarAdded) + " g",
-        roundMacro(perPortion.protein) + " g",
-        roundMacro(perPortion.fatTotal) + " g",
-        roundSaturatedTrans(perPortion.fatSat) + " g",
-        roundSaturatedTrans(perPortion.fatTrans) + " g",
-        roundMacro(perPortion.fiber) + " g",
-        roundSodium(perPortion.sodium) + " mg"
-    ];
-    rowP.values = hP;
-    rowP.eachCell((c, i) => {
-        c.alignment = { horizontal: 'center' };
-        c.border = { left: i === 1 ? BORDER_THICK : BORDER_THIN, right: i === totalCols ? BORDER_THICK : BORDER_THIN, bottom: BORDER_THIN };
-        if (i === 1) c.font = FONT_BOLD;
-    });
-    r++;
-
-    // VD Row
-    const rowVD = sheet.getRow(r);
-    const hVD = [
-        "%VD*",
-        getVD(perPortion.energy, vdrObj.energy),
-        getVD(perPortion.carbs, vdrObj.carbs),
-        "",
-        "",
-        getVD(perPortion.protein, vdrObj.protein),
-        getVD(perPortion.fatTotal, vdrObj.fatTotal),
-        getVD(perPortion.fatSat, vdrObj.fatSat),
-        "",
-        getVD(perPortion.fiber, vdrObj.fiber),
-        getVD(perPortion.sodium, vdrObj.sodium),
-    ];
-    rowVD.values = hVD;
-    rowVD.eachCell((c, i) => {
-        c.alignment = { horizontal: 'center' };
-        c.font = { ...FONT_BOLD, size: 9 };
-        c.border = { left: i === 1 ? BORDER_THICK : BORDER_THIN, right: i === totalCols ? BORDER_THICK : BORDER_THIN, bottom: BORDER_THICK };
-    });
-    r++;
-
-    // Footer
-    sheet.mergeCells(r, 1, r, totalCols);
-    const f = sheet.getCell(r, 1);
-    f.value = "*Percentual de valores diários fornecidos pela porção.";
-    f.font = { name: 'Arial', size: 8 };
-    f.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-}
-
-// --- 4. Linear (Sentence) ---
-function generateLinear(sheet: ExcelJS.Worksheet, data: any) {
-    const { perPortion, portionSize, householdMeasure, popGroup } = data;
-    const { vdrObj, getVD } = getHelpers(popGroup);
-
-    sheet.columns = [{ width: 120 }];
-
-    // ANVISA Linear Format:
-    // INFORMAÇÃO NUTRICIONAL: Porção de X g (Y medida). Valor energético A kcal (B %VD); Carboidratos C g (D %VD); ...
-
-    const parts = [
-        `INFORMAÇÃO NUTRICIONAL: Porção de ${portionSize} g (${householdMeasure}).`,
-        `Valor energético ${roundEnergy(perPortion.energy)} kcal (${getVD(perPortion.energy, vdrObj.energy)})`,
-        `Carboidratos ${roundMacro(perPortion.carbs)} g (${getVD(perPortion.carbs, vdrObj.carbs)})`,
-        `Açúcares totais ${roundSugars(perPortion.sugarTotal)} g`,
-        `Açúcares adicionados ${roundSugars(perPortion.sugarAdded)} g`,
-        `Proteínas ${roundMacro(perPortion.protein)} g (${getVD(perPortion.protein, vdrObj.protein)})`,
-        `Gorduras totais ${roundMacro(perPortion.fatTotal)} g (${getVD(perPortion.fatTotal, vdrObj.fatTotal)})`,
-        `Gorduras saturadas ${roundSaturatedTrans(perPortion.fatSat)} g (${getVD(perPortion.fatSat, vdrObj.fatSat)})`,
-        `Gorduras trans ${roundSaturatedTrans(perPortion.fatTrans)} g`,
-        `Fibras alimentares ${roundMacro(perPortion.fiber)} g (${getVD(perPortion.fiber, vdrObj.fiber)})`,
-        `Sódio ${roundSodium(perPortion.sodium)} mg (${getVD(perPortion.sodium, vdrObj.sodium)}).`,
-        `*Percentual de valores diários fornecidos pela porção.`
-    ];
-
-    const fullText = parts.join(" ");
-
-    const cell = sheet.getCell('A1');
-    cell.value = fullText;
-    cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
-    cell.font = FONT_ARIAL;
-}
-
-// --- 5. Supplement (Simple vertical) ---
-function generateSupplement(sheet: ExcelJS.Worksheet, data: any) {
-    // Supplements only show: Item | Amount | %VD. No 100g column usually.
-    const { perPortion, portionSize, householdMeasure, popGroup } = data;
-    const { vdrObj, getVD } = getHelpers(popGroup);
-
-    sheet.columns = [{ width: 35 }, { width: 15 }, { width: 10 }];
-    let r = 1;
-
-    sheet.mergeCells(`A${r}:C${r}`);
-    const t = sheet.getCell(`A${r}`);
-    t.value = "INFORMAÇÃO NUTRICIONAL";
-    t.font = FONT_TITLE;
-    t.alignment = { horizontal: 'center' };
-    t.border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-    r++;
-
-    sheet.mergeCells(`A${r}:C${r}`);
-    const p = sheet.getCell(`A${r}`);
-    p.value = `Porção: ${portionSize} g (${householdMeasure})`;
-    p.font = FONT_ARIAL;
-    p.alignment = { horizontal: 'left' };
-    p.border = { left: BORDER_THICK, right: BORDER_THICK, bottom: BORDER_THICK };
-    r++;
-
-    const row = sheet.getRow(r);
-    row.values = ["", "Quantidade por porção", "%VD*"];
-    row.eachCell((c, i) => {
-        c.font = FONT_BOLD;
-        c.border = { top: BORDER_THIN, bottom: BORDER_THIN, left: i === 1 ? BORDER_THICK : undefined, right: i === 3 ? BORDER_THICK : undefined };
-    });
-    r++;
-
-    const addRow = (label: string, vPortion: string, vd: string, bold = false) => {
-        const row = sheet.getRow(r);
-        row.values = [label, vPortion, vd];
-        row.getCell(1).border = { left: BORDER_THICK, bottom: BORDER_THIN };
-        row.getCell(2).alignment = { horizontal: 'center' };
-        row.getCell(2).border = { bottom: BORDER_THIN };
-        row.getCell(3).alignment = { horizontal: 'center' };
-        row.getCell(3).border = { right: BORDER_THICK, bottom: BORDER_THIN };
-        r++;
-    };
-
-    addRow("Valor energético (kcal)", roundEnergy(perPortion.energy), getVD(perPortion.energy, vdrObj.energy), true);
-    addRow("Carboidratos (g)", roundMacro(perPortion.carbs), getVD(perPortion.carbs, vdrObj.carbs), true);
-    addRow("Açúcares totais (g)", roundSugars(perPortion.sugarTotal), "", false);
-    addRow("Açúcares adic. (g)", roundSugars(perPortion.sugarAdded), "", false);
-    addRow("Proteínas (g)", roundMacro(perPortion.protein), getVD(perPortion.protein, vdrObj.protein), true);
-    addRow("Gorduras totais (g)", roundMacro(perPortion.fatTotal), getVD(perPortion.fatTotal, vdrObj.fatTotal), true);
-    addRow("Gord. saturadas (g)", roundSaturatedTrans(perPortion.fatSat), getVD(perPortion.fatSat, vdrObj.fatSat), false);
-    addRow("Gorduras trans (g)", roundSaturatedTrans(perPortion.fatTrans), "", false);
-    addRow("Sódio (mg)", roundSodium(perPortion.sodium), getVD(perPortion.sodium, vdrObj.sodium), true);
-
-    // Supplement footer
-    sheet.mergeCells(`A${r}:C${r}`);
-    sheet.getCell(`A${r}`).value = "*Percentual de valores diários fornecidos pela porção.";
-    sheet.getCell(`A${r}`).border = { top: BORDER_THICK, bottom: BORDER_THICK, left: BORDER_THICK, right: BORDER_THICK };
-}
-
