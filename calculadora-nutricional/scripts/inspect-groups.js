@@ -2,7 +2,7 @@ const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, '../Dataset/Table examples/Grupos.xlsx');
+const filePath = path.join(__dirname, '../Dataset/runtime/examples/grupos.xlsx');
 console.log('Reading file from:', filePath);
 
 try {

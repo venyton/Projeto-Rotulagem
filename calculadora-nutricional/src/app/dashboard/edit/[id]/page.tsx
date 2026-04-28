@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { TableGenerator } from "@/components/TableGenerator";
-import { SelectedIngredient } from "@/lib/nutrients";
+import { TableGenerator } from "@/features/tables/components/TableGenerator";
+import { SelectedIngredient } from "@/features/tables/domain/nutrients";
 
 export default async function EditTablePage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
