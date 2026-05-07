@@ -33,7 +33,7 @@ import { Trash2, Download, Save, ChevronDown } from "lucide-react";
 import { saveTable } from "@/features/tables/actions/table-actions";
 import { toast } from "sonner";
 import { toCanvas } from "html-to-image";
-import { MICRONUTRIENTS, MICRONUTRIENTS_A_TO_Z } from "@/features/tables/domain/micronutrients";
+import { MICRONUTRIENTS_A_TO_Z } from "@/features/tables/domain/micronutrients";
 import { FOOD_GROUPS } from "@/features/tables/domain/food-groups";
 import {
     HOUSEHOLD_MEASURE_CODES,
@@ -386,13 +386,97 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         [selectedTableTypes, previewTableType]
     );
     const selectedImageTableCount = selectedTableTypes.length > 0 ? selectedTableTypes.length : 1;
-    const availableTableOptions = React.useMemo(
+    const previewViewportRef = React.useRef<HTMLDivElement>(null);
+    const previewContentRef = React.useRef<HTMLDivElement>(null);
+    const [previewScale, setPreviewScale] = useState(1);
+    const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+    const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
+    const availableTableOptionValues = React.useMemo(
         () =>
-            EXCEL_TABLE_OPTIONS.filter((item) =>
-                isSupplement ? SUPPLEMENT_TABLE_TYPES.includes(item.value) : !SUPPLEMENT_TABLE_TYPES.includes(item.value)
-            ),
-        [isSupplement]
+            EXCEL_TABLE_OPTIONS
+                .filter((item) => {
+                    if (isSupplement) {
+                        return SUPPLEMENT_TABLE_TYPES.includes(item.value);
+                    }
+                    if (item.value === "100") {
+                        return isExactHundredPortion;
+                    }
+                    return !SUPPLEMENT_TABLE_TYPES.includes(item.value);
+                })
+                .map((item) => item.value),
+        [isExactHundredPortion, isSupplement]
     );
+    const availableTableOptions = React.useMemo(
+        () => EXCEL_TABLE_OPTIONS.filter((item) => availableTableOptionValues.includes(item.value)),
+        [availableTableOptionValues]
+    );
+    const previewTableOptions = React.useMemo(
+        () => EXCEL_TABLE_OPTIONS.filter((item) => item.value !== "100" || isExactHundredPortion),
+        [isExactHundredPortion]
+    );
+
+    useEffect(() => {
+        const availablePreview = new Set(previewTableOptions.map((item) => item.value));
+        const availableExport = new Set(availableTableOptionValues);
+        if (!availablePreview.has(previewTableType)) {
+            const nextPreview = previewTableOptions[0]?.value || "VERT";
+            setPreviewTableType(nextPreview);
+            setSelectedTableTypes([nextPreview]);
+            return;
+        }
+        setSelectedTableTypes((prev) => {
+            const next = prev.filter((item) => availableExport.has(item));
+            return next.length === prev.length ? prev : next;
+        });
+    }, [availableTableOptionValues, previewTableOptions, previewTableType]);
+
+    useEffect(() => {
+        if (!result) return;
+
+        const viewport = previewViewportRef.current;
+        const content = previewContentRef.current;
+        if (!viewport || !content) return;
+
+        let rafId = 0;
+        const updatePreviewSize = () => {
+            cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                const availableWidth = viewport.clientWidth;
+                const contentWidth = content.scrollWidth;
+                const contentHeight = content.scrollHeight;
+                if (availableWidth <= 0 || contentWidth <= 0 || contentHeight <= 0) return;
+
+                const nextScale = Math.min(1, availableWidth / contentWidth);
+                const roundedScale = Math.floor(nextScale * 10000) / 10000;
+                const nextHeight = Math.ceil(contentHeight * roundedScale);
+
+                setPreviewScale((current) => (Math.abs(current - roundedScale) > 0.0001 ? roundedScale : current));
+                setPreviewHeight((current) => (current !== nextHeight ? nextHeight : current));
+            });
+        };
+
+        updatePreviewSize();
+        const resizeObserver = new ResizeObserver(updatePreviewSize);
+        resizeObserver.observe(viewport);
+        resizeObserver.observe(content);
+        window.addEventListener("resize", updatePreviewSize);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            resizeObserver.disconnect();
+            window.removeEventListener("resize", updatePreviewSize);
+        };
+    }, [
+        effectiveHasFopSeal,
+        fopStatus,
+        householdMeasure,
+        popGroup,
+        portionSize,
+        previewTableType,
+        result,
+        selectedNutrients,
+        servingsPerPackage,
+    ]);
 
     const handleGroupChange = (group: string) => {
         setSelectedGroup(group);
@@ -464,9 +548,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
     const handlePreviewTypeChange = (value: string) => {
         const selected = value as ExcelTableType;
-        if (!availableTableOptions.some((item) => item.value === selected)) {
+        if (!previewTableOptions.some((item) => item.value === selected)) {
             return;
         }
+        setIsSupplement(SUPPLEMENT_TABLE_TYPES.includes(selected));
         setPreviewTableType(selected);
         setSelectedTableTypes([selected]);
     };
@@ -837,7 +922,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             }
 
             const JSZipModule = await import("jszip");
-            const JSZip = (JSZipModule as any).default || JSZipModule;
+            const JSZip = JSZipModule.default;
             const zip = new JSZip();
             files.forEach((file) => zip.file(file.fileName, file.blob));
 
@@ -865,7 +950,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         try {
             // 1. Get JSZip (dynamic import to avoid bundle issues)
             const JSZipModule = await import("jszip");
-            const JSZip = (JSZipModule as any).default || JSZipModule;
+            const JSZip = JSZipModule.default;
             const zip = new JSZip();
 
             // 2. Capture Images
@@ -1430,7 +1515,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         <SelectValue placeholder="Selecione o modelo" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {availableTableOptions.map((item) => (
+                                        {previewTableOptions.map((item) => (
                                             <SelectItem key={item.value} value={item.value}>
                                                 {item.label}
                                         </SelectItem>
@@ -1442,20 +1527,33 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </p>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex min-h-[400px] flex-col items-center gap-8 rounded-b-xl bg-muted/[0.25] py-8 dark:bg-muted/[0.18]">
+                    <CardContent className="flex min-h-[400px] min-w-0 flex-col items-center gap-8 overflow-hidden rounded-b-xl bg-muted/[0.25] px-4 py-8 dark:bg-muted/[0.18]">
                         {result ? (
                             <>
-                                <NutritionalLabel
-                                    per100g={result.per100g}
-                                    perPortion={result.perPortion}
-                                    portionSize={portionSize}
-                                    householdMeasure={householdMeasure || "..."}
-                                    servingsPerPackage={servingsPerPackage}
-                                    popGroup={popGroup}
-                                    selectedNutrients={selectedNutrients}
-                                    fop={effectiveHasFopSeal ? (fopStatus || undefined) : undefined}
-                                    previewType={previewTableType}
-                                />
+                                <div ref={previewViewportRef} className="w-full min-w-0 overflow-hidden">
+                                    <div
+                                        className="flex w-full justify-center"
+                                        style={{ height: previewHeight ? `${previewHeight}px` : undefined }}
+                                    >
+                                        <div
+                                            ref={previewContentRef}
+                                            className="origin-top"
+                                            style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}
+                                        >
+                                            <NutritionalLabel
+                                                per100g={result.per100g}
+                                                perPortion={result.perPortion}
+                                                portionSize={portionSize}
+                                                householdMeasure={householdMeasure || "..."}
+                                                servingsPerPackage={servingsPerPackage}
+                                                popGroup={popGroup}
+                                                selectedNutrients={selectedNutrients}
+                                                fop={effectiveHasFopSeal ? (fopStatus || undefined) : undefined}
+                                                previewType={previewTableType}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                                 {mandatoryStatements.length > 0 && (
                                     <div className="w-full max-w-[64rem] rounded-md border border-border/70 bg-background px-3 py-2 text-[11px] leading-snug">
                                         {mandatoryStatements.map((statement) => (

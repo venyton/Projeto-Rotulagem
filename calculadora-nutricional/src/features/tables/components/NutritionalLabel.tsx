@@ -236,16 +236,33 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const linearBase = `Por 100 g ou ml (${portionHeader}, % VD*):`;
     const linearText = baseRows
         .map((r) => {
-            const vd = r.vdPortion ? `, ${r.vdPortion}% VD*` : "";
+            const vd = r.vdPortion ? `, ${r.vdPortion}%` : "";
             return `${r.label} ${r.per100} (${r.portion}${vd})`;
         })
         .join(" ● ");
+    const sideHeaderTypes = ["HORIZ", "HORIZ-QUEB", "AGREGADO", "SUPLEM-POP"];
+    const hasSideHeader = sideHeaderTypes.includes(previewType);
+    const hasServingBlock = !hasSideHeader && previewType !== "B2B";
+    const hasFootnote = previewType !== "B2B";
+    const simplifiedAbsentText =
+        "Não contém quantidades significativas de valor energético, açúcares totais, açúcares adicionados, proteínas, gorduras totais, gorduras saturadas, gorduras trans, fibras alimentares e sódio.";
+    const sideHeader = (
+        <div className="text-[11px] leading-tight">
+            <div className="inline-block border-b-[4px] pb-1 font-bold leading-tight" style={{ borderColor: "#000000" }}>
+                INFORMAÇÃO<br />NUTRICIONAL
+            </div>
+            <div className="mt-3">Porções por emb.:</div>
+            <div>{servingsHeader}</div>
+            <div className="mt-2">Porção: {portionHeader}</div>
+            <div>({householdMeasure})</div>
+        </div>
+    );
 
     return (
         <div
             className={cn(
                 "max-w-[64rem]",
-                isLinearPreview ? "block w-full min-w-0 max-w-full" : "inline-block w-fit min-w-[22rem]"
+                isLinearPreview ? "inline-block w-[88mm] min-w-0 max-w-full" : "inline-block w-fit min-w-[22rem]"
             )}
             id={id}
             style={{ color: "#000000", fontFamily: "Arial, Helvetica, sans-serif" }}
@@ -256,32 +273,52 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                 letter-spacing: normal !important;
                 word-spacing: normal !important;
               }
-              #${id} td {
+              #${id} td,
+              #${id} th {
                 vertical-align: middle !important;
                 line-height: 1.15 !important;
                 padding-top: 2px !important;
                 padding-bottom: 2px !important;
+              }
+              #${id} table th + th,
+              #${id} table td + td {
+                border-left: 1px solid #000000 !important;
               }
               #${id} .linear-preview-content {
                 white-space: normal !important;
                 overflow-wrap: anywhere !important;
                 word-break: break-word !important;
               }
+              #${id} .nutrition-wrap-cell {
+                white-space: normal !important;
+                overflow-wrap: anywhere !important;
+                word-break: normal !important;
+              }
             `}} />
             <div
-                className={cn("p-4 border-2", isLinearPreview && "w-full")}
+                className={cn(isLinearPreview ? "w-full border p-[4px]" : "border-2 p-4")}
                 style={{ backgroundColor: "#ffffff", borderColor: "#000000" }}
             >
-            <h2 className={cn(isLinearPreview ? "text-[11px] text-left" : "text-[13px] text-center", "font-bold")} style={{ margin: 0, paddingBottom: "3px", borderBottom: "1px solid #000000" }}>
-                INFORMAÇÃO NUTRICIONAL
-            </h2>
-            <div className={cn(isLinearPreview ? "text-[8px] text-left" : "text-[11px] text-center", "mt-2 mb-2 leading-tight")}>
-                <p style={{ margin: 0 }}>Porções por embalagem: {servingsHeader}</p>
-                <p style={{ margin: 0 }}>Porção: {portionHeader} ({householdMeasure})</p>
-            </div>
+            {!hasSideHeader && (
+                <h2 className={cn(isLinearPreview ? "text-[8pt] text-left" : "text-[13px] text-center", "font-bold")} style={{ margin: 0, paddingBottom: "3px", borderBottom: "1px solid #000000" }}>
+                    INFORMAÇÃO NUTRICIONAL
+                </h2>
+            )}
+            {hasServingBlock && (
+                <div className={cn(isLinearPreview ? "my-[4px] text-[6pt]" : "mt-2 mb-2 text-[11px]", "text-left leading-tight")}>
+                    {previewType === "VERT-QUEB" ? (
+                        <p style={{ margin: 0 }}>Porções por embalagem: {servingsHeader} ● Porção: {portionHeader} ({householdMeasure})</p>
+                    ) : (
+                        <>
+                            <p style={{ margin: 0 }}>Porções por embalagem: {servingsHeader}</p>
+                            <p style={{ margin: 0 }}>Porção: {portionHeader} ({householdMeasure})</p>
+                        </>
+                    )}
+                </div>
+            )}
 
             {previewType === "LINEAR" ? (
-                <div className="linear-preview-content text-[8px] leading-relaxed pt-2 w-full text-left" style={declarationSeparatorStyle}>
+                <div className="linear-preview-content w-full pt-[4px] text-left text-[6pt] leading-[1.08]" style={declarationSeparatorStyle}>
                     <strong>{linearBase}</strong> {linearText}
                 </div>
             ) : previewType === "SIMPLIF" ? (
@@ -290,58 +327,23 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">100 g</th>
-                                <th className="py-[3px] pl-4 text-center">{portionHeader}</th>
-                                <th className="py-[3px] pl-4 text-center">% VD*</th>
+                                <th className="py-[3px] px-2 text-center">100 g</th>
+                                <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                <th className="py-[3px] px-2 text-center">% VD*</th>
                             </tr>
                         </thead>
                         <tbody>
                             <Row4 label="Carboidratos (g)" v1={baseRows[1].per100} v2={baseRows[1].portion} v3={baseRows[1].vdPortion} />
                             <tr className="border-b text-[11px]" style={{ borderColor: "#000000" }}>
-                                <td className="py-[3px] leading-[1.2]" colSpan={4}>
-                                    Não contém quantidades significativas de proteínas, gorduras totais, gorduras saturadas, gorduras trans, fibras alimentares e sódio.
+                                <td className="nutrition-wrap-cell py-[3px] leading-[1.2]" colSpan={4}>
+                                    {simplifiedAbsentText}
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             ) : previewType === "VERT-QUEB" ? (
-                <div className="pt-2" style={declarationSeparatorStyle}>
-                    <div className="grid grid-cols-2 gap-3">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
-                                    <th className="py-[3px] text-left"></th>
-                                    <th className="py-[3px] px-2 text-center">100 g</th>
-                                    <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                    <th className="py-[3px] px-2 text-center">% VD*</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {baseRows.slice(0, 5).map((row) => (
-                                    <Row4 key={`vert-queb-left-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />
-                                ))}
-                            </tbody>
-                        </table>
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
-                                    <th className="py-[3px] text-left"></th>
-                                    <th className="py-[3px] px-2 text-center">100 g</th>
-                                    <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                    <th className="py-[3px] px-2 text-center">% VD*</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {baseRows.slice(5).map((row) => (
-                                    <Row4 key={`vert-queb-right-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ) : previewType === "HORIZ-QUEB" ? (
-                <div className="pt-2" style={declarationSeparatorStyle}>
+                <div style={declarationSeparatorStyle}>
                     <table className="w-full border-collapse">
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
@@ -360,7 +362,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 const left = baseRows[idx];
                                 const right = baseRows[idx + 5];
                                 return (
-                                    <tr key={`horiz-queb-${idx}`} className="border-b text-[11px]" style={{ borderColor: "#000000" }}>
+                                    <tr key={`vert-queb-${idx}`} className="border-b text-[11px]" style={{ borderColor: "#000000" }}>
                                         <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(left?.indentLevel))}>{left?.label ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{left?.per100 ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{left?.portion ?? ""}</td>
@@ -375,13 +377,51 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         </tbody>
                     </table>
                 </div>
+            ) : previewType === "HORIZ-QUEB" ? (
+                <div className="grid grid-cols-[10rem_auto] items-start gap-3">
+                    {sideHeader}
+                    <div>
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
+                                    <th className="py-[3px] text-left"></th>
+                                    <th className="py-[3px] px-2 text-center">100 g</th>
+                                    <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                    <th className="py-[3px] px-2 text-center">% VD*</th>
+                                    <th className="py-[3px] text-left"></th>
+                                    <th className="py-[3px] px-2 text-center">100 g</th>
+                                    <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                    <th className="py-[3px] px-2 text-center">% VD*</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Array.from({ length: 5 }).map((_, idx) => {
+                                    const left = baseRows[idx];
+                                    const right = baseRows[idx + 5];
+                                    return (
+                                        <tr key={`horiz-queb-${idx}`} className="border-b text-[11px]" style={{ borderColor: "#000000" }}>
+                                            <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(left?.indentLevel))}>{left?.label ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{left?.per100 ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{left?.portion ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{left?.vdPortion ?? ""}</td>
+                                            <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(right?.indentLevel))}>{right?.label ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{right?.per100 ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{right?.portion ?? ""}</td>
+                                            <td className="py-[3px] px-2 text-center">{right?.vdPortion ?? ""}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             ) : previewType === "B2B" ? (
                 <div style={declarationSeparatorStyle}>
                     <table className="w-full border-collapse">
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">100 g</th>
+                                <th className="py-[3px] px-2 text-center">100 g</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -397,8 +437,8 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">100 g</th>
-                                <th className="py-[3px] pl-4 text-center">% VD*</th>
+                                <th className="py-[3px] px-2 text-center">100 g</th>
+                                <th className="py-[3px] px-2 text-center">% VD*</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -414,8 +454,8 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">{portionHeader}</th>
-                                <th className="py-[3px] pl-4 text-center">% VD*</th>
+                                <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                <th className="py-[3px] px-2 text-center">% VD*</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -431,9 +471,9 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">100 g</th>
-                                <th className="py-[3px] pl-4 text-center">{portionHeader}</th>
-                                <th className="py-[3px] pl-4 text-center">% VD*</th>
+                                <th className="py-[3px] px-2 text-center">100 g**</th>
+                                <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                <th className="py-[3px] px-2 text-center">% VD*</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -444,13 +484,26 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                     </table>
                 </div>
             ) : previewType === "AGREGADO" ? (
-                <div style={declarationSeparatorStyle}>
+                <div className="grid grid-cols-[10rem_auto] items-start gap-3">
+                    <div className="text-[11px] leading-tight">
+                        <div className="inline-block border-b-[4px] pb-1 font-bold leading-tight" style={{ borderColor: "#000000" }}>
+                            INFORMAÇÃO<br />NUTRICIONAL
+                        </div>
+                    </div>
                     <table className="w-full border-collapse text-[11px]">
                         <thead>
-                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                            <tr className="border-b align-top" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] px-2 text-center" colSpan={3}>Produto 1</th>
-                                <th className="py-[3px] px-2 text-center" colSpan={3}>Produto 2</th>
+                                <th className="py-[3px] px-2 text-left" colSpan={3}>
+                                    <strong>Produto 1</strong><br />
+                                    Porções por emb.: {servingsHeader}<br />
+                                    Porção: {portionHeader} ({householdMeasure})
+                                </th>
+                                <th className="py-[3px] px-2 text-left" colSpan={3}>
+                                    <strong>Produto 2</strong><br />
+                                    Porções por emb.: {servingsHeader}<br />
+                                    Porção: {portionHeader} ({householdMeasure})
+                                </th>
                             </tr>
                             <tr className="border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
@@ -478,13 +531,26 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                     </table>
                 </div>
             ) : previewType === "SUPLEM-POP" ? (
-                <div style={declarationSeparatorStyle}>
+                <div className="grid grid-cols-[10rem_auto] items-start gap-3">
+                    <div className="text-[11px] leading-tight">
+                        <div className="inline-block border-b-[4px] pb-1 font-bold leading-tight" style={{ borderColor: "#000000" }}>
+                            INFORMAÇÃO<br />NUTRICIONAL
+                        </div>
+                    </div>
                     <table className="w-full border-collapse text-[11px]">
                         <thead>
-                            <tr className="border-b" style={{ borderColor: "#000000" }}>
+                            <tr className="border-b align-top" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] px-2 text-center" colSpan={2}>{firstGroupLabel}</th>
-                                <th className="py-[3px] px-2 text-center" colSpan={2}>{secondGroupLabel}</th>
+                                <th className="py-[3px] px-2 text-left" colSpan={2}>
+                                    <strong>{firstGroupLabel}</strong><br />
+                                    Porções por emb.: {servingsHeader}<br />
+                                    Porção: {portionHeader} ({householdMeasure})
+                                </th>
+                                <th className="py-[3px] px-2 text-left" colSpan={2}>
+                                    <strong>{secondGroupLabel}</strong><br />
+                                    Porções por emb.: {servingsHeader}<br />
+                                    Porção: {portionHeader} ({householdMeasure})
+                                </th>
                             </tr>
                             <tr className="border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
@@ -510,20 +576,16 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                     </table>
                 </div>
             ) : previewType === "HORIZ" ? (
-                <div className="pt-2" style={declarationSeparatorStyle}>
-                    <div className="grid grid-cols-[12rem_auto] gap-4 items-start">
-                        <div className="text-[11px] border rounded-sm p-2" style={{ borderColor: "#000000" }}>
-                            <div className="font-bold">INFORMAÇÃO NUTRICIONAL</div>
-                            <div className="mt-1">Porções por embalagem: {servingsHeader}</div>
-                            <div>Porção: {portionHeader} ({householdMeasure})</div>
-                        </div>
+                <div>
+                    <div className="grid grid-cols-[10rem_auto] gap-3 items-start">
+                        {sideHeader}
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                     <th className="py-[3px] text-left font-bold"></th>
-                                    <th className="py-[3px] pl-4 text-center font-bold whitespace-nowrap">100 g</th>
-                                    <th className="py-[3px] pl-4 text-center font-bold whitespace-nowrap">{portionHeader}</th>
-                                    <th className="py-[3px] pl-4 text-center font-bold whitespace-nowrap">% VD*</th>
+                                    <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">100 g</th>
+                                    <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">{portionHeader}</th>
+                                    <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">% VD*</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -540,9 +602,9 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                         <thead>
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
-                                <th className="py-[3px] pl-4 text-center">100 g</th>
-                                <th className="py-[3px] pl-4 text-center">{portionHeader}</th>
-                                <th className="py-[3px] pl-4 text-center">% VD*</th>
+                                <th className="py-[3px] px-2 text-center">100 g</th>
+                                <th className="py-[3px] px-2 text-center">{portionHeader}</th>
+                                <th className="py-[3px] px-2 text-center">% VD*</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -554,9 +616,18 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                 </div>
             )}
 
-            <div className={cn("mt-4 text-[8px]", isLinearPreview ? "text-left" : "text-left")}>
-                * Percentual de valores diários fornecidos pela porção.
-            </div>
+            {hasFootnote && (
+                <div
+                    className={cn(
+                        "text-left",
+                        isLinearPreview ? "mt-[3px] border-t pt-[2px] text-[6pt] leading-[1.05]" : "mt-4 text-[8px]"
+                    )}
+                    style={isLinearPreview ? { borderColor: "#000000" } : undefined}
+                >
+                    <p style={{ margin: 0 }}>* Percentual de valores diários fornecidos pela porção.</p>
+                    {previewType === "ADICAO" && <p style={{ margin: 0 }}>** No alimento pronto para o consumo.</p>}
+                </div>
+            )}
             </div>
 
             {fop && (fop.highSugar || fop.highFat || fop.highSodium) && (
