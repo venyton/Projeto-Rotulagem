@@ -13,7 +13,7 @@ import {
   roundSugars,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
-import { MICRONUTRIENTS_A_TO_Z as MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 
 type SheetType =
   | "VERT"
@@ -45,6 +45,8 @@ const ALL_SHEET_TYPES: SheetType[] = [
 ];
 
 const SUPPLEMENT_SHEET_TYPES: SheetType[] = ["SUPLEM", "SUPLEM-POP"];
+const DEFAULT_VD_SUGAR_ADDED = 50;
+const DEFAULT_VD_FAT_TRANS = 2;
 
 type ExportBody = {
   title?: string;
@@ -115,6 +117,13 @@ function getPortionLine(portionSize: number, householdMeasure: string) {
   return `Porção: ${portionSize} g (${measure})`;
 }
 
+function getVdReference(vdr: ReturnType<typeof withFallbackVdr>, key: keyof CalculatedNutrients) {
+  if (key === "sugarAdded") return DEFAULT_VD_SUGAR_ADDED;
+  if (key === "fatTrans") return DEFAULT_VD_FAT_TRANS;
+  const vdrValues = vdr as Record<string, number | null | undefined>;
+  return vdrValues[key] ?? null;
+}
+
 function formatMicro(val: number): string {
   if (val === 0) return "0";
   if (val < 1) return val.toFixed(1).replace(".", ",");
@@ -161,8 +170,7 @@ function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackV
       valueByKey("sugarAdded").per100,
       valueByKey("sugarAdded").perPortion,
       roundSugars,
-      null,
-      false
+      getVdReference(vdr, "sugarAdded")
     ),
     protein: metric(valueByKey("protein").per100, valueByKey("protein").perPortion, roundMacro, vdr.protein),
     fatTotal: metric(valueByKey("fatTotal").per100, valueByKey("fatTotal").perPortion, roundMacro, vdr.fatTotal),
@@ -176,8 +184,7 @@ function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackV
       valueByKey("fatTrans").per100,
       valueByKey("fatTrans").perPortion,
       roundSaturatedTrans,
-      null,
-      false
+      getVdReference(vdr, "fatTrans")
     ),
     fiber: metric(valueByKey("fiber").per100, valueByKey("fiber").perPortion, roundMacro, vdr.fiber),
     sodium: metric(valueByKey("sodium").per100, valueByKey("sodium").perPortion, roundSodium, vdr.sodium),
@@ -272,7 +279,7 @@ function fillVerticalQuebrado(cells: CellValueMap, body: ExportBody, n: Nutrient
   setCell(
     cells,
     "C8",
-    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} • ${getPortionLine(body.portionSize, body.householdMeasure)}`
+    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} ● ${getPortionLine(body.portionSize, body.householdMeasure)}`
   );
   setCell(cells, "E10", `${body.portionSize} g`);
   setCell(cells, "J10", `${body.portionSize} g`);
@@ -300,7 +307,7 @@ function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: Nutrie
   const right = rows.slice(5);
 
   setCell(cells, "C10", `Porções por emb.: ${getServingsValue(body.servingsPerPackage)}`);
-  setCell(cells, "C11", `${body.portionSize} • Porção: ${body.portionSize} g`);
+  setCell(cells, "C11", `Porção: ${body.portionSize} g`);
   setCell(cells, "C12", `(${body.householdMeasure?.trim() || "medida caseira"})`);
   setCell(cells, "G8", `${body.portionSize} g`);
   setCell(cells, "L8", `${body.portionSize} g`);
@@ -326,23 +333,23 @@ function fillLinear(cells: CellValueMap, body: ExportBody, n: NutrientMap, micro
   setCell(
     cells,
     "C8",
-    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} ▪ ${getPortionLine(body.portionSize, body.householdMeasure)}`
+    `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)} ● ${getPortionLine(body.portionSize, body.householdMeasure)}`
   );
 
   const microsPhrase =
     micros.length > 0
-      ? ` ▪ Micronutrientes selecionados: ${micros
-          .map((m) => `${m.label} ${m.portion} (${m.vdPortion}%VD)`)
+      ? ` ● Micronutrientes selecionados: ${micros
+          .map((m) => `${m.label} ${m.portion} (${m.vdPortion}% VD*)`)
           .join("; ")}.`
       : "";
 
   const text =
-    `Por 100 g (${body.portionSize} g, %VD*): Valor energético ${n.energy.per100} kcal (${n.energy.portion} kcal, ${n.energy.vdPortion}%VD) ▪ ` +
-    `Carboidratos ${n.carbs.per100} g (${n.carbs.portion} g, ${n.carbs.vdPortion}%VD), dos quais Açúcares totais ${n.sugarTotal.per100} g (${n.sugarTotal.portion} g), ` +
-    `Açúcares adicionados ${n.sugarAdded.per100} g (${n.sugarAdded.portion} g) ▪ Proteínas ${n.protein.per100} g (${n.protein.portion} g, ${n.protein.vdPortion}%VD) ▪ ` +
-    `Gorduras totais ${n.fatTotal.per100} g (${n.fatTotal.portion} g, ${n.fatTotal.vdPortion}%VD), das quais Gorduras saturadas ${n.fatSat.per100} g (${n.fatSat.portion} g, ${n.fatSat.vdPortion}%VD), ` +
-    `Gorduras trans ${n.fatTrans.per100} g (${n.fatTrans.portion} g) ▪ Fibras alimentares ${n.fiber.per100} g (${n.fiber.portion} g, ${n.fiber.vdPortion}%VD) ▪ ` +
-    `Sódio ${n.sodium.per100} mg (${n.sodium.portion} mg, ${n.sodium.vdPortion}%VD).` +
+    `Por 100 g ou ml (${body.portionSize} g, % VD*): Valor energético ${n.energy.per100} kcal (${n.energy.portion} kcal, ${n.energy.vdPortion}% VD*) ● ` +
+    `Carboidratos ${n.carbs.per100} g (${n.carbs.portion} g, ${n.carbs.vdPortion}% VD*), dos quais Açúcares totais ${n.sugarTotal.per100} g (${n.sugarTotal.portion} g), ` +
+    `Açúcares adicionados ${n.sugarAdded.per100} g (${n.sugarAdded.portion} g, ${n.sugarAdded.vdPortion}% VD*) ● Proteínas ${n.protein.per100} g (${n.protein.portion} g, ${n.protein.vdPortion}% VD*) ● ` +
+    `Gorduras totais ${n.fatTotal.per100} g (${n.fatTotal.portion} g, ${n.fatTotal.vdPortion}% VD*), das quais Gorduras saturadas ${n.fatSat.per100} g (${n.fatSat.portion} g, ${n.fatSat.vdPortion}% VD*), ` +
+    `Gorduras trans ${n.fatTrans.per100} g (${n.fatTrans.portion} g, ${n.fatTrans.vdPortion}% VD*) ● Fibras alimentares ${n.fiber.per100} g (${n.fiber.portion} g, ${n.fiber.vdPortion}% VD*) ● ` +
+    `Sódio ${n.sodium.per100} mg (${n.sodium.portion} mg, ${n.sodium.vdPortion}% VD*).` +
     microsPhrase;
 
   setCell(cells, "C10", text);

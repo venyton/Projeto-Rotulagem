@@ -11,7 +11,7 @@ import {
   roundSugars,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
-import { MICRONUTRIENTS_A_TO_Z as MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 
 export type SheetType =
   | "VERT"
