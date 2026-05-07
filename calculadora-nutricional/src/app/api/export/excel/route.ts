@@ -339,17 +339,17 @@ function fillLinear(cells: CellValueMap, body: ExportBody, n: NutrientMap, micro
   const microsPhrase =
     micros.length > 0
       ? ` ● Micronutrientes selecionados: ${micros
-          .map((m) => `${m.label} ${m.portion} (${m.vdPortion}% VD*)`)
+          .map((m) => `${m.label} ${m.portion} (${m.vdPortion}%)`)
           .join("; ")}.`
       : "";
 
   const text =
-    `Por 100 g ou ml (${body.portionSize} g, % VD*): Valor energético ${n.energy.per100} kcal (${n.energy.portion} kcal, ${n.energy.vdPortion}% VD*) ● ` +
-    `Carboidratos ${n.carbs.per100} g (${n.carbs.portion} g, ${n.carbs.vdPortion}% VD*), dos quais Açúcares totais ${n.sugarTotal.per100} g (${n.sugarTotal.portion} g), ` +
-    `Açúcares adicionados ${n.sugarAdded.per100} g (${n.sugarAdded.portion} g, ${n.sugarAdded.vdPortion}% VD*) ● Proteínas ${n.protein.per100} g (${n.protein.portion} g, ${n.protein.vdPortion}% VD*) ● ` +
-    `Gorduras totais ${n.fatTotal.per100} g (${n.fatTotal.portion} g, ${n.fatTotal.vdPortion}% VD*), das quais Gorduras saturadas ${n.fatSat.per100} g (${n.fatSat.portion} g, ${n.fatSat.vdPortion}% VD*), ` +
-    `Gorduras trans ${n.fatTrans.per100} g (${n.fatTrans.portion} g, ${n.fatTrans.vdPortion}% VD*) ● Fibras alimentares ${n.fiber.per100} g (${n.fiber.portion} g, ${n.fiber.vdPortion}% VD*) ● ` +
-    `Sódio ${n.sodium.per100} mg (${n.sodium.portion} mg, ${n.sodium.vdPortion}% VD*).` +
+    `Por 100 g ou ml (${body.portionSize} g, % VD*): Valor energético ${n.energy.per100} kcal (${n.energy.portion} kcal, ${n.energy.vdPortion}%) ● ` +
+    `Carboidratos ${n.carbs.per100} g (${n.carbs.portion} g, ${n.carbs.vdPortion}%), dos quais Açúcares totais ${n.sugarTotal.per100} g (${n.sugarTotal.portion} g), ` +
+    `Açúcares adicionados ${n.sugarAdded.per100} g (${n.sugarAdded.portion} g, ${n.sugarAdded.vdPortion}%) ● Proteínas ${n.protein.per100} g (${n.protein.portion} g, ${n.protein.vdPortion}%) ● ` +
+    `Gorduras totais ${n.fatTotal.per100} g (${n.fatTotal.portion} g, ${n.fatTotal.vdPortion}%), das quais Gorduras saturadas ${n.fatSat.per100} g (${n.fatSat.portion} g, ${n.fatSat.vdPortion}%), ` +
+    `Gorduras trans ${n.fatTrans.per100} g (${n.fatTrans.portion} g, ${n.fatTrans.vdPortion}%) ● Fibras alimentares ${n.fiber.per100} g (${n.fiber.portion} g, ${n.fiber.vdPortion}%) ● ` +
+    `Sódio ${n.sodium.per100} mg (${n.sodium.portion} mg, ${n.sodium.vdPortion}%).` +
     microsPhrase;
 
   setCell(cells, "C10", text);

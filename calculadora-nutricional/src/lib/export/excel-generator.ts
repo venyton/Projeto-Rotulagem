@@ -287,10 +287,10 @@ function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: Nutrie
 function fillLinear(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
   const rows = nutrientRows(n);
   const text = rows
-    .map((v) => `${v.name.split(" (")[0]} ${v.portion} (${v.vdPortion}% VD*)`)
+    .map((v) => `${v.name.split(" (")[0]} ${v.portion} (${v.vdPortion}%)`)
     .join("; ");
   
-  const mText = micros.map(m => `${m.name} ${m.portion} (${m.vdPortion}% VD*)`).join("; ");
+  const mText = micros.map(m => `${m.name} ${m.portion} (${m.vdPortion}%)`).join("; ");
   const fullText = mText ? `${text}; ${mText}` : text;
 
   setCell(cells, "C8", `INFORMAÇÃO NUTRICIONAL: Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}. ${getPortionLine(body.portionSize, body.householdMeasure)}. Valor energético ${n.energy.portion} kcal (${n.energy.vdPortion}% VD); ${fullText}. *Percentual de valores diários fornecidos pela porção.`);
