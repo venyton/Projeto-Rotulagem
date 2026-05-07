@@ -14,6 +14,7 @@ type CompleteExportBody = {
   servingsPerPackage?: string;
   selectedNutrients?: string[];
   selectedTableTypes?: string[];
+  showDailyValue?: boolean;
   imageDataUrl?: string;
   imageDataUrls?: Record<string, string>;
 };
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
       servingsPerPackage: body.servingsPerPackage,
       selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
       selectedTableTypes: Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes : [],
+      showDailyValue: body.showDailyValue !== false,
     };
 
     const excelResponse = await fetch(`${req.nextUrl.origin}/api/export/excel`, {

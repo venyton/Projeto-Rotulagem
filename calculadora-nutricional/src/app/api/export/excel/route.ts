@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import JSZip from "jszip";
 import ExcelJS from "exceljs";
-import { access, readFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "path";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
@@ -59,6 +58,7 @@ type ExportBody = {
   servingsPerPackage?: string;
   selectedNutrients?: string[];
   selectedTableTypes?: SheetType[];
+  showDailyValue?: boolean;
 };
 
 type Metric = {
@@ -118,9 +118,9 @@ function getPortionLine(portionSize: number, householdMeasure: string) {
 }
 
 function getVdReference(vdr: ReturnType<typeof withFallbackVdr>, key: keyof CalculatedNutrients) {
-  if (key === "sugarAdded") return DEFAULT_VD_SUGAR_ADDED;
-  if (key === "fatTrans") return DEFAULT_VD_FAT_TRANS;
   const vdrValues = vdr as Record<string, number | null | undefined>;
+  if (key === "sugarAdded") return vdrValues[key] !== undefined ? vdrValues[key] : DEFAULT_VD_SUGAR_ADDED;
+  if (key === "fatTrans") return vdrValues[key] !== undefined ? vdrValues[key] : DEFAULT_VD_FAT_TRANS;
   return vdrValues[key] ?? null;
 }
 
@@ -152,8 +152,8 @@ function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackV
   ): Metric => ({
     per100: format(per100Raw),
     portion: format(portionRaw),
-    vd100: hasVD ? getVD(per100Raw, ref) : "-",
-    vdPortion: hasVD ? getVD(portionRaw, ref) : "-",
+    vd100: hasVD && body.showDailyValue !== false ? getVD(per100Raw, ref) : "",
+    vdPortion: hasVD && body.showDailyValue !== false ? getVD(portionRaw, ref) : "",
   });
 
   return {
@@ -206,8 +206,8 @@ function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFal
       label: `${micro.label} (${micro.unit})`,
       per100: formatMicro(per100Raw),
       portion: formatMicro(portionRaw),
-      vd100: calculateVD(per100Raw, ref ?? null),
-      vdPortion: calculateVD(portionRaw, ref ?? null),
+      vd100: body.showDailyValue === false ? "" : calculateVD(per100Raw, ref ?? null),
+      vdPortion: body.showDailyValue === false ? "" : calculateVD(portionRaw, ref ?? null),
     };
   });
 }
@@ -484,10 +484,6 @@ function fillSuplementoPopulacional(
   setMicrosMetadata(cells, microsSelected);
 }
 
-function isSheetType(value: string): value is SheetType {
-  return (ALL_SHEET_TYPES as string[]).includes(value);
-}
-
 function sanitizeSelectedTableTypes(selected: SheetType[] | undefined, isSupplement: boolean | undefined): SheetType[] {
   const safe = (selected ?? []).filter((item): item is SheetType => ALL_SHEET_TYPES.includes(item));
 
@@ -522,6 +518,7 @@ export async function POST(req: NextRequest) {
       servingsPerPackage: typeof body.servingsPerPackage === "string" ? body.servingsPerPackage : undefined,
       selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
       selectedTableTypes: Array.isArray(body.selectedTableTypes) ? (body.selectedTableTypes as SheetType[]) : [],
+      showDailyValue: body.showDailyValue !== false,
     };
 
     const selectedTables = sanitizeSelectedTableTypes(exportBody.selectedTableTypes, exportBody.isSupplement);
