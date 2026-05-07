@@ -7,6 +7,7 @@ import { SelectedIngredient } from "@/features/tables/domain/nutrients";
 import { PopGroup } from "@/features/tables/domain/constants";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 
 export async function saveTable(data: {
     id?: string;
@@ -16,6 +17,11 @@ export async function saveTable(data: {
     householdMeasure: string;
     popGroup: PopGroup;
     ingredients: SelectedIngredient[];
+    packageContent?: number;
+    servingsPerPackage?: string;
+    suggestedFoodGroup?: string;
+    suggestedProduct?: string;
+    uiState?: Record<string, unknown>;
 }) {
     const session = await getServerSession(authOptions);
 
@@ -27,6 +33,7 @@ export async function saveTable(data: {
     if (!user) return { error: "Usuário não encontrado" };
 
     try {
+        const uiStateValue = data.uiState ? (data.uiState as Prisma.InputJsonValue) : undefined;
         const payload = {
             userId: user.id,
             title: data.title,
@@ -34,6 +41,11 @@ export async function saveTable(data: {
             uom: data.uom,
             householdMeasure: data.householdMeasure,
             popGroup: data.popGroup,
+            packageContent: data.packageContent ?? null,
+            servingsPerPackage: data.servingsPerPackage ?? null,
+            suggestedFoodGroup: data.suggestedFoodGroup || null,
+            suggestedProduct: data.suggestedProduct || null,
+            uiState: uiStateValue,
         };
 
         const itemsPayload = data.ingredients.map(i => ({
