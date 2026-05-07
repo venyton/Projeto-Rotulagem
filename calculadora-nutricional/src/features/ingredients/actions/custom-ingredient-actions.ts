@@ -77,7 +77,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 
         revalidatePath("/dashboard/ingredients");
         return { success: true };
-    } catch (_e) {
+    } catch {
         return { error: "Erro ao criar ingrediente" };
     }
 }
@@ -97,7 +97,7 @@ export async function deleteCustomIngredient(id: string) {
         await prisma.customIngredient.delete({ where: { id } });
         revalidatePath("/dashboard/ingredients");
         return { success: true };
-    } catch (_e) {
+    } catch {
         return { error: "Erro ao deletar" };
     }
 }
@@ -176,7 +176,7 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
         revalidatePath("/dashboard/ingredients");
         return { success: true };
-    } catch (_e) {
+    } catch {
         return { error: "Erro ao atualizar ingrediente" };
     }
 }
@@ -206,7 +206,7 @@ export async function searchIngredients(query: string) {
             })
         ]);
 
-        return dedupeById([
+        return dedupeSearchResults([
             ...customSuggestions.map((c) => ({ ...c, origin: "CUSTOM" })),
             ...tacoSuggestions
         ]).slice(0, MAX_RESULTS);
@@ -235,7 +235,7 @@ export async function searchIngredients(query: string) {
         })
     ]);
 
-    let combined = dedupeById([
+    let combined = dedupeSearchResults([
         ...customDirect.map((c) => ({ ...c, origin: "CUSTOM" })),
         ...tacoDirect
     ]);
@@ -273,7 +273,7 @@ export async function searchIngredients(query: string) {
                 return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
             });
 
-        combined = dedupeById([...combined, ...normalizedMatches]);
+        combined = dedupeSearchResults([...combined, ...normalizedMatches]);
     }
 
     return combined.slice(0, MAX_RESULTS);
@@ -311,13 +311,16 @@ function isCustomLike(item: { origin?: string | null; name: string }) {
     return item.origin === "CUSTOM" || item.name.startsWith("[Meu]");
 }
 
-function dedupeById<T extends { id: string }>(items: T[]) {
+function dedupeSearchResults<T extends { id: string; name: string; origin?: string | null }>(items: T[]) {
     const seen = new Set<string>();
     const deduped: T[] = [];
 
     for (const item of items) {
-        if (seen.has(item.id)) continue;
-        seen.add(item.id);
+        const source = isCustomLike(item) ? "custom" : "official";
+        const normalizedName = normalizeForSearch(item.name);
+        const keys = [item.id, `${source}:${normalizedName}`];
+        if (keys.some((key) => seen.has(key))) continue;
+        keys.forEach((key) => seen.add(key));
         deduped.push(item);
     }
 
