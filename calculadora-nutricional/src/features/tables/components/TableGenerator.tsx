@@ -2,10 +2,22 @@
 
 import React, { useState, useEffect } from "react";
 import { IngredientSelector } from "@/features/ingredients/components/IngredientSelector";
-import { SelectedIngredient, calculateRecipe, CalculatedNutrients } from "@/features/tables/domain/nutrients";
+import {
+    SelectedIngredient,
+    calculateRecipe,
+    CalculatedNutrients,
+    isLikelyAddedSugarIngredient,
+} from "@/features/tables/domain/nutrients";
 import { NutritionalLabel } from "@/features/tables/components/NutritionalLabel";
 import { MagnifyingGlassLabel } from "@/features/tables/components/MagnifyingGlassLabel";
-import { POPULATION_GROUPS, PopGroup, POPULATION_LABELS } from "@/features/tables/domain/constants";
+import {
+    POPULATION_GROUPS,
+    PopGroup,
+    RegulatoryScenario,
+    SPECIFIC_POPULATION_LABELS,
+    isSpecificPopulationGroup,
+    normalizePopulationGroupForScenario,
+} from "@/features/tables/domain/constants";
 import { checkFOP, inferFopFoodType, type FOPFoodType } from "@/features/tables/domain/anvisa";
 import { Ingredient } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -61,13 +73,31 @@ type ImageExportFormat = "png" | "jpeg" | "webp";
 type ServingsDeclarationMode = "auto" | "manual";
 type ComplianceProfile = "general" | "bottled-water" | "iodized-salt" | "flour" | "annex-xvi";
 type FopReferenceMode = "as-sold" | "prepared";
+type RegulatoryCategory =
+    | "general-food"
+    | "supplement"
+    | "special-purpose"
+    | "infant-formula"
+    | "enteral-formula"
+    | "metabolic-formula"
+    | "lactose-restriction"
+    | "hyposodium-salt";
+type ExtraConstituent = {
+    id: string;
+    name: string;
+    amount: string;
+    unit: string;
+};
 type TableUiState = {
     selectedGroup?: string;
     selectedProduct?: string;
     packageContent?: number;
     servingsDeclarationMode?: ServingsDeclarationMode;
     servingsPerPackageManual?: string;
+    regulatoryScenario?: RegulatoryScenario;
+    regulatoryCategory?: RegulatoryCategory;
     isSupplement?: boolean;
+    extraConstituents?: ExtraConstituent[];
     selectedNutrients?: string[];
     selectedTableTypes?: ExcelTableType[];
     selectedImageFormats?: ImageExportFormat[];
@@ -107,6 +137,22 @@ const COMPLIANCE_PROFILE_OPTIONS: Array<{ value: ComplianceProfile; label: strin
     { value: "iodized-salt", label: "Sal iodado para consumo humano" },
     { value: "flour", label: "Farinha de trigo/milho enriquecida" },
     { value: "annex-xvi", label: "Categoria com vedação de lupa (Anexo XVI IN 75)" },
+];
+const REGULATORY_CATEGORY_OPTIONS: Array<{ value: RegulatoryCategory; label: string }> = [
+    { value: "general-food", label: "Alimento em geral" },
+    { value: "supplement", label: "Suplemento alimentar" },
+    { value: "special-purpose", label: "Alimento para fins especiais" },
+    { value: "infant-formula", label: "Fórmula infantil" },
+    { value: "enteral-formula", label: "Fórmula para nutrição enteral" },
+    { value: "metabolic-formula", label: "Fórmula dietoterápica" },
+    { value: "lactose-restriction", label: "Dieta com restrição de lactose" },
+    { value: "hyposodium-salt", label: "Sal hipossódico" },
+];
+
+const NO_DAILY_VALUE_CATEGORIES: RegulatoryCategory[] = [
+    "infant-formula",
+    "enteral-formula",
+    "metabolic-formula",
 ];
 
 function median(values: number[]) {
@@ -182,7 +228,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const [householdMeasureCustom, setHouseholdMeasureCustom] = useState(
         () => parseHouseholdMeasureValue(initialMeasure).customValue
     );
-    const [popGroup, setPopGroup] = useState<PopGroup>((initialData?.popGroup as PopGroup) || POPULATION_GROUPS.ADULTS);
     const [packageContent, setPackageContent] = useState<number>(initialData?.packageContent || 0);
     const [servingsDeclarationMode, setServingsDeclarationMode] = useState<ServingsDeclarationMode>(
         savedUiState.servingsDeclarationMode || "auto"
@@ -191,6 +236,27 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         savedUiState.servingsPerPackageManual || initialData?.servingsPerPackage || ""
     );
     const [isSupplement, setIsSupplement] = useState(!!savedUiState.isSupplement);
+    const [regulatoryCategory, setRegulatoryCategory] = useState<RegulatoryCategory>(
+        savedUiState.regulatoryCategory || (savedUiState.isSupplement ? "supplement" : "general-food")
+    );
+    const [extraConstituents, setExtraConstituents] = useState<ExtraConstituent[]>(
+        Array.isArray(savedUiState.extraConstituents) ? savedUiState.extraConstituents : []
+    );
+    const initialRegulatoryScenario: RegulatoryScenario =
+        savedUiState.regulatoryScenario ||
+        (savedUiState.isSupplement ||
+        savedUiState.regulatoryCategory === "supplement" ||
+        savedUiState.regulatoryCategory === "special-purpose" ||
+        isSpecificPopulationGroup((initialData?.popGroup as PopGroup) || POPULATION_GROUPS.ADULTS)
+            ? "specific"
+            : "general");
+    const [regulatoryScenario, setRegulatoryScenario] = useState<RegulatoryScenario>(initialRegulatoryScenario);
+    const [popGroup, setPopGroup] = useState<PopGroup>(() =>
+        normalizePopulationGroupForScenario(
+            initialRegulatoryScenario,
+            (initialData?.popGroup as PopGroup) || POPULATION_GROUPS.ADULTS
+        )
+    );
     const [selectedNutrients, setSelectedNutrients] = useState<string[]>(savedUiState.selectedNutrients || []);
     const [selectedTableTypes, setSelectedTableTypes] = useState<ExcelTableType[]>(
         savedUiState.selectedTableTypes && savedUiState.selectedTableTypes.length > 0
@@ -326,6 +392,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const isFopForbiddenByCategory = complianceProfile === "annex-xvi";
     const requiresIodizedSaltStatement = complianceProfile === "iodized-salt";
     const requiresFlourStatement = complianceProfile === "flour";
+    const showDailyValue = !NO_DAILY_VALUE_CATEGORIES.includes(regulatoryCategory);
 
     const fopStatus = fopReference ? checkFOP(fopReference, fopFoodType) : null;
     const hasFopSeal = !!(fopStatus && (fopStatus.highSugar || fopStatus.highFat || fopStatus.highSodium));
@@ -358,6 +425,35 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             warnings.push("Lupa está sendo calculada por alimento pronto para consumo (Art. 19, parágrafo único, RDC 429/2020).");
         }
 
+        if (!showDailyValue) {
+            warnings.push("Categoria selecionada dispensa %VD: a tabela não deve declarar percentual de valores diários.");
+        }
+
+        if (regulatoryCategory === "supplement") {
+            warnings.push("Suplemento: a porção deve corresponder à quantidade diária recomendada para o grupo populacional indicado.");
+            warnings.push("Validar constituintes, limites mínimos/máximos, alegações e rotulagem complementar na IN 28/2018 e atualizações.");
+        }
+
+        if (regulatoryCategory === "lactose-restriction") {
+            warnings.push("Restrição de lactose: declarar lactose e galactose na tabela.");
+        }
+
+        if (regulatoryCategory === "hyposodium-salt") {
+            warnings.push("Sal hipossódico: declarar potássio na tabela.");
+        }
+
+        if (regulatoryCategory === "infant-formula") {
+            warnings.push("Fórmula infantil: declarar vitaminas/minerais e DHA, ARA, taurina, L-carnitina, nucleotídeos, FOS, GOS e outros nutrientes quando adicionados.");
+        }
+
+        if (regulatoryCategory === "enteral-formula") {
+            warnings.push("Nutrição enteral: declarar monoinsaturadas, poli-insaturadas, ômega 6, ômega 3, colesterol, vitaminas, minerais e nutrientes adicionados.");
+        }
+
+        if (regulatoryCategory === "metabolic-formula") {
+            warnings.push("Fórmula dietoterápica: declarar substâncias associadas ao erro inato do metabolismo indicado.");
+        }
+
         if (servingsDeclarationMode === "manual" && servingsPerPackageManual.trim().length === 0) {
             warnings.push("Declaração manual de porções por embalagem está vazia.");
         }
@@ -376,6 +472,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         isExcludedFromRdc429,
         isFopForbiddenByCategory,
         fopReferenceMode,
+        showDailyValue,
+        regulatoryCategory,
         servingsDeclarationMode,
         servingsPerPackageManual,
         requiresIodizedSaltStatement,
@@ -551,13 +649,97 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         if (!previewTableOptions.some((item) => item.value === selected)) {
             return;
         }
-        setIsSupplement(SUPPLEMENT_TABLE_TYPES.includes(selected));
+        const nextIsSupplement = SUPPLEMENT_TABLE_TYPES.includes(selected);
+        setIsSupplement(nextIsSupplement);
+        if (nextIsSupplement) {
+            setRegulatoryScenario("specific");
+            setPopGroup((current) => normalizePopulationGroupForScenario("specific", current));
+        }
         setPreviewTableType(selected);
         setSelectedTableTypes([selected]);
     };
 
+    const addExtraConstituent = (preset?: Partial<ExtraConstituent>) => {
+        setExtraConstituents((prev) => [
+            ...prev,
+            {
+                id: crypto.randomUUID(),
+                name: preset?.name || "",
+                amount: preset?.amount || "",
+                unit: preset?.unit || "mg",
+            },
+        ]);
+    };
+
+    const updateExtraConstituent = <K extends keyof ExtraConstituent>(
+        id: string,
+        field: K,
+        value: ExtraConstituent[K]
+    ) => {
+        setExtraConstituents((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+    };
+
+    const removeExtraConstituent = (id: string) => {
+        setExtraConstituents((prev) => prev.filter((item) => item.id !== id));
+    };
+
+    const handleRegulatoryCategoryChange = (value: string) => {
+        const nextCategory = value as RegulatoryCategory;
+        setRegulatoryCategory(nextCategory);
+        const nextIsSupplement = nextCategory === "supplement";
+        setIsSupplement(nextIsSupplement);
+
+        if (nextCategory !== "general-food") {
+            setRegulatoryScenario("specific");
+            setPopGroup((current) => normalizePopulationGroupForScenario("specific", current));
+        } else {
+            setRegulatoryScenario("general");
+            setPopGroup(POPULATION_GROUPS.ADULTS);
+        }
+
+        if (nextCategory === "lactose-restriction") {
+            setExtraConstituents((prev) => {
+                const existing = new Set(prev.map((item) => normalizeText(item.name)));
+                const additions: ExtraConstituent[] = [];
+                if (!existing.has("lactose")) additions.push({ id: crypto.randomUUID(), name: "Lactose", amount: "", unit: "g" });
+                if (!existing.has("galactose")) additions.push({ id: crypto.randomUUID(), name: "Galactose", amount: "", unit: "g" });
+                return [...prev, ...additions];
+            });
+        }
+
+        if (nextCategory === "hyposodium-salt") {
+            setSelectedNutrients((prev) => (prev.includes("potassium") ? prev : [...prev, "potassium"]));
+        }
+    };
+
+    const handleRegulatoryScenarioChange = (value: string) => {
+        const nextScenario = value as RegulatoryScenario;
+        if (regulatoryCategory !== "general-food" && nextScenario === "general") return;
+        setRegulatoryScenario(nextScenario);
+        setPopGroup((current) => normalizePopulationGroupForScenario(nextScenario, current));
+    };
+
+    const handleSupplementChange = (checked: boolean) => {
+        setIsSupplement(checked);
+        setRegulatoryCategory(checked ? "supplement" : "general-food");
+        if (checked) {
+            setRegulatoryScenario("specific");
+            setPopGroup((current) => normalizePopulationGroupForScenario("specific", current));
+        } else {
+            setRegulatoryScenario("general");
+            setPopGroup(POPULATION_GROUPS.ADULTS);
+        }
+    };
+
     const handleAddIngredient = (ing: Ingredient) => {
-        setIngredients(prev => [...prev, { ingredient: ing, quantity: 0, isAddedSugar: false }]);
+        setIngredients(prev => [
+            ...prev,
+            {
+                ingredient: ing,
+                quantity: 0,
+                isAddedSugar: isLikelyAddedSugarIngredient(ing.name),
+            },
+        ]);
     };
 
     const updateIngredient = <K extends keyof SelectedIngredient>(
@@ -590,6 +772,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
     useEffect(() => {
         if (isSupplement) {
+            setRegulatoryCategory("supplement");
+            setRegulatoryScenario("specific");
+            setPopGroup((current) => normalizePopulationGroupForScenario("specific", current));
             setSelectedTableTypes((prev) => {
                 const supplementSelected = prev.filter((type) => SUPPLEMENT_TABLE_TYPES.includes(type));
                 return supplementSelected.length > 0 ? supplementSelected : [...SUPPLEMENT_TABLE_TYPES];
@@ -626,7 +811,19 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
             if (persisted.servingsDeclarationMode) setServingsDeclarationMode(persisted.servingsDeclarationMode);
             if (typeof persisted.servingsPerPackageManual === "string") setServingsPerPackageManual(persisted.servingsPerPackageManual);
-            if (typeof persisted.isSupplement === "boolean") setIsSupplement(persisted.isSupplement);
+            if (persisted.regulatoryScenario) {
+                setRegulatoryScenario(persisted.regulatoryScenario);
+                setPopGroup((current) => normalizePopulationGroupForScenario(persisted.regulatoryScenario!, current));
+            }
+            if (persisted.regulatoryCategory) setRegulatoryCategory(persisted.regulatoryCategory);
+            if (Array.isArray(persisted.extraConstituents)) setExtraConstituents(persisted.extraConstituents);
+            if (typeof persisted.isSupplement === "boolean") {
+                setIsSupplement(persisted.isSupplement);
+                if (persisted.isSupplement) {
+                    setRegulatoryScenario("specific");
+                    setPopGroup((current) => normalizePopulationGroupForScenario("specific", current));
+                }
+            }
 
             if (Array.isArray(persisted.selectedNutrients)) setSelectedNutrients(persisted.selectedNutrients);
             if (Array.isArray(persisted.selectedTableTypes) && persisted.selectedTableTypes.length > 0) {
@@ -739,7 +936,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     packageContent,
                     servingsDeclarationMode,
                     servingsPerPackageManual,
+                    regulatoryScenario,
+                    regulatoryCategory,
                     isSupplement,
+                    extraConstituents,
                     selectedNutrients,
                     selectedTableTypes,
                     selectedImageFormats,
@@ -763,7 +963,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     packageContent,
                     servingsDeclarationMode,
                     servingsPerPackageManual,
+                    regulatoryScenario,
+                    regulatoryCategory,
                     isSupplement,
+                    extraConstituents,
                     selectedNutrients,
                     selectedTableTypes,
                     selectedImageFormats,
@@ -982,6 +1185,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     isSupplement,
                     servingsPerPackage,
                     selectedNutrients,
+                    showDailyValue,
                     selectedTableTypes,
                 }),
             });
@@ -1019,7 +1223,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                         {/* Group and Product Selectors */}
                         {/* Group and Product Selectors */}
-                        <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-border/70 bg-muted/[0.22] p-4">
+                        <div className="mb-4 grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20">
                             <div className="space-y-2">
                                 <Label>Grupo de Alimentos (Opcional)</Label>
                                 <Select value={selectedGroup} onValueChange={handleGroupChange}>
@@ -1176,7 +1380,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border/70 bg-muted/[0.22] p-4 md:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="package-content">Conteúdo da embalagem (g ou ml)</Label>
                                 <Input
@@ -1211,7 +1415,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         placeholder='ex: Cerca de 3'
                                     />
                                 ) : (
-                                    <div className="rounded-md border border-border/60 bg-background px-3 py-2 text-sm">
+                                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950/20">
                                         {servingsPerPackageAuto}
                                     </div>
                                 )}
@@ -1221,7 +1425,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </div>
                         </div>
 
-                        <div className="space-y-4 rounded-xl border border-border/70 bg-muted/[0.22] p-4">
+                        <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20">
                             <div className="flex items-center justify-between gap-2">
                                 <Label className="text-sm font-semibold">Conformidade ANVISA (RDC 429/IN 75)</Label>
                                 <div className="flex items-center space-x-2">
@@ -1237,6 +1441,22 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Categoria regulatória</Label>
+                                    <Select value={regulatoryCategory} onValueChange={handleRegulatoryCategoryChange}>
+                                        <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {REGULATORY_CATEGORY_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 <div className="space-y-2">
                                     <Label>Perfil regulatório do produto</Label>
                                     <Select value={complianceProfile} onValueChange={(value) => setComplianceProfile(value as ComplianceProfile)}>
@@ -1280,13 +1500,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="rounded-md border border-border/60 bg-background px-3 py-2 text-xs">
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950/20">
                                     {effectiveHasFopSeal ? "Lupa ativa para este produto." : "Lupa inativa para este produto."}
                                 </div>
                             </div>
 
                             {fopReferenceMode === "prepared" && (
-                                <div className="grid grid-cols-1 gap-4 rounded-lg border border-border/60 bg-background/60 p-3 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white/80 p-3 dark:border-slate-700 dark:bg-slate-950/20 md:grid-cols-3">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="prepared-sugar">Açúcares adicionados (g/100)</Label>
                                         <Input
@@ -1340,7 +1560,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             )}
 
                             {enableStrictCompliance && complianceWarnings.length > 0 && (
-                                <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+                                <div className="space-y-1 rounded-lg border border-stone-300 bg-stone-50 p-3 text-xs text-stone-700 dark:border-stone-700 dark:bg-stone-950/20 dark:text-stone-300">
                                     {complianceWarnings.map((warning) => (
                                         <p key={warning}>- {warning}</p>
                                     ))}
@@ -1348,27 +1568,41 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             )}
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label>Grupo Populacional</Label>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <Label>Base de referência VDR</Label>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="is-supplement"
                                         checked={isSupplement}
-                                        onCheckedChange={(c) => setIsSupplement(!!c)}
+                                        onCheckedChange={(c) => handleSupplementChange(!!c)}
                                     />
                                     <label
                                         htmlFor="is-supplement"
-                                        className="text-sm font-medium leading-none cursor-pointer"
+                                        className="cursor-pointer text-sm font-medium leading-none"
                                     >
-                                        Suplemento Alimentar
+                                        Suplemento alimentar
                                     </label>
                                 </div>
                             </div>
-                            <Select value={popGroup} onValueChange={(v) => setPopGroup(v as PopGroup)}>
+                            <Select value={regulatoryScenario} onValueChange={handleRegulatoryScenarioChange}>
+                                <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
+                                    <SelectValue placeholder="Selecione a base regulatória" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="general">População geral - alimentos em geral (Anexo II)</SelectItem>
+                                    <SelectItem value="specific">Grupo populacional específico / suplementos (Anexo VIII)</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {regulatoryScenario === "specific" && (
+                                <Select
+                                    value={normalizePopulationGroupForScenario("specific", popGroup)}
+                                    onValueChange={(v) => setPopGroup(v as PopGroup)}
+                                >
                                 <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                     <SelectValue
-                                        placeholder="Selecione"
+                                        placeholder="Selecione o grupo populacional"
                                         className="block max-w-[calc(100%-1.5rem)] whitespace-normal text-left leading-relaxed"
                                     />
                                 </SelectTrigger>
@@ -1376,7 +1610,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     position="popper"
                                     className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-2.5 [&_[data-slot=select-item]]:pr-10"
                                 >
-                                    {Object.entries(POPULATION_LABELS).map(([key, label]) => (
+                                    {Object.entries(SPECIFIC_POPULATION_LABELS).map(([key, label]) => (
                                         <SelectItem key={key} value={key}>
                                             <span className="block max-w-full break-words whitespace-normal leading-relaxed">
                                                 {label}
@@ -1384,7 +1618,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
-                            </Select>
+                                </Select>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -1412,7 +1647,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             {ingredients.map((item, idx) => (
                                 <div
                                     key={idx}
-                                    className="flex items-end gap-3 rounded-xl border border-border/70 bg-muted/[0.22] p-3"
+                                    className="flex items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/20"
                                 >
                                     <div className="flex-1 space-y-1">
                                         <div className="font-medium text-sm">{item.ingredient.name}</div>
@@ -1426,17 +1661,21 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                     className="h-8"
                                                 />
                                             </div>
-                                            <div className="flex items-center space-x-2">
+                                            <div className="flex items-start gap-2">
                                                 <Checkbox
                                                     id={`added-sugar-${idx}`}
                                                     checked={item.isAddedSugar}
                                                     onCheckedChange={(c) => updateIngredient(idx, 'isAddedSugar', !!c)}
+                                                    className="mt-0.5"
                                                 />
                                                 <label
                                                     htmlFor={`added-sugar-${idx}`}
-                                                    className="text-xs font-medium leading-none cursor-pointer"
+                                                    className="cursor-pointer space-y-0.5 text-xs leading-tight"
                                                 >
-                                                    É açúcar adicionado
+                                                    <span className="block font-medium">Conta como açúcar adicionado</span>
+                                                    <span className="block text-muted-foreground">
+                                                        Marque para açúcar, mel, xaropes, maltodextrina e similares.
+                                                    </span>
                                                 </label>
                                             </div>
                                         </div>
@@ -1452,13 +1691,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 </div>
                             ))}
                             {ingredients.length === 0 && (
-                                <div className="rounded-xl border-2 border-dashed border-border/70 bg-muted/[0.2] py-4 text-center text-sm text-muted-foreground">
+                                <div className="rounded-lg border border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-950/20 py-4 text-center text-sm text-muted-foreground">
                                     Adicione ingredientes para começar.
                                 </div>
                             )}
                         </div>
                         {ingredients.length > 0 && (
-                            <div className="mt-4 flex items-center justify-between rounded-xl border border-border/70 bg-muted/[0.3] p-4">
+                            <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/20">
                                 <span className="font-semibold text-sm">Peso Total dos Ingredientes:</span>
                                 <span className="font-bold text-lg text-primary">{ingredients.reduce((acc, item) => acc + (item.quantity || 0), 0).toFixed(1)} g</span>
                             </div>
@@ -1498,6 +1737,75 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     </label>
                                 </div>
                             ))}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
+                    <CardHeader className="border-b border-border/60">
+                        <div className="flex items-center justify-between gap-2">
+                            <CardTitle>Constituintes Extras</CardTitle>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => addExtraConstituent()}>
+                                Adicionar
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {extraConstituents.length === 0 && (
+                            <div className="rounded-lg border border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-950/20 py-4 text-center text-sm text-muted-foreground">
+                                Use para lactose, galactose, creatina, cafeína, probióticos, enzimas e substâncias bioativas.
+                            </div>
+                        )}
+                        {extraConstituents.map((item) => (
+                            <div key={item.id} className="grid grid-cols-1 items-end gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/20 sm:grid-cols-[1fr_7rem_6rem_2.5rem]">
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Nome</Label>
+                                    <Input
+                                        value={item.name}
+                                        onChange={(event) => updateExtraConstituent(item.id, "name", event.target.value)}
+                                        placeholder="ex: Creatina"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Porção</Label>
+                                    <Input
+                                        value={item.amount}
+                                        onChange={(event) => updateExtraConstituent(item.id, "amount", event.target.value)}
+                                        placeholder="ex: 3"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Unid.</Label>
+                                    <Input
+                                        value={item.unit}
+                                        onChange={(event) => updateExtraConstituent(item.id, "unit", event.target.value)}
+                                        placeholder="mg"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeExtraConstituent(item.id)}
+                                    className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))}
+                        <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Lactose", unit: "g" })}>
+                                Lactose
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Galactose", unit: "g" })}>
+                                Galactose
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Creatina", unit: "g" })}>
+                                Creatina
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Probióticos", unit: "UFC" })}>
+                                Probióticos
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
@@ -1548,6 +1856,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 servingsPerPackage={servingsPerPackage}
                                                 popGroup={popGroup}
                                                 selectedNutrients={selectedNutrients}
+                                                extraConstituents={extraConstituents}
+                                                showDailyValue={showDailyValue}
                                                 fop={effectiveHasFopSeal ? (fopStatus || undefined) : undefined}
                                                 previewType={previewTableType}
                                             />
@@ -1739,6 +2049,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     servingsPerPackage={servingsPerPackage}
                                     popGroup={popGroup}
                                     selectedNutrients={selectedNutrients}
+                                    extraConstituents={extraConstituents}
+                                    showDailyValue={showDailyValue}
                                     fop={undefined}
                                     previewType={tableType}
                                     id={`nutrition-label-container-export-${tableType}`}

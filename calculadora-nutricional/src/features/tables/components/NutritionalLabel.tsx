@@ -21,6 +21,12 @@ export interface NutritionalLabelProps {
     servingsPerPackage?: string;
     popGroup: PopGroup;
     selectedNutrients: string[];
+    extraConstituents?: Array<{
+        name: string;
+        amount: string;
+        unit: string;
+    }>;
+    showDailyValue?: boolean;
     fop?: {
         highSugar: boolean;
         highFat: boolean;
@@ -56,8 +62,14 @@ const getVdrValue = (vdr: VdrValues, key: NutrientKey): number | null | undefine
 };
 
 const getVdReference = (vdr: VdrValues, key: NutrientKey) => {
-    if (key === "sugarAdded") return DEFAULT_VD_SUGAR_ADDED;
-    if (key === "fatTrans") return DEFAULT_VD_FAT_TRANS;
+    if (key === "sugarAdded") {
+        const ref = getVdrValue(vdr, key);
+        return ref !== undefined ? ref : DEFAULT_VD_SUGAR_ADDED;
+    }
+    if (key === "fatTrans") {
+        const ref = getVdrValue(vdr, key);
+        return ref !== undefined ? ref : DEFAULT_VD_FAT_TRANS;
+    }
     return getVdrValue(vdr, key) ?? null;
 };
 
@@ -91,6 +103,41 @@ const Row2 = ({ label, v1, indentLevel }: { label: string; v1: string; indentLev
     </tr>
 );
 
+const RowBase = ({
+    row,
+    variant,
+    showDailyValue = true,
+}: {
+    row: {
+        label: string;
+        per100: string;
+        portion: string;
+        vdPortion: string;
+        vd100: string;
+        indentLevel?: IndentLevel;
+    };
+    variant: "full" | "portion-vd" | "per100-vd" | "per100-only";
+    showDailyValue?: boolean;
+}) => {
+    if (variant === "portion-vd") {
+        return showDailyValue
+            ? <Row3 label={row.label} v1={row.portion} v2={row.vdPortion} indentLevel={row.indentLevel} />
+            : <Row2 label={row.label} v1={row.portion} indentLevel={row.indentLevel} />;
+    }
+    if (variant === "per100-vd") {
+        return showDailyValue
+            ? <Row3 label={row.label} v1={row.per100} v2={row.vd100} indentLevel={row.indentLevel} />
+            : <Row2 label={row.label} v1={row.per100} indentLevel={row.indentLevel} />;
+    }
+    if (variant === "per100-only") {
+        return <Row2 label={row.label} v1={row.per100} indentLevel={row.indentLevel} />;
+    }
+    if (!showDailyValue) {
+        return <Row3 label={row.label} v1={row.per100} v2={row.portion} indentLevel={row.indentLevel} />;
+    }
+    return <Row4 label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />;
+};
+
 export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     per100g,
     perPortion,
@@ -99,6 +146,8 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     servingsPerPackage,
     popGroup,
     selectedNutrients,
+    extraConstituents = [],
+    showDailyValue = true,
     fop,
     previewType = "VERT",
     id = "nutrition-label-container",
@@ -229,14 +278,35 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         }
     });
 
+    extraConstituents
+        .filter((item) => item.name.trim() && item.amount.trim())
+        .forEach((item) => {
+            const formattedAmount = `${item.amount.trim()}${item.unit.trim() ? ` ${item.unit.trim()}` : ""}`;
+            baseRows.push({
+                label: item.name.trim(),
+                nutrientKey: "energy",
+                per100: "-",
+                portion: formattedAmount,
+                vdPortion: "",
+                vd100: "",
+            });
+        });
+
+    if (!showDailyValue) {
+        baseRows.forEach((row) => {
+            row.vdPortion = "";
+            row.vd100 = "";
+        });
+    }
+
     const isLinearPreview = previewType === "LINEAR";
     const portionHeader = `${portionSize} g`;
     const servingsHeader = servingsPerPackage?.trim() || "-";
     const declarationSeparatorStyle = { borderTop: "4px solid #000000" };
-    const linearBase = `Por 100 g ou ml (${portionHeader}, % VD*):`;
+    const linearBase = showDailyValue ? `Por 100 g ou ml (${portionHeader}, % VD*):` : `Por 100 g ou ml (${portionHeader}):`;
     const linearText = baseRows
         .map((r) => {
-            const vd = r.vdPortion ? `, ${r.vdPortion}%` : "";
+            const vd = showDailyValue && r.vdPortion ? `, ${r.vdPortion}%` : "";
             return `${r.label} ${r.per100} (${r.portion}${vd})`;
         })
         .join(" ● ");
@@ -329,13 +399,13 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
-                            <Row4 label="Carboidratos (g)" v1={baseRows[1].per100} v2={baseRows[1].portion} v3={baseRows[1].vdPortion} />
+                            <RowBase row={baseRows[1]} variant="full" showDailyValue={showDailyValue} />
                             <tr className="border-b text-[11px]" style={{ borderColor: "#000000" }}>
-                                <td className="nutrition-wrap-cell py-[3px] leading-[1.2]" colSpan={4}>
+                                <td className="nutrition-wrap-cell py-[3px] leading-[1.2]" colSpan={showDailyValue ? 4 : 3}>
                                     {simplifiedAbsentText}
                                 </td>
                             </tr>
@@ -350,11 +420,11 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -366,11 +436,11 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                         <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(left?.indentLevel))}>{left?.label ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{left?.per100 ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{left?.portion ?? ""}</td>
-                                        <td className="py-[3px] px-2 text-center">{left?.vdPortion ?? ""}</td>
+                                        {showDailyValue && <td className="py-[3px] px-2 text-center">{left?.vdPortion ?? ""}</td>}
                                         <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(right?.indentLevel))}>{right?.label ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{right?.per100 ?? ""}</td>
                                         <td className="py-[3px] px-2 text-center">{right?.portion ?? ""}</td>
-                                        <td className="py-[3px] px-2 text-center">{right?.vdPortion ?? ""}</td>
+                                        {showDailyValue && <td className="py-[3px] px-2 text-center">{right?.vdPortion ?? ""}</td>}
                                     </tr>
                                 );
                             })}
@@ -387,11 +457,11 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                     <th className="py-[3px] text-left"></th>
                                     <th className="py-[3px] px-2 text-center">100 g</th>
                                     <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                    <th className="py-[3px] px-2 text-center">% VD*</th>
+                                    {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                                     <th className="py-[3px] text-left"></th>
                                     <th className="py-[3px] px-2 text-center">100 g</th>
                                     <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                    <th className="py-[3px] px-2 text-center">% VD*</th>
+                                    {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -403,11 +473,11 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                             <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(left?.indentLevel))}>{left?.label ?? ""}</td>
                                             <td className="py-[3px] px-2 text-center">{left?.per100 ?? ""}</td>
                                             <td className="py-[3px] px-2 text-center">{left?.portion ?? ""}</td>
-                                            <td className="py-[3px] px-2 text-center">{left?.vdPortion ?? ""}</td>
+                                            {showDailyValue && <td className="py-[3px] px-2 text-center">{left?.vdPortion ?? ""}</td>}
                                             <td className={cn("py-[3px] pr-2 leading-tight", getIndentClass(right?.indentLevel))}>{right?.label ?? ""}</td>
                                             <td className="py-[3px] px-2 text-center">{right?.per100 ?? ""}</td>
                                             <td className="py-[3px] px-2 text-center">{right?.portion ?? ""}</td>
-                                            <td className="py-[3px] px-2 text-center">{right?.vdPortion ?? ""}</td>
+                                            {showDailyValue && <td className="py-[3px] px-2 text-center">{right?.vdPortion ?? ""}</td>}
                                         </tr>
                                     );
                                 })}
@@ -438,12 +508,12 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {baseRows.map((row) => (
-                                <Row3 key={`100-${row.label}`} label={row.label} v1={row.per100} v2={row.vd100} indentLevel={row.indentLevel} />
+                                <RowBase key={`100-${row.label}`} row={row} variant="per100-vd" showDailyValue={showDailyValue} />
                             ))}
                         </tbody>
                     </table>
@@ -455,12 +525,12 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             <tr className="font-bold text-[11px] border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {baseRows.map((row) => (
-                                <Row3 key={`sup-${row.label}`} label={row.label} v1={row.portion} v2={row.vdPortion} indentLevel={row.indentLevel} />
+                                <RowBase key={`sup-${row.label}`} row={row} variant="portion-vd" showDailyValue={showDailyValue} />
                             ))}
                         </tbody>
                     </table>
@@ -473,12 +543,12 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g**</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {baseRows.map((row) => (
-                                <Row4 key={`adicao-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />
+                                <RowBase key={`adicao-${row.label}`} row={row} variant="full" showDailyValue={showDailyValue} />
                             ))}
                         </tbody>
                     </table>
@@ -509,10 +579,10 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -521,10 +591,10 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                     <td className={cn("py-[3px] pr-2", getIndentClass(row.indentLevel))}>{row.label}</td>
                                     <td className="py-[3px] px-2 text-center">{row.per100}</td>
                                     <td className="py-[3px] px-2 text-center">{row.portion}</td>
-                                    <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>
+                                    {showDailyValue && <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>}
                                     <td className="py-[3px] px-2 text-center">{row.per100}</td>
                                     <td className="py-[3px] px-2 text-center">{row.portion}</td>
-                                    <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>
+                                    {showDailyValue && <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>}
                                 </tr>
                             ))}
                         </tbody>
@@ -555,9 +625,9 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             <tr className="border-b" style={{ borderColor: "#000000" }}>
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -565,11 +635,13 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <tr key={`pop-${row.label}`} className="border-b" style={{ borderColor: "#000000" }}>
                                     <td className={cn("py-[3px] pr-2", getIndentClass(row.indentLevel))}>{row.label}</td>
                                     <td className="py-[3px] px-2 text-center">{row.portion}</td>
-                                    <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>
+                                    {showDailyValue && <td className="py-[3px] px-2 text-center">{row.vdPortion}</td>}
                                     <td className="py-[3px] px-2 text-center">{row.portion}</td>
-                                    <td className="py-[3px] px-2 text-center">
-                                        {getSafeVD(getNutrientValue(perPortion, row.nutrientKey), getVdReference(adultsVdr, row.nutrientKey))}
-                                    </td>
+                                    {showDailyValue && (
+                                        <td className="py-[3px] px-2 text-center">
+                                            {getSafeVD(getNutrientValue(perPortion, row.nutrientKey), getVdReference(adultsVdr, row.nutrientKey))}
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -585,12 +657,12 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                     <th className="py-[3px] text-left font-bold"></th>
                                     <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">100 g</th>
                                     <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">{portionHeader}</th>
-                                    <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">% VD*</th>
+                                    {showDailyValue && <th className="py-[3px] px-2 text-center font-bold whitespace-nowrap">% VD*</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {baseRows.map((row) => (
-                                    <Row4 key={`horiz-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />
+                                    <RowBase key={`horiz-${row.label}`} row={row} variant="full" showDailyValue={showDailyValue} />
                                 ))}
                             </tbody>
                         </table>
@@ -604,19 +676,19 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                                 <th className="py-[3px] text-left"></th>
                                 <th className="py-[3px] px-2 text-center">100 g</th>
                                 <th className="py-[3px] px-2 text-center">{portionHeader}</th>
-                                <th className="py-[3px] px-2 text-center">% VD*</th>
+                                {showDailyValue && <th className="py-[3px] px-2 text-center">% VD*</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {baseRows.map((row) => (
-                                <Row4 key={`vert-${row.label}`} label={row.label} v1={row.per100} v2={row.portion} v3={row.vdPortion} indentLevel={row.indentLevel} />
+                                <RowBase key={`vert-${row.label}`} row={row} variant="full" showDailyValue={showDailyValue} />
                             ))}
                         </tbody>
                     </table>
                 </div>
             )}
 
-            {hasFootnote && (
+            {hasFootnote && showDailyValue && (
                 <div
                     className={cn(
                         "text-left",
