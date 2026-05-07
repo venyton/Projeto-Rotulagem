@@ -1,36 +1,213 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Calculadora Nutricional
 
-## Getting Started
+Aplicacao web para criacao, calculo, pre-visualizacao, salvamento e exportacao de tabelas nutricionais para rotulagem de alimentos.
 
-First, run the development server:
+O sistema permite montar receitas por ingredientes, calcular nutrientes por 100 g e por porcao, aplicar regras de rotulagem, selecionar modelos oficiais de tabela, gerar lupa frontal quando aplicavel e exportar imagens, Excel ou pacote ZIP completo.
+
+Documentacao completa:
+
+```text
+docs/DOCUMENTACAO_COMPLETA_DO_SISTEMA.md
+```
+
+## O que o sistema faz
+
+- Cadastro, login e sessao de usuarios.
+- Gestao de perfil e senha.
+- Cadastro manual de ingredientes.
+- Importacao e exportacao de ingredientes por Excel.
+- Busca de ingredientes oficiais e proprios, com suporte a acentos e remocao de duplicados.
+- Calculo nutricional por receita.
+- Calculo por 100 g e por porcao.
+- Separacao entre acucares totais e acucares adicionados.
+- Marcacao automatica/sugerida de ingredientes que contam como acucar adicionado.
+- Selecao de grupo de alimentos, produto sugerido, porcao e medida caseira.
+- Calculo de porcoes por embalagem.
+- Selecao de micronutrientes opcionais.
+- Suporte a constituintes extras, como creatina, cafeina, lactose, galactose, enzimas e probioticos.
+- Suporte a populacao geral e grupos populacionais especificos.
+- Suporte a categorias regulatorias especiais.
+- Remocao de `%VD` quando a categoria nao deve declarar percentual de valores diarios.
+- Calculo da lupa frontal para alto em acucar adicionado, gordura saturada e sodio.
+- Pre-visualizacao de modelos oficiais.
+- Exportacao em PNG, JPEG, WEBP, Excel e ZIP completo.
+- Salvamento e reabertura de tabelas com estado completo de configuracao.
+
+## Modelos de tabela
+
+Modelos disponiveis:
+
+```text
+Vertical
+Horizontal
+Vertical Quebrado
+Horizontal Quebrado
+Linear
+Agregado
+Simplificada
+B2B
+Adicao de Ingredientes
+Porcao = 100 g/ml
+Suplemento Alimentar
+Suplemento por Grupo
+```
+
+## Categorias regulatorias
+
+O sistema trabalha com:
+
+```text
+Alimento em geral
+Suplemento alimentar
+Alimento para fins especiais
+Formula infantil
+Formula para nutricao enteral
+Formula dietoterapica
+Dieta com restricao de lactose
+Sal hipossodico
+```
+
+Tambem permite selecionar:
+
+```text
+Populacao geral
+0-6 meses
+7-11 meses
+1-3 anos
+4-8 anos
+9-18 anos
+>=19 anos
+Gestantes
+Lactantes
+```
+
+## Stack
+
+```text
+Next.js 16
+React 19
+TypeScript
+Prisma
+PostgreSQL
+NextAuth
+Tailwind CSS
+ExcelJS
+html-to-image
+XLSX
+```
+
+## Estrutura principal
+
+```text
+src/app                  Rotas, paginas e APIs
+src/features             Regras e componentes por dominio
+src/components/ui        Componentes reutilizaveis
+src/lib                  Infraestrutura compartilhada
+prisma                   Schema do banco
+Dataset                  Bases, templates e referencias
+docs                     Documentacao
+scripts                  Seeds e utilitarios
+```
+
+## Rotas principais
+
+Publicas:
+
+```text
+/
+/login
+/register
+```
+
+Protegidas:
+
+```text
+/dashboard
+/dashboard/new
+/dashboard/edit/[id]
+/dashboard/ingredients
+/dashboard/ingredients/my-ingredients
+/dashboard/profile
+/dashboard/debug
+```
+
+APIs:
+
+```text
+/api/auth/[...nextauth]
+/api/export/excel
+/api/export/complete
+/api/debug-auth
+/api/debug/force-migrate
+```
+
+## Variaveis de ambiente
+
+Variaveis esperadas:
+
+```text
+POSTGRES_PRISMA_URL
+POSTGRES_URL_NON_POOLING
+NEXTAUTH_SECRET
+NEXTAUTH_URL
+```
+
+## Como rodar
+
+Instalar dependencias:
+
+```bash
+npm install
+```
+
+Gerar Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+Rodar em desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run seed
+npm run seed-user
+npm run test-db
+```
 
-To learn more about Next.js, take a look at the following resources:
+Atencao: o `npm run build` atual executa `prisma db push --accept-data-loss` antes do `next build`. Use com cuidado em ambientes que apontem para banco compartilhado ou producao.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Arquivos importantes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```text
+src/features/tables/components/TableGenerator.tsx
+src/features/tables/components/NutritionalLabel.tsx
+src/features/tables/domain/nutrients.ts
+src/features/tables/domain/anvisa.ts
+src/features/tables/domain/constants.ts
+src/features/ingredients/components/AddIngredientForm.tsx
+src/features/ingredients/actions/custom-ingredient-actions.ts
+src/app/api/export/excel/route.ts
+src/app/api/export/complete/route.ts
+src/lib/export/excel-generator.ts
+prisma/schema.prisma
+```
 
-## Deploy on Vercel
+## Observacao
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O sistema automatiza calculo, formato, pre-visualizacao e varias regras regulatórias. A aprovacao final do rotulo ainda deve passar por revisao tecnica, principalmente para suplementos, alimentos infantis, formulas, fins especiais, alegacoes e regras complementares de rotulagem.
