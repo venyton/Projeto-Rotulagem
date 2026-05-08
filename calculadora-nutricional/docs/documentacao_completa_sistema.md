@@ -619,6 +619,7 @@ Protegidas:
 /api/auth/[...nextauth]    Autenticacao NextAuth
 /api/export/excel         Exportacao Excel
 /api/export/complete      Exportacao ZIP completo
+/api/open-food-facts/products Busca segura no Open Food Facts
 /api/debug-auth           Diagnostico de autenticacao
 /api/debug/force-migrate  Suporte operacional de migracao
 ```
@@ -683,12 +684,13 @@ Fluxo para gerar uma tabela:
 4. Define porcao, medida caseira e conteudo da embalagem.
 5. Configura categoria regulatoria, VDR e lupa.
 6. Adiciona ingredientes e quantidades.
-7. Marca ingredientes que contam como acucar adicionado, se necessario.
-8. Seleciona micronutrientes e constituintes extras.
-9. Escolhe modelo de tabela.
-10. Confere pre-visualizacao.
-11. Salva a tabela.
-12. Exporta imagem, Excel ou pacote completo.
+7. Quando quiser usar produto de mercado, busca no Open Food Facts por codigo de barras ou nome, revisa os dados e importa como ingrediente. Ao importar, uma copia normalizada fica salva na base interna.
+8. Marca ingredientes que contam como acucar adicionado, se necessario.
+9. Seleciona micronutrientes e constituintes extras.
+10. Escolhe modelo de tabela.
+11. Confere pre-visualizacao.
+12. Salva a tabela.
+13. Exporta imagem, Excel ou pacote completo.
 
 ## 9. Variaveis de ambiente
 
@@ -699,9 +701,12 @@ POSTGRES_PRISMA_URL
 POSTGRES_URL_NON_POOLING
 NEXTAUTH_SECRET
 NEXTAUTH_URL
+OPEN_FOOD_FACTS_USER_AGENT
 ```
 
 O codigo de autenticacao tambem possui fallback para `DATABASE_URL` em diagnostico, mas o schema Prisma usa `POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`.
+
+`OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar a aplicacao nas chamadas ao Open Food Facts. A busca externa deve ser tratada como apoio operacional: o usuario precisa revisar os valores antes de usar no rotulo. Produtos importados ficam cacheados na tabela `Ingredient` com id `off-{codigo_de_barras}` e `origin = Open Food Facts`.
 
 ## 10. Scripts
 

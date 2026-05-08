@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { IngredientSelector } from "@/features/ingredients/components/IngredientSelector";
+import { OpenFoodFactsImporter } from "@/features/open-food-facts/components/OpenFoodFactsImporter";
 import {
     SelectedIngredient,
     calculateRecipe,
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { HelpTip } from "@/components/ui/help-tip";
 import {
     Select,
     SelectContent,
@@ -488,6 +490,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const previewContentRef = React.useRef<HTMLDivElement>(null);
     const [previewScale, setPreviewScale] = useState(1);
     const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+    const previewMaxHeight = 520;
     const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
     const availableTableOptionValues = React.useMemo(
         () =>
@@ -544,7 +547,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 const contentHeight = content.scrollHeight;
                 if (availableWidth <= 0 || contentWidth <= 0 || contentHeight <= 0) return;
 
-                const nextScale = Math.min(1, availableWidth / contentWidth);
+                const nextScale = Math.min(1, availableWidth / contentWidth, previewMaxHeight / contentHeight);
                 const roundedScale = Math.floor(nextScale * 10000) / 10000;
                 const nextHeight = Math.ceil(contentHeight * roundedScale);
 
@@ -1213,7 +1216,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     };
 
     return (
-        <div className="grid grid-cols-1 gap-8 pb-20 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start">
             <div className="space-y-6">
                 <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
                     <CardHeader className="border-b border-border/60">
@@ -1225,7 +1228,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         {/* Group and Product Selectors */}
                         <div className="mb-4 grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20">
                             <div className="space-y-2">
-                                <Label>Grupo de Alimentos (Opcional)</Label>
+                                <Label className="inline-flex items-center gap-1.5">
+                                    Grupo de Alimentos (Opcional)
+                                    <HelpTip>Use quando quiser partir de uma categoria oficial. Isso ajuda a preencher produto, porção e medida com mais consistência.</HelpTip>
+                                </Label>
                                 <Select value={selectedGroup} onValueChange={handleGroupChange}>
                                     <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                         <SelectValue placeholder="Selecione um grupo" />
@@ -1243,7 +1249,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label>Produto (Sugestão)</Label>
+                                <Label className="inline-flex items-center gap-1.5">
+                                    Produto (Sugestão)
+                                    <HelpTip>Ao selecionar um produto sugerido, o sistema preenche automaticamente nome, porção e medida caseira. Você ainda pode editar tudo depois.</HelpTip>
+                                </Label>
                                 <Select value={selectedProduct} onValueChange={handleProductChange} disabled={!selectedGroup}>
                                     <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                         <SelectValue placeholder="Selecione um produto" />
@@ -1259,9 +1268,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <div className="col-span-full text-xs text-muted-foreground">
-                                *Selecione para preencher automaticamente nome, porção e medida.
                             </div>
                         </div>
 
@@ -1279,7 +1285,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <Label>Porção (g)</Label>
+                                    <Label className="inline-flex items-center gap-1.5">
+                                        Porção (g)
+                                        <HelpTip>Quantidade de alimento usada como referência no rótulo. Ela aparece na tabela e define o cálculo por porção.</HelpTip>
+                                    </Label>
                                     {isUsingSuggestedPortion && (
                                         <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-600/80" />
@@ -1305,14 +1314,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     onChange={e => setPortionSize(parseFloat(e.target.value) || 0)}
                                     placeholder="ex: 20"
                                 />
-                                {currentMeasureSuggestedPortion && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Sugestão oficial para esta medida: {currentMeasureSuggestedPortion} g. Você pode editar manualmente.
-                                    </p>
-                                )}
                             </div>
                             <div className="space-y-2">
-                                <Label>Medida Caseira</Label>
+                                <Label className="inline-flex items-center gap-1.5">
+                                    Medida Caseira
+                                    <HelpTip>Forma simples de explicar a porção para o consumidor, como colher, fatia, unidade ou copo.</HelpTip>
+                                </Label>
                                 <Select value={householdMeasureCode} onValueChange={handleHouseholdMeasureCodeChange}>
                                     <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                         <SelectValue placeholder="Selecione a medida caseira" />
@@ -1374,15 +1381,15 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         Mostrar sugestões de medida ({suggestedMeasuresForCurrentPortion.length})
                                     </Button>
                                 )}
-                                <p className="text-xs text-muted-foreground">
-                                    Use uma medida oficial para padronizar. Se não se aplicar, escolha &quot;Outra (digitar)&quot;.
-                                </p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20 md:grid-cols-2">
                             <div className="space-y-2">
-                                <Label htmlFor="package-content">Conteúdo da embalagem (g ou ml)</Label>
+                                <Label htmlFor="package-content" className="inline-flex items-center gap-1.5">
+                                    Conteúdo da embalagem (g ou ml)
+                                    <HelpTip>Peso ou volume total vendido na embalagem. O sistema usa esse valor para calcular quantas porções existem no pacote.</HelpTip>
+                                </Label>
                                 <Input
                                     id="package-content"
                                     type="number"
@@ -1390,12 +1397,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     onChange={(e) => setPackageContent(parseFloat(e.target.value) || 0)}
                                     placeholder="ex: 500"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Base ANVISA: divide conteúdo da embalagem pela porção.
-                                </p>
                             </div>
                             <div className="space-y-2">
-                                <Label>Porções por embalagem (declaração)</Label>
+                                <Label className="inline-flex items-center gap-1.5">
+                                    Porções por embalagem (declaração)
+                                    <HelpTip>Texto que aparece no rótulo. No automático, divide o conteúdo total pela porção. No manual, você pode escrever como o cliente quer declarar.</HelpTip>
+                                </Label>
                                 <Select
                                     value={servingsDeclarationMode}
                                     onValueChange={(value) => setServingsDeclarationMode(value as ServingsDeclarationMode)}
@@ -1419,30 +1426,34 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         {servingsPerPackageAuto}
                                     </div>
                                 )}
-                                <p className="text-xs text-muted-foreground">
-                                    Valor usado na prévia e no Excel: <strong>{servingsPerPackage}</strong>
-                                </p>
                             </div>
                         </div>
 
                         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/20">
                             <div className="flex items-center justify-between gap-2">
-                                <Label className="text-sm font-semibold">Conformidade ANVISA (RDC 429/IN 75)</Label>
+                                <Label className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                                    Conformidade ANVISA (RDC 429/IN 75)
+                                    <HelpTip>Área para ajustar regras especiais do rótulo, como lupa frontal, suplementos e categorias com declarações obrigatórias.</HelpTip>
+                                </Label>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="strict-compliance"
                                         checked={enableStrictCompliance}
                                         onCheckedChange={(value) => setEnableStrictCompliance(!!value)}
                                     />
-                                    <label htmlFor="strict-compliance" className="text-xs font-medium leading-none cursor-pointer">
+                                    <label htmlFor="strict-compliance" className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium leading-none">
                                         Modo conformidade
+                                        <HelpTip>Quando ligado, o sistema mostra avisos de atenção sobre regras da ANVISA que podem exigir ajuste antes de exportar o rótulo.</HelpTip>
                                     </label>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label>Categoria regulatória</Label>
+                                    <Label className="inline-flex items-center gap-1.5">
+                                        Categoria regulatória
+                                        <HelpTip>Define se o produto é alimento geral, suplemento ou outra categoria com regra própria de rotulagem.</HelpTip>
+                                    </Label>
                                     <Select value={regulatoryCategory} onValueChange={handleRegulatoryCategoryChange}>
                                         <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                             <SelectValue />
@@ -1458,7 +1469,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Perfil regulatório do produto</Label>
+                                    <Label className="inline-flex items-center gap-1.5">
+                                        Perfil regulatório do produto
+                                        <HelpTip>Use para casos especiais, como sal iodado, farinha enriquecida ou produtos que não devem exibir lupa frontal.</HelpTip>
+                                    </Label>
                                     <Select value={complianceProfile} onValueChange={(value) => setComplianceProfile(value as ComplianceProfile)}>
                                         <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                             <SelectValue />
@@ -1474,7 +1488,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Classificação da base da lupa</Label>
+                                    <Label className="inline-flex items-center gap-1.5">
+                                        Classificação da base da lupa
+                                        <HelpTip>Escolhe se os limites da lupa serão avaliados como alimento sólido/semissólido ou líquido.</HelpTip>
+                                    </Label>
                                     <Select value={fopFoodType} onValueChange={(value) => setFopFoodType(value as FOPFoodType)}>
                                         <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                             <SelectValue />
@@ -1489,7 +1506,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label>Base de cálculo da lupa</Label>
+                                    <Label className="inline-flex items-center gap-1.5">
+                                        Base de cálculo da lupa
+                                        <HelpTip>Normalmente é o produto como vendido. Use pronto para consumo quando a regra exigir avaliação após preparo.</HelpTip>
+                                    </Label>
                                     <Select value={fopReferenceMode} onValueChange={(value) => setFopReferenceMode(value as FopReferenceMode)}>
                                         <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                             <SelectValue />
@@ -1570,7 +1590,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3">
-                                <Label>Base de referência VDR</Label>
+                                <Label className="inline-flex items-center gap-1.5">
+                                    Base de referência VDR
+                                    <HelpTip>Define qual tabela de valores diários será usada para calcular o %VD no rótulo.</HelpTip>
+                                </Label>
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="is-supplement"
@@ -1628,7 +1651,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     {/* ... Ingredients Card Content ... */}
                     <CardHeader className="border-b border-border/60">
                         <div className="flex items-center justify-between gap-2">
-                            <CardTitle>Ingredientes</CardTitle>
+                            <CardTitle className="inline-flex items-center gap-1.5">
+                                Ingredientes
+                                <HelpTip>Monte a receita com ingredientes da base, ingredientes próprios ou produtos importados do Open Food Facts.</HelpTip>
+                            </CardTitle>
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -1642,6 +1668,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <IngredientSelector onSelect={handleAddIngredient} />
+                        <OpenFoodFactsImporter onSelect={handleAddIngredient} />
 
                         <div className="space-y-2">
                             {ingredients.map((item, idx) => (
@@ -1672,9 +1699,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                     htmlFor={`added-sugar-${idx}`}
                                                     className="cursor-pointer space-y-0.5 text-xs leading-tight"
                                                 >
-                                                    <span className="block font-medium">Conta como açúcar adicionado</span>
-                                                    <span className="block text-muted-foreground">
-                                                        Marque para açúcar, mel, xaropes, maltodextrina e similares.
+                                                    <span className="inline-flex items-center gap-1.5 font-medium">
+                                                        Conta como açúcar adicionado
+                                                        <HelpTip>Marque quando o ingrediente for açúcar, mel, xarope, maltodextrina ou similar. Isso entra no cálculo de açúcares adicionados e pode ativar lupa.</HelpTip>
                                                     </span>
                                                 </label>
                                             </div>
@@ -1708,7 +1735,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
                     <CardHeader className="border-b border-border/60">
                         <div className="flex items-center justify-between gap-2">
-                            <CardTitle>Micronutrientes Opcionais</CardTitle>
+                            <CardTitle className="inline-flex items-center gap-1.5">
+                                Micronutrientes Opcionais
+                                <HelpTip>Marque apenas os micronutrientes que precisam aparecer na tabela. Os valores vêm dos ingredientes cadastrados.</HelpTip>
+                            </CardTitle>
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -1744,7 +1774,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
                     <CardHeader className="border-b border-border/60">
                         <div className="flex items-center justify-between gap-2">
-                            <CardTitle>Constituintes Extras</CardTitle>
+                            <CardTitle className="inline-flex items-center gap-1.5">
+                                Constituintes Extras
+                                <HelpTip>Use para informações que não são nutrientes padrão da tabela, como lactose, galactose, creatina, cafeína, probióticos e enzimas.</HelpTip>
+                            </CardTitle>
                             <Button type="button" variant="ghost" size="sm" onClick={() => addExtraConstituent()}>
                                 Adicionar
                             </Button>
@@ -1812,12 +1845,18 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
             </div>
 
-            <div className="space-y-6">
-                <Card className="sticky top-6 border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
+            <div className="space-y-6 lg:self-stretch">
+                <Card className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto border-border/70 bg-card/95 shadow-sm backdrop-blur-sm">
                     <CardHeader className="border-b border-border/60">
-                        <CardTitle>Pré-visualização</CardTitle>
+                        <CardTitle className="inline-flex items-center gap-1.5">
+                            Pré-visualização
+                            <HelpTip>Mostra como a tabela ficará com os dados atuais. Use essa área para conferir antes de exportar ou salvar.</HelpTip>
+                        </CardTitle>
                         <div className="space-y-2 pt-2">
-                            <Label>Modelo Oficial Pré-selecionado para Exportação</Label>
+                            <Label className="inline-flex items-center gap-1.5">
+                                Modelo Oficial Pré-selecionado para Exportação
+                                <HelpTip>Escolhe o modelo de tabela usado na prévia e já sincroniza a seleção do exportador de Excel.</HelpTip>
+                            </Label>
                                 <Select value={previewTableType} onValueChange={handlePreviewTypeChange}>
                                     <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
                                         <SelectValue placeholder="Selecione o modelo" />
@@ -1830,15 +1869,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground">
-                                A seleção acima já ajusta os tipos marcados no exportador de Excel.
-                            </p>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex min-h-[400px] min-w-0 flex-col items-center gap-8 overflow-hidden rounded-b-xl bg-muted/[0.25] px-4 py-8 dark:bg-muted/[0.18]">
+                    <CardContent className="flex min-h-[400px] min-w-0 flex-col items-center gap-8 overflow-visible rounded-b-xl bg-muted/[0.25] px-4 py-8 dark:bg-muted/[0.18]">
                         {result ? (
                             <>
-                                <div ref={previewViewportRef} className="w-full min-w-0 overflow-hidden">
+                                <div ref={previewViewportRef} className="w-full min-w-0 overflow-visible">
                                     <div
                                         className="flex w-full justify-center"
                                         style={{ height: previewHeight ? `${previewHeight}px` : undefined }}

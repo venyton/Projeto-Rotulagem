@@ -112,7 +112,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     };
 
     return (
-        <div className="container mx-auto py-8">
+        <div className="container mx-auto pt-8">
             <h1 className="text-3xl font-bold mb-6">Editar Tabela</h1>
             <TableGenerator initialData={initialData} />
         </div>
