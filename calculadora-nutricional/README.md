@@ -190,7 +190,7 @@ npm run seed-user
 npm run test-db
 ```
 
-Atencao: o `npm run build` atual executa `prisma db push --accept-data-loss` antes do `next build`. Use com cuidado em ambientes que apontem para banco compartilhado ou producao.
+Atencao: o `npm run build` apenas gera o Prisma Client e compila o Next.js. Para alterar schema no banco, confira o alvo do `.env` e rode `npm run db:push` manualmente.
 
 ## Arquivos importantes
 

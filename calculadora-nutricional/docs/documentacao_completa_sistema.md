@@ -726,10 +726,10 @@ npm run build
 executa:
 
 ```text
-npx prisma generate --schema=./prisma/schema.prisma && npx prisma db push --accept-data-loss && next build
+npx prisma generate --schema=./prisma/schema.prisma && next build
 ```
 
-Ou seja, o build atual tambem tenta aplicar `prisma db push --accept-data-loss`. Em ambiente de producao, isso deve ser tratado com cuidado operacional.
+Ou seja, o build atual apenas gera o Prisma Client e compila o Next.js. Alteracao de schema no banco deve ser feita manualmente e fora do build, usando `npm run db:push` somente quando o alvo do banco estiver conferido.
 
 ## 11. Pontos de atencao
 

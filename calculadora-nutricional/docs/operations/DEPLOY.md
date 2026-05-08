@@ -33,7 +33,7 @@ A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](
     
     *   **Criar as Tabelas:**
         No seu terminal (com o `.env` já baixado), rode:
-        `npx prisma db push`
+        `npm run db:push`
     
     *   **Criar Usuário de Teste:**
         Rode o script que cria o usuário `teste@teste.com` (senha: `teste`):
