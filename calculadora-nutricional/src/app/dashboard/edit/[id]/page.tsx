@@ -103,6 +103,11 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
         portionSize: table.portion,
         householdMeasure: table.householdMeasure,
         popGroup: table.popGroup,
+        packageContent: table.packageContent ?? undefined,
+        servingsPerPackage: table.servingsPerPackage ?? undefined,
+        suggestedFoodGroup: table.suggestedFoodGroup ?? undefined,
+        suggestedProduct: table.suggestedProduct ?? undefined,
+        uiState: table.uiState ?? undefined,
         ingredients
     };
 

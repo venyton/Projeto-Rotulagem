@@ -137,6 +137,11 @@ model GeneratedTable {
   uom       String   // "g" or "ml"
   householdMeasure String
   popGroup  String   // "adultos", etc.
+  packageContent     Float?
+  servingsPerPackage String?
+  suggestedFoodGroup String?
+  suggestedProduct   String?
+  uiState            Json?
   items     TableItem[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

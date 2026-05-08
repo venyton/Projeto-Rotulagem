@@ -1,5 +1,9 @@
 import { Ingredient } from "@prisma/client";
 
+type IngredientWithAddedSugar = Ingredient & {
+    sugarAdded?: number | null;
+};
+
 export interface SelectedIngredient {
     ingredient: Ingredient;
     quantity: number; // g
@@ -63,6 +67,37 @@ const MICRO_KEYS = [
     'calcium', 'chloride', 'copper', 'chromium', 'iron', 'fluoride', 'phosphorus', 'iodine', 'magnesium', 'manganese', 'molybdenum', 'potassium', 'selenium', 'zinc', 'choline'
 ] as const;
 
+const ADDED_SUGAR_NAME_PATTERNS = [
+    /\bacucar(?:es)?\b/,
+    /\bsacarose\b/,
+    /\bglicose\b/,
+    /\bfrutose\b/,
+    /\blactose\b/,
+    /\bdextrose\b/,
+    /\bacucar invertido\b/,
+    /\bmel\b/,
+    /\bmelaco\b/,
+    /\bmelado\b/,
+    /\brapadura\b/,
+    /\bcaldo de cana\b/,
+    /\bextrato de malte\b/,
+    /\bxarope(?:s)?\b/,
+    /\bmaltodextrina(?:s)?\b/,
+    /\bcarboidrato(?:s)? hidrolisado(?:s)?\b/,
+];
+
+function normalizeIngredientName(name: string): string {
+    return name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+}
+
+export function isLikelyAddedSugarIngredient(name: string): boolean {
+    const normalizedName = normalizeIngredientName(name);
+    return ADDED_SUGAR_NAME_PATTERNS.some((pattern) => pattern.test(normalizedName));
+}
+
 export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: number): {
     per100g: CalculatedNutrients;
     perPortion: CalculatedNutrients;
@@ -99,29 +134,20 @@ export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: 
 
         // Micros
         for (const key of MICRO_KEYS) {
-            // @ts-ignore - dynamic access to Prisma model fields
             const val = item.ingredient[key] || 0;
             totals[key] += val * scale;
         }
 
-        // Sugars
-        const itemSugar = (item.ingredient.sugarTotal || 0) * scale;
-        totals.sugarTotal += itemSugar;
+        // Sugars: total sugars always count. Added sugars count only when declared or marked.
+        const ingredient = item.ingredient as IngredientWithAddedSugar;
+        const totalSugar = (ingredient.sugarTotal || 0) * scale;
+        const declaredAddedSugar = (ingredient.sugarAdded || 0) * scale;
+        const addedSugar = item.isAddedSugar
+            ? (ingredient.sugarTotal ? totalSugar : (ingredient.carbs || 0) * scale)
+            : declaredAddedSugar;
 
-        if (item.isAddedSugar) {
-            const valToAdd = item.ingredient.sugarTotal ? itemSugar : (item.ingredient.carbs || 0) * scale;
-            totals.sugarAdded += valToAdd;
-            if (!item.ingredient.sugarTotal) {
-                totals.sugarTotal += valToAdd;
-            }
-        } else {
-            // If Ingredient has addedSugar field (CustomIngredient), use it
-            // @ts-ignore
-            if (item.ingredient.sugarAdded) {
-                // @ts-ignore
-                totals.sugarAdded += (item.ingredient.sugarAdded || 0) * scale;
-            }
-        }
+        totals.sugarTotal += Math.max(totalSugar, addedSugar);
+        totals.sugarAdded += addedSugar;
     }
 
     const f100 = totalWeight > 0 ? 100 / totalWeight : 0;
@@ -135,11 +161,8 @@ export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: 
 
 function scaleNutrients(n: CalculatedNutrients, factor: number): CalculatedNutrients {
     const scaled = { ...n };
-    for (const key in scaled) {
-        // @ts-ignore
+    for (const key of Object.keys(scaled) as Array<keyof CalculatedNutrients>) {
         scaled[key] *= factor;
     }
     return scaled;
 }
-
-

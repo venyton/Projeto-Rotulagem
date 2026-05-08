@@ -11,7 +11,7 @@ import {
   roundSugars,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
-import { MICRONUTRIENTS_A_TO_Z as MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 
 export type SheetType =
   | "VERT"
@@ -55,6 +55,7 @@ export type ExportBody = {
   servingsPerPackage?: string;
   selectedNutrients: string[];
   selectedTableTypes: SheetType[];
+  showDailyValue?: boolean;
 };
 
 type CellValueMap = Record<string, string>;
@@ -124,8 +125,8 @@ function buildNutrientMap(body: ExportBody, vdr: Record<string, number | null | 
       name,
       per100: round(raw100).replace(".", ","),
       portion: round(rawPortion).replace(".", ","),
-      vd100: calculateVD(raw100, ref ?? null),
-      vdPortion: calculateVD(rawPortion, ref ?? null),
+      vd100: body.showDailyValue === false ? "" : calculateVD(raw100, ref ?? null),
+      vdPortion: body.showDailyValue === false ? "" : calculateVD(rawPortion, ref ?? null),
     };
   });
 
@@ -148,7 +149,7 @@ function buildSelectedMicroRows(body: ExportBody, vdr: Record<string, number | n
     return {
       name: `${m.label} (${m.unit})`,
       portion: formatMicro(rawPortion),
-      vdPortion: calculateVD(rawPortion, ref ?? null),
+      vdPortion: body.showDailyValue === false ? "" : calculateVD(rawPortion, ref ?? null),
     };
   });
 }
@@ -197,7 +198,7 @@ function fillVertical(cells: CellValueMap, body: ExportBody, n: NutrientMap, mic
   });
 }
 
-function fillHorizontal(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillHorizontal(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   const left = rows.slice(0, 5);
   const right = rows.slice(5);
@@ -227,7 +228,7 @@ function fillHorizontal(cells: CellValueMap, body: ExportBody, n: NutrientMap, m
   });
 }
 
-function fillVerticalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillVerticalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   const top = rows.slice(0, 5);
   const bottom = rows.slice(5);
@@ -250,7 +251,7 @@ function fillVerticalQuebrado(cells: CellValueMap, body: ExportBody, n: Nutrient
   });
 }
 
-function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   const q1 = rows.slice(0, 3);
   const q2 = rows.slice(3, 6);
@@ -287,16 +288,16 @@ function fillHorizontalQuebrado(cells: CellValueMap, body: ExportBody, n: Nutrie
 function fillLinear(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
   const rows = nutrientRows(n);
   const text = rows
-    .map((v) => `${v.name.split(" (")[0]} ${v.portion} (${v.vdPortion}% VD*)`)
+    .map((v) => `${v.name.split(" (")[0]} ${v.portion} (${v.vdPortion}%)`)
     .join("; ");
   
-  const mText = micros.map(m => `${m.name} ${m.portion} (${m.vdPortion}% VD*)`).join("; ");
+  const mText = micros.map(m => `${m.name} ${m.portion} (${m.vdPortion}%)`).join("; ");
   const fullText = mText ? `${text}; ${mText}` : text;
 
   setCell(cells, "C8", `INFORMAÇÃO NUTRICIONAL: Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}. ${getPortionLine(body.portionSize, body.householdMeasure)}. Valor energético ${n.energy.portion} kcal (${n.energy.vdPortion}% VD); ${fullText}. *Percentual de valores diários fornecidos pela porção.`);
 }
 
-function fillAgregado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillAgregado(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
   setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
@@ -309,7 +310,7 @@ function fillAgregado(cells: CellValueMap, body: ExportBody, n: NutrientMap, mic
   });
 }
 
-function fillSimplificado(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillSimplificado(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n).filter(r => !r.name.includes("açúcar") && !r.name.includes("trans"));
   setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
   setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
@@ -336,7 +337,7 @@ function fillB2B(cells: CellValueMap, n: NutrientMap, micros: SelectedMicroRow[]
   });
 }
 
-function fillAdicao(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillAdicao(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
   setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
@@ -348,7 +349,7 @@ function fillAdicao(cells: CellValueMap, body: ExportBody, n: NutrientMap, micro
   });
 }
 
-function fill100(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fill100(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
   setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
@@ -360,7 +361,7 @@ function fill100(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: 
   });
 }
 
-function fillSuplemento(cells: CellValueMap, body: ExportBody, n: NutrientMap, micros: SelectedMicroRow[]) {
+function fillSuplemento(cells: CellValueMap, body: ExportBody, n: NutrientMap) {
   const rows = nutrientRows(n);
   setCell(cells, "C8", `Porções por embalagem: ${getServingsValue(body.servingsPerPackage)}`);
   setCell(cells, "C9", getPortionLine(body.portionSize, body.householdMeasure));
@@ -376,8 +377,7 @@ function fillSuplementoPopulacional(
   cells: CellValueMap,
   body: ExportBody,
   selected: NutrientMap,
-  adults: NutrientMap,
-  microsSelected: SelectedMicroRow[]
+  adults: NutrientMap
 ) {
   const rowsSelected = nutrientRows(selected);
   const rowsAdults = nutrientRows(adults);
@@ -440,18 +440,18 @@ export async function generateExcelBuffer(body: ExportBody): Promise<Uint8Array>
   };
 
   setSheetCells("VERT", (cells) => fillVertical(cells, body, nutrients, selectedMicros));
-  setSheetCells("HORIZ", (cells) => fillHorizontal(cells, body, nutrients, selectedMicros));
-  setSheetCells("VERT-QUEB", (cells) => fillVerticalQuebrado(cells, body, nutrients, selectedMicros));
-  setSheetCells("HORIZ-QUEB", (cells) => fillHorizontalQuebrado(cells, body, nutrients, selectedMicros));
+  setSheetCells("HORIZ", (cells) => fillHorizontal(cells, body, nutrients));
+  setSheetCells("VERT-QUEB", (cells) => fillVerticalQuebrado(cells, body, nutrients));
+  setSheetCells("HORIZ-QUEB", (cells) => fillHorizontalQuebrado(cells, body, nutrients));
   setSheetCells("LINEAR", (cells) => fillLinear(cells, body, nutrients, selectedMicros));
-  setSheetCells("AGREGADO", (cells) => fillAgregado(cells, body, nutrients, selectedMicros));
-  setSheetCells("SIMPLIF", (cells) => fillSimplificado(cells, body, nutrients, selectedMicros));
+  setSheetCells("AGREGADO", (cells) => fillAgregado(cells, body, nutrients));
+  setSheetCells("SIMPLIF", (cells) => fillSimplificado(cells, body, nutrients));
   setSheetCells("B2B", (cells) => fillB2B(cells, nutrients, selectedMicros));
-  setSheetCells("ADICAO", (cells) => fillAdicao(cells, body, nutrients, selectedMicros));
-  setSheetCells("100", (cells) => fill100(cells, body, nutrients, selectedMicros));
-  setSheetCells("SUPLEM", (cells) => fillSuplemento(cells, body, nutrients, selectedMicros));
+  setSheetCells("ADICAO", (cells) => fillAdicao(cells, body, nutrients));
+  setSheetCells("100", (cells) => fill100(cells, body, nutrients));
+  setSheetCells("SUPLEM", (cells) => fillSuplemento(cells, body, nutrients));
   setSheetCells("SUPLEM-POP", (cells) =>
-    fillSuplementoPopulacional(cells, body, nutrients, nutrientsAdults, selectedMicros)
+    fillSuplementoPopulacional(cells, body, nutrients, nutrientsAdults)
   );
 
   const templatePath = await resolveTemplatePath();
