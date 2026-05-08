@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "npx prisma generate",
-    "build": "npx prisma generate --schema=./prisma/schema.prisma && npx prisma db push --accept-data-loss && next build",
+    "build": "npx prisma generate --schema=./prisma/schema.prisma && next build",
+    "db:push": "npx prisma db push --schema=./prisma/schema.prisma",
     "start": "next start",
     "lint": "eslint",
     "seed": "npx -y tsx scripts/seed.ts",
