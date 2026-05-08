@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { Ingredient } from "@prisma/client";
-import { AlertTriangle, Barcode, CheckCircle2, ExternalLink, PackagePlus, Search } from "lucide-react";
+import { AlertTriangle, Barcode, ExternalLink, PackagePlus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
@@ -24,15 +24,15 @@ type CacheResponse = {
 };
 
 const completenessLabel = {
-    high: "Dados bons",
-    medium: "Revisar",
-    low: "Poucos dados",
+    high: "dados bons",
+    medium: "revisar",
+    low: "dados incompletos",
 } as const;
 
 const completenessClass = {
-    high: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
-    medium: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300",
-    low: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300",
+    high: "text-emerald-700 dark:text-emerald-300",
+    medium: "text-amber-700 dark:text-amber-300",
+    low: "text-red-700 dark:text-red-300",
 } as const;
 
 function nutrientSummary(product: OpenFoodFactsProduct) {
@@ -106,8 +106,8 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                 </div>
                 <div className="min-w-0">
                     <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                        Open Food Facts
-                        <HelpTip>Busca produtos por código de barras ou nome em uma base colaborativa. Ao usar um produto, salvamos uma cópia revisável na nossa base.</HelpTip>
+                        Buscar produtos por código de barras ou pelo nome
+                        <HelpTip>Busca produtos por código de barras ou pelo nome. Sempre revise os valores.</HelpTip>
                     </h3>
                 </div>
             </div>
@@ -162,15 +162,15 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                                             {[product.brands, product.quantity, product.code].filter(Boolean).join(" • ")}
                                         </p>
                                     </div>
-                                    <span className={cn("inline-flex w-fit items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium", completenessClass[product.completeness])}>
-                                        {product.completeness === "high" ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                                    <span className={cn("inline-flex w-fit items-center gap-1 text-[11px] font-medium", completenessClass[product.completeness])}>
+                                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
                                         {completenessLabel[product.completeness]}
                                     </span>
                                 </div>
 
                                 <div className="flex flex-wrap gap-1.5">
                                     {nutrientSummary(product).map((item) => (
-                                        <span key={item} className="rounded-md border border-border/70 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
+                                        <span key={item} className="text-[11px] text-muted-foreground">
                                             {item}
                                         </span>
                                     ))}
