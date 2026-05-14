@@ -33,7 +33,10 @@ A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](
     
     *   **Criar as Tabelas:**
         No seu terminal (com o `.env` já baixado), rode:
-        `npm run db:push`
+        `npx prisma migrate deploy --schema=./prisma/schema.prisma`
+    
+    *   **Gerar Prisma Client:**
+        `npx prisma generate --schema=./prisma/schema.prisma`
     
     *   **Criar Usuário de Teste:**
         Rode o script que cria o usuário `teste@teste.com` (senha: `teste`):
@@ -54,3 +57,28 @@ A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](
 ## Variáveis de Ambiente
 
 Se o projeto utilizar variáveis de ambiente (arquivo `.env`), lembre-se de configurá-las no painel de configurações do seu projeto na Vercel ou Netlify (seção _Environment Variables_).
+
+Obrigatórias:
+
+```text
+POSTGRES_PRISMA_URL
+POSTGRES_URL_NON_POOLING
+NEXTAUTH_SECRET
+NEXTAUTH_URL
+```
+
+Recomendadas/opcionais por funcionalidade:
+
+```text
+OPEN_FOOD_FACTS_USER_AGENT
+GEMINI_API_KEY
+GEMINI_MODEL
+TECHNICAL_SHEET_MAX_FILE_SIZE_MB
+TECHNICAL_SHEET_MAX_BATCH_FILES
+```
+
+SQL manual organizado para DBA:
+
+```text
+docs/database/sql/README.md
+```

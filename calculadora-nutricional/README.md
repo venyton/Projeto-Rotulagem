@@ -4,10 +4,11 @@ Aplicacao web para criacao, calculo, pre-visualizacao, salvamento e exportacao d
 
 O sistema permite montar receitas por ingredientes, calcular nutrientes por 100 g e por porcao, aplicar regras de rotulagem, selecionar modelos oficiais de tabela, gerar lupa frontal quando aplicavel e exportar imagens, Excel ou pacote ZIP completo.
 
-Documentacao completa:
+Documentacao:
 
 ```text
-docs/DOCUMENTACAO_COMPLETA_DO_SISTEMA.md
+docs/README.md
+docs/system/documentacao_completa_sistema.md
 ```
 
 ## O que o sistema faz
@@ -17,6 +18,7 @@ docs/DOCUMENTACAO_COMPLETA_DO_SISTEMA.md
 - Cadastro manual de ingredientes.
 - Importacao e exportacao de ingredientes por Excel.
 - Busca de ingredientes oficiais e proprios, com suporte a acentos e remocao de duplicados.
+- Importacao de fichas tecnicas por IA com revisao humana.
 - Calculo nutricional por receita.
 - Calculo por 100 g e por porcao.
 - Separacao entre acucares totais e acucares adicionados.
@@ -32,6 +34,8 @@ docs/DOCUMENTACAO_COMPLETA_DO_SISTEMA.md
 - Pre-visualizacao de modelos oficiais.
 - Exportacao em PNG, JPEG, WEBP, Excel e ZIP completo.
 - Salvamento e reabertura de tabelas com estado completo de configuracao.
+- Workspace enterprise para mercados internacionais, versoes e fluxo de aprovacao.
+- Idioma global da interface com padrao em portugues do Brasil.
 
 ## Modelos de tabela
 
@@ -94,6 +98,8 @@ Tailwind CSS
 ExcelJS
 html-to-image
 XLSX
+Gemini API
+Open Food Facts
 ```
 
 ## Estrutura principal
@@ -127,6 +133,8 @@ Protegidas:
 /dashboard/edit/[id]
 /dashboard/ingredients
 /dashboard/ingredients/my-ingredients
+/dashboard/ingredients/technical-sheets
+/dashboard/enterprise
 /dashboard/profile
 /dashboard/debug
 ```
@@ -152,9 +160,15 @@ POSTGRES_URL_NON_POOLING
 NEXTAUTH_SECRET
 NEXTAUTH_URL
 OPEN_FOOD_FACTS_USER_AGENT
+GEMINI_API_KEY
+GEMINI_MODEL
+TECHNICAL_SHEET_MAX_FILE_SIZE_MB
+TECHNICAL_SHEET_MAX_BATCH_FILES
 ```
 
 `OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar o app nas chamadas ao Open Food Facts. Ao importar um produto, o sistema salva uma copia normalizada na tabela `Ingredient` com id `off-{codigo_de_barras}`, reduzindo dependencia da API externa nas proximas buscas.
+
+`GEMINI_API_KEY` habilita o importador de fichas tecnicas por IA. Sem ela, o importador retorna erro de provider nao configurado.
 
 ## Como rodar
 
@@ -206,6 +220,10 @@ src/features/tables/domain/anvisa.ts
 src/features/tables/domain/constants.ts
 src/features/ingredients/components/AddIngredientForm.tsx
 src/features/ingredients/actions/custom-ingredient-actions.ts
+src/features/technical-sheets/actions/technical-sheet-actions.ts
+src/features/technical-sheets/services/technical-sheet-ai-service.ts
+src/features/enterprise/components/EnterpriseWorkspace.tsx
+src/features/enterprise/actions/enterprise-label-actions.ts
 src/features/open-food-facts/components/OpenFoodFactsImporter.tsx
 src/app/api/open-food-facts/products/route.ts
 src/app/api/export/excel/route.ts

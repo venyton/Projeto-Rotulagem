@@ -1,12 +1,14 @@
 # Documentacao completa do sistema
 
-Atualizado em: 07/05/2026.
+Atualizado em: 14/05/2026.
 
 ## 1. Visao geral
 
 O sistema e uma aplicacao web para criacao, calculo, revisao, pre-visualizacao, salvamento e exportacao de tabelas nutricionais para rotulagem de alimentos.
 
 Ele foi construido para apoiar o fluxo operacional de rotulagem nutricional com base em receitas, ingredientes, grupos de alimentos, porcoes, medidas caseiras e regras regulatórias da Anvisa. O foco do produto e permitir que o usuario monte uma receita, calcule seus nutrientes, escolha o modelo oficial de tabela, valide regras importantes e gere arquivos para uso em rotulo, planilha ou revisao tecnica.
+
+A base atual tambem inclui importacao de fichas tecnicas por IA, revisao humana antes de transformar dados extraidos em ingrediente, organizacao de SQL para execucao manual e um workspace enterprise para versoes, aprovacao e mercados internacionais.
 
 O projeto fica em:
 
@@ -27,6 +29,8 @@ Tailwind CSS
 ExcelJS
 html-to-image
 XLSX
+Gemini API
+Open Food Facts
 ```
 
 ## 2. Publico e finalidade
@@ -591,6 +595,92 @@ Farinha de trigo/milho enriquecida
 Categoria com vedacao de lupa
 ```
 
+### 3.20 Importador de fichas tecnicas por IA
+
+O importador recebe PDFs ou imagens de fichas tecnicas, envia o conteudo para Gemini no servidor e grava uma extracao revisavel antes de criar ingrediente.
+
+Fluxo:
+
+1. Usuario envia um ou mais arquivos em `Ingredientes`.
+2. O servidor valida tipo e tamanho.
+3. Gemini retorna JSON estruturado.
+4. O sistema normaliza nutrientes, alergenicos e campos tecnicos.
+5. O usuario revisa os campos extraidos.
+6. Aprovacao humana cria ingrediente em `CustomIngredient`.
+
+Modelos/tabelas envolvidos:
+
+```text
+TechnicalDocument
+TechnicalSheetExtraction
+ExtractedNutrient
+ExtractedAllergen
+ExtractedTechnicalField
+CustomIngredient
+```
+
+Arquivos principais:
+
+```text
+src/features/technical-sheets/actions/technical-sheet-actions.ts
+src/features/technical-sheets/domain/technical-sheet-schema.ts
+src/features/technical-sheets/domain/technical-sheet-normalizer.ts
+src/features/technical-sheets/domain/technical-sheet-validator.ts
+src/features/technical-sheets/services/technical-sheet-ai-service.ts
+src/features/technical-sheets/services/technical-sheet-file-service.ts
+src/app/dashboard/ingredients/technical-sheets/page.tsx
+```
+
+### 3.21 Workspace enterprise
+
+O modulo enterprise permite criar projetos de rotulo a partir de uma tabela base e acompanhar versoes, mercado internacional e aprovacao.
+
+Mercados suportados no dominio atual:
+
+```text
+Brasil
+Estados Unidos
+Uniao Europeia
+Canada
+Mexico
+Chile
+```
+
+O fluxo registra snapshots para preservar o estado do rotulo no momento da revisao.
+
+Modelos/tabelas envolvidos:
+
+```text
+EnterpriseLabelProject
+EnterpriseLabelVersion
+EnterpriseApproval
+EnterpriseExport
+```
+
+Arquivos principais:
+
+```text
+src/features/enterprise/domain/enterprise.ts
+src/features/enterprise/components/EnterpriseWorkspace.tsx
+src/features/enterprise/components/InternationalNutritionLabel.tsx
+src/features/enterprise/actions/enterprise-label-actions.ts
+src/app/dashboard/enterprise/page.tsx
+```
+
+### 3.22 Idioma global da interface
+
+O idioma global fica em `src/features/i18n`. O padrao e `pt-BR`; a selecao de mercado enterprise nao muda automaticamente o idioma global da aplicacao.
+
+Idiomas previstos:
+
+```text
+pt-BR
+en-US
+es-MX
+es-CL
+fr-CA
+```
+
 ## 4. Mapa de paginas
 
 Publicas:
@@ -609,6 +699,8 @@ Protegidas:
 /dashboard/edit/[id]               Editar tabela salva
 /dashboard/ingredients             Ingredientes
 /dashboard/ingredients/my-ingredients Ingredientes do usuario
+/dashboard/ingredients/technical-sheets Fichas tecnicas importadas
+/dashboard/enterprise              Workspace enterprise
 /dashboard/profile                 Perfil e seguranca
 /dashboard/debug                   Diagnostico interno
 ```
@@ -634,6 +726,15 @@ Ingredient
 CustomIngredient
 GeneratedTable
 TableItem
+TechnicalDocument
+TechnicalSheetExtraction
+ExtractedNutrient
+ExtractedAllergen
+ExtractedTechnicalField
+EnterpriseLabelProject
+EnterpriseLabelVersion
+EnterpriseApproval
+EnterpriseExport
 ```
 
 Resumo:
@@ -643,6 +744,10 @@ Resumo:
 - `CustomIngredient`: ingrediente criado/importado pelo usuario.
 - `GeneratedTable`: tabela salva e configuracoes principais.
 - `TableItem`: snapshot dos ingredientes usados na tabela.
+- `TechnicalDocument`: arquivo enviado ao importador de fichas tecnicas e JSON extraido.
+- `TechnicalSheetExtraction`: dados normalizados e revisaveis da ficha.
+- `ExtractedNutrient`, `ExtractedAllergen`, `ExtractedTechnicalField`: detalhes extraidos por categoria.
+- `EnterpriseLabelProject`, `EnterpriseLabelVersion`, `EnterpriseApproval`, `EnterpriseExport`: workspace enterprise, versoes, aprovacao e exportacoes.
 
 Arquivo:
 
@@ -669,9 +774,13 @@ Dominios em `src/features`:
 
 ```text
 auth
+enterprise
+i18n
 ingredients
+open-food-facts
 profile
 tables
+technical-sheets
 ```
 
 ## 8. Fluxo operacional principal
@@ -691,6 +800,8 @@ Fluxo para gerar uma tabela:
 11. Confere pre-visualizacao.
 12. Salva a tabela.
 13. Exporta imagem, Excel ou pacote completo.
+14. Opcionalmente importa ficha tecnica com IA, revisa e salva como ingrediente.
+15. Opcionalmente abre o workspace enterprise para versoes e mercado internacional.
 
 ## 9. Variaveis de ambiente
 
@@ -702,11 +813,17 @@ POSTGRES_URL_NON_POOLING
 NEXTAUTH_SECRET
 NEXTAUTH_URL
 OPEN_FOOD_FACTS_USER_AGENT
+GEMINI_API_KEY
+GEMINI_MODEL
+TECHNICAL_SHEET_MAX_FILE_SIZE_MB
+TECHNICAL_SHEET_MAX_BATCH_FILES
 ```
 
 O codigo de autenticacao tambem possui fallback para `DATABASE_URL` em diagnostico, mas o schema Prisma usa `POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`.
 
 `OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar a aplicacao nas chamadas ao Open Food Facts. A busca externa deve ser tratada como apoio operacional: o usuario precisa revisar os valores antes de usar no rotulo. Produtos importados ficam cacheados na tabela `Ingredient` com id `off-{codigo_de_barras}` e `origin = Open Food Facts`.
+
+`GEMINI_API_KEY` habilita o importador de fichas tecnicas. `GEMINI_MODEL`, `TECHNICAL_SHEET_MAX_FILE_SIZE_MB` e `TECHNICAL_SHEET_MAX_BATCH_FILES` permitem ajustar modelo, tamanho maximo e lote de upload sem alterar o codigo.
 
 ## 10. Scripts
 
@@ -758,6 +875,11 @@ src/features/tables/actions/table-actions.ts
 src/features/ingredients/components/AddIngredientForm.tsx
 src/features/ingredients/components/IngredientSelector.tsx
 src/features/ingredients/actions/custom-ingredient-actions.ts
+src/features/technical-sheets/actions/technical-sheet-actions.ts
+src/features/technical-sheets/services/technical-sheet-ai-service.ts
+src/features/enterprise/components/EnterpriseWorkspace.tsx
+src/features/enterprise/actions/enterprise-label-actions.ts
+src/features/i18n/domain/site-i18n.ts
 src/app/api/export/excel/route.ts
 src/app/api/export/complete/route.ts
 src/lib/export/excel-generator.ts
@@ -778,6 +900,8 @@ O sistema hoje faz:
 - calculo de %VD por grupo populacional;
 - suporte a Anexo II e Anexo VIII;
 - suporte a categorias especiais;
+- importacao de fichas tecnicas por IA com revisao humana;
+- workspace enterprise com mercado, versoes e aprovacao;
 - desligamento de %VD para formulas que nao devem declarar;
 - selecao de micronutrientes;
 - inclusao de constituintes extras;
