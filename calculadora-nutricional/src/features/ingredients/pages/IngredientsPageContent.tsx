@@ -1,7 +1,12 @@
+import Link from 'next/link';
+import { FileSearch } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import { AddIngredientForm } from '@/features/ingredients/components/AddIngredientForm';
 import { DatabaseFixButton } from '@/features/ingredients/components/DatabaseFixButton';
 import { IngredientsTable } from '@/features/ingredients/components/IngredientsTable';
 import { getUserIngredients } from '@/features/ingredients/actions/import-ingredient-actions';
+import { TechnicalSheetImportDialog } from '@/features/technical-sheets/components/TechnicalSheetImportDialog';
 
 type IngredientsPageContentProps = {
   title: string;
@@ -46,7 +51,18 @@ export async function IngredientsPageContent({
           <h1 className="text-3xl font-bold mb-1">{title}</h1>
           <p className="text-muted-foreground">{description}</p>
         </div>
-        {showAddButton && <AddIngredientForm />}
+        {showAddButton && (
+          <div className="flex flex-wrap gap-2">
+            <TechnicalSheetImportDialog />
+            <Button asChild variant="outline">
+              <Link href="/dashboard/ingredients/technical-sheets">
+                <FileSearch className="mr-2 h-4 w-4" />
+                Fichas técnicas importadas
+              </Link>
+            </Button>
+            <AddIngredientForm />
+          </div>
+        )}
       </div>
       <IngredientsTable ingredients={ingredients} />
     </div>

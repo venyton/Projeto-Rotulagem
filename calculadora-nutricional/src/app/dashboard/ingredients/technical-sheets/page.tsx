@@ -1,0 +1,67 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  getTechnicalSheetExtraction,
+  listTechnicalSheetDocuments,
+} from "@/features/technical-sheets/actions/technical-sheet-actions";
+import { TechnicalSheetExtractionList } from "@/features/technical-sheets/components/TechnicalSheetExtractionList";
+import { TechnicalSheetExtractionReview } from "@/features/technical-sheets/components/TechnicalSheetExtractionReview";
+import { TechnicalSheetImportDialog } from "@/features/technical-sheets/components/TechnicalSheetImportDialog";
+
+type TechnicalSheetsPageProps = {
+  searchParams: Promise<{ documentId?: string }>;
+};
+
+export default async function TechnicalSheetsPage({ searchParams }: TechnicalSheetsPageProps) {
+  const params = await searchParams;
+  const documents = await listTechnicalSheetDocuments();
+  const selectedDocumentId = params.documentId;
+  const selectedExtraction = selectedDocumentId
+    ? await getTechnicalSheetExtraction(selectedDocumentId)
+    : null;
+
+  return (
+    <div className="container mx-auto space-y-6 px-4 py-10">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
+            <Link href="/dashboard/ingredients">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Ingredientes
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold">Fichas técnicas importadas</h1>
+          <p className="text-muted-foreground">
+            Revise extrações por IA antes de salvar em meus ingredientes.
+          </p>
+        </div>
+        <TechnicalSheetImportDialog />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
+        <TechnicalSheetExtractionList
+          documents={documents}
+          selectedDocumentId={selectedDocumentId}
+        />
+
+        {selectedDocumentId && selectedExtraction && (
+          <TechnicalSheetExtractionReview data={selectedExtraction} />
+        )}
+
+        {selectedDocumentId && !selectedExtraction && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+            Nenhuma extração encontrada para este documento. Ele pode ainda estar sendo processado ou ter falhado.
+          </div>
+        )}
+
+        {!selectedDocumentId && (
+          <div className="rounded-lg border border-border/70 bg-card p-6 text-sm text-muted-foreground">
+            Selecione uma ficha técnica para revisar.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

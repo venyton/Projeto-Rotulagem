@@ -31,7 +31,7 @@ export function DatabaseFixButton() {
                 throw new Error(`Erro ${res.status}: ${text.slice(0, 100)}`);
             }
 
-            const data = await res.json();
+            const data = await res.json() as { success?: boolean; errors?: string[] };
 
             if (data.success) {
                 setMessage("Banco de dados corrigido! Recarregando...");
@@ -43,12 +43,13 @@ export function DatabaseFixButton() {
                 const errorDetails = data.errors?.join(", ") || "Erro desconhecido";
                 setMessage(`Falha parcial: ${errorDetails.slice(0, 100)}...`);
             }
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
+        } catch (error: unknown) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
                 setMessage("Tempo limite esgotado. O servidor demorou muito.");
             } else {
                 console.error(error);
-                setMessage("Erro: " + error.message);
+                const message = error instanceof Error ? error.message : String(error);
+                setMessage("Erro: " + message);
             }
         } finally {
             setLoading(false);

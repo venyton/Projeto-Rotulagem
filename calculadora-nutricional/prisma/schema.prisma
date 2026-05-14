@@ -3,167 +3,500 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url = env("POSTGRES_PRISMA_URL") // uses connection pooling
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
   directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
 }
 
+enum DocumentType {
+  NUTRITION_TABLE_ONLY
+  PRODUCT_TECHNICAL_SHEET
+  MATERIAL_SPECIFICATION
+  LAB_REPORT
+  CERTIFICATE
+  UNKNOWN
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVIEW
+}
+
+enum TechnicalFieldCategory {
+  REGULATORY
+  DECLARATION
+  SENSORY
+  PHYSICOCHEMICAL
+  MICROBIOLOGICAL
+  CONTAMINANT
+  TRACEABILITY
+  LOGISTICS
+  CERTIFICATION
+  WARNING
+}
+
+enum EnterpriseApprovalStatus {
+  DRAFT
+  QUALITY
+  REGULATORY
+  MARKETING
+  APPROVED
+}
+
+enum EnterpriseExportType {
+  PNG
+  JSON
+  GS1_DIGITAL_LINK
+}
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  tables    GeneratedTable[]
-  customIngredients CustomIngredient[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                        String                     @id @default(cuid())
+  email                     String                     @unique
+  password                  String
+  name                      String?
+  tables                    GeneratedTable[]
+  customIngredients         CustomIngredient[]
+  technicalDocuments        TechnicalDocument[]
+  technicalSheetExtractions TechnicalSheetExtraction[]
+  enterpriseLabelProjects   EnterpriseLabelProject[]
+  enterpriseLabelVersions   EnterpriseLabelVersion[]
+  enterpriseApprovals       EnterpriseApproval[]
+  enterpriseExports         EnterpriseExport[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 }
 
 model Ingredient {
-  id        String   @id @default(cuid())
-  name      String
-  energy    Float    // kcal
-  carbs     Float    // g
-  protein   Float    // g
-  fatTotal  Float    // g
-  fatSat    Float    // g
-  fatTrans  Float    // g
-  fiber     Float    // g
-  sodium    Float    // mg
-  sugarTotal Float?  // g
-  origin    String?  // "TACO", etc.
+  id         String  @id @default(cuid())
+  name       String
+  energy     Float // kcal
+  carbs      Float // g
+  protein    Float // g
+  fatTotal   Float // g
+  fatSat     Float // g
+  fatTrans   Float // g
+  fiber      Float // g
+  sodium     Float // mg
+  sugarTotal Float? // g
+  origin     String? // "TACO", etc.
 
   // Micronutrients
-  fatMono           Float?   @default(0)
-  fatPoly           Float?   @default(0)
-  omega6            Float?   @default(0)
-  omega3            Float?   @default(0)
-  cholesterol       Float?   @default(0)
-  
-  vitaminA          Float?   @default(0)
-  vitaminD          Float?   @default(0)
-  vitaminE          Float?   @default(0)
-  vitaminK          Float?   @default(0)
-  vitaminC          Float?   @default(0)
-  thiamin           Float?   @default(0)
-  riboflavin        Float?   @default(0)
-  niacin            Float?   @default(0)
-  vitaminB6         Float?   @default(0)
-  biotin            Float?   @default(0)
-  folicAcid         Float?   @default(0) // folate
-  pantothenicAcid   Float?   @default(0)
-  vitaminB12        Float?   @default(0)
+  fatMono     Float? @default(0)
+  fatPoly     Float? @default(0)
+  omega6      Float? @default(0)
+  omega3      Float? @default(0)
+  cholesterol Float? @default(0)
 
-  calcium           Float?   @default(0)
-  chloride          Float?   @default(0)
-  copper            Float?   @default(0)
-  chromium          Float?   @default(0)
-  iron              Float?   @default(0)
-  fluoride          Float?   @default(0)
-  phosphorus        Float?   @default(0)
-  iodine            Float?   @default(0)
-  magnesium         Float?   @default(0)
-  manganese         Float?   @default(0)
-  molybdenum        Float?   @default(0)
-  potassium         Float?   @default(0)
-  selenium          Float?   @default(0)
-  zinc              Float?   @default(0)
-  choline           Float?   @default(0)
+  vitaminA        Float? @default(0)
+  vitaminD        Float? @default(0)
+  vitaminE        Float? @default(0)
+  vitaminK        Float? @default(0)
+  vitaminC        Float? @default(0)
+  thiamin         Float? @default(0)
+  riboflavin      Float? @default(0)
+  niacin          Float? @default(0)
+  vitaminB6       Float? @default(0)
+  biotin          Float? @default(0)
+  folicAcid       Float? @default(0) // folate
+  pantothenicAcid Float? @default(0)
+  vitaminB12      Float? @default(0)
+
+  calcium    Float? @default(0)
+  chloride   Float? @default(0)
+  copper     Float? @default(0)
+  chromium   Float? @default(0)
+  iron       Float? @default(0)
+  fluoride   Float? @default(0)
+  phosphorus Float? @default(0)
+  iodine     Float? @default(0)
+  magnesium  Float? @default(0)
+  manganese  Float? @default(0)
+  molybdenum Float? @default(0)
+  potassium  Float? @default(0)
+  selenium   Float? @default(0)
+  zinc       Float? @default(0)
+  choline    Float? @default(0)
 }
 
 model CustomIngredient {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  name      String
-  energy    Float
-  carbs     Float
-  protein   Float
-  fatTotal  Float
-  fatSat    Float
-  fatTrans  Float
-  fiber     Float
-  sodium    Float
-  sugarTotal Float
-  sugarAdded Float    @default(0)
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  name               String
+  energy             Float
+  carbs              Float
+  protein            Float
+  fatTotal           Float
+  fatSat             Float
+  fatTrans           Float
+  fiber              Float
+  sodium             Float
+  sugarTotal         Float
+  sugarAdded         Float    @default(0)
+  manufacturer       String?
+  productCode        String?
+  ingredientsText    String?  @db.Text
+  containsGluten     Boolean?
+  glutenText         String?  @db.Text
+  allergensText      String?  @db.Text
+  mayContainText     String?  @db.Text
+  sourceType         String?  @default("MANUAL")
+  sourceDocumentId   String?
+  sourceExtractionId String?
 
   // Micronutrients
-  fatMono           Float?   @default(0)
-  fatPoly           Float?   @default(0)
-  omega6            Float?   @default(0)
-  omega3            Float?   @default(0)
-  cholesterol       Float?   @default(0)
-  
-  vitaminA          Float?   @default(0)
-  vitaminD          Float?   @default(0)
-  vitaminE          Float?   @default(0)
-  vitaminK          Float?   @default(0)
-  vitaminC          Float?   @default(0)
-  thiamin           Float?   @default(0)
-  riboflavin        Float?   @default(0)
-  niacin            Float?   @default(0)
-  vitaminB6         Float?   @default(0)
-  biotin            Float?   @default(0)
-  folicAcid         Float?   @default(0) // folate
-  pantothenicAcid   Float?   @default(0)
-  vitaminB12        Float?   @default(0)
+  fatMono     Float? @default(0)
+  fatPoly     Float? @default(0)
+  omega6      Float? @default(0)
+  omega3      Float? @default(0)
+  cholesterol Float? @default(0)
 
-  calcium           Float?   @default(0)
-  chloride          Float?   @default(0)
-  copper            Float?   @default(0)
-  chromium          Float?   @default(0)
-  iron              Float?   @default(0)
-  fluoride          Float?   @default(0)
-  phosphorus        Float?   @default(0)
-  iodine            Float?   @default(0)
-  magnesium         Float?   @default(0)
-  manganese         Float?   @default(0)
-  molybdenum        Float?   @default(0)
-  potassium         Float?   @default(0)
-  selenium          Float?   @default(0)
-  zinc              Float?   @default(0)
-  choline           Float?   @default(0)
+  vitaminA        Float? @default(0)
+  vitaminD        Float? @default(0)
+  vitaminE        Float? @default(0)
+  vitaminK        Float? @default(0)
+  vitaminC        Float? @default(0)
+  thiamin         Float? @default(0)
+  riboflavin      Float? @default(0)
+  niacin          Float? @default(0)
+  vitaminB6       Float? @default(0)
+  biotin          Float? @default(0)
+  folicAcid       Float? @default(0) // folate
+  pantothenicAcid Float? @default(0)
+  vitaminB12      Float? @default(0)
+
+  calcium    Float? @default(0)
+  chloride   Float? @default(0)
+  copper     Float? @default(0)
+  chromium   Float? @default(0)
+  iron       Float? @default(0)
+  fluoride   Float? @default(0)
+  phosphorus Float? @default(0)
+  iodine     Float? @default(0)
+  magnesium  Float? @default(0)
+  manganese  Float? @default(0)
+  molybdenum Float? @default(0)
+  potassium  Float? @default(0)
+  selenium   Float? @default(0)
+  zinc       Float? @default(0)
+  choline    Float? @default(0)
 
   createdAt DateTime @default(now())
 }
 
 model GeneratedTable {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  title     String
-  portion   Float
-  uom       String   // "g" or "ml"
-  householdMeasure String
-  popGroup  String   // "adultos", etc.
+  id                 String                   @id @default(cuid())
+  userId             String
+  user               User                     @relation(fields: [userId], references: [id])
+  title              String
+  portion            Float
+  uom                String // "g" or "ml"
+  householdMeasure   String
+  popGroup           String // "adultos", etc.
   packageContent     Float?
   servingsPerPackage String?
   suggestedFoodGroup String?
   suggestedProduct   String?
   uiState            Json?
-  items     TableItem[]
+  items              TableItem[]
+  enterpriseProjects EnterpriseLabelProject[]
+  enterpriseVersions EnterpriseLabelVersion[]
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+}
+
+model TableItem {
+  id      String         @id @default(cuid())
+  tableId String
+  table   GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  name         String
+  quantity     Float // g
+  isAddedSugar Boolean @default(false)
+
+  // Snapshotted nutritional values (per 100g)
+  energy     Float
+  carbs      Float
+  protein    Float
+  fatTotal   Float
+  fatSat     Float
+  fatTrans   Float
+  fiber      Float
+  sodium     Float
+  sugarTotal Float?
+  sugarAdded Float? @default(0)
+}
+
+model TechnicalDocument {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fileName String
+  fileUrl  String?
+  mimeType String?
+
+  documentType DocumentType     @default(UNKNOWN)
+  status       ExtractionStatus @default(PENDING)
+
+  rawText       String? @db.Text
+  extractedJson Json?
+  errorMessage  String? @db.Text
+
+  confidence Float?
+
+  extraction TechnicalSheetExtraction?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model TableItem {
-  id        String   @id @default(cuid())
-  tableId   String
-  table     GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
-  
-  name      String
-  quantity  Float    // g
-  isAddedSugar Boolean @default(false)
-  
-  // Snapshotted nutritional values (per 100g)
-  energy    Float
-  carbs     Float
-  protein   Float
-  fatTotal  Float
-  fatSat    Float
-  fatTrans  Float
-  fiber     Float
-  sodium    Float
-  sugarTotal Float?
+model TechnicalSheetExtraction {
+  id String @id @default(cuid())
+
+  documentId String            @unique
+  document   TechnicalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productName  String?
+  productCode  String?
+  manufacturer String?
+  brand        String?
+
+  version      String?
+  revision     String?
+  issueDate    DateTime?
+  revisionDate DateTime?
+
+  description          String? @db.Text
+  applicationAndDosage String? @db.Text
+  compositionText      String? @db.Text
+  ingredientsText      String? @db.Text
+
+  containsGluten Boolean?
+  glutenText     String?  @db.Text
+
+  containsGmo Boolean?
+  gmoText     String?  @db.Text
+
+  allergensText  String? @db.Text
+  mayContainText String? @db.Text
+
+  shelfLife         String?
+  storageConditions String? @db.Text
+  packagingText     String? @db.Text
+
+  servingQuantity    Float?
+  servingUnit        String?
+  householdMeasure   String?
+  servingsPerPackage String?
+
+  baseQuantity Float  @default(100)
+  baseUnit     String @default("g")
+
+  reviewStatus ReviewStatus @default(PENDING)
+  confidence   Float?
+
+  approvedTargetType String?
+  approvedTargetId   String?
+
+  nutrients       ExtractedNutrient[]
+  allergens       ExtractedAllergen[]
+  technicalFields ExtractedTechnicalField[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExtractedNutrient {
+  id String @id @default(cuid())
+
+  extractionId String
+  extraction   TechnicalSheetExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+
+  nutrientKey String
+  label       String
+
+  value Float?
+  unit  String?
+
+  baseQuantity Float  @default(100)
+  baseUnit     String @default("g")
+
+  dailyValuePercent Float?
+
+  sourceText String? @db.Text
+  confidence Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([extractionId])
+  @@index([nutrientKey])
+}
+
+model ExtractedAllergen {
+  id String @id @default(cuid())
+
+  extractionId String
+  extraction   TechnicalSheetExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+
+  allergenKey String
+  label       String
+
+  declarationType String?
+  present         Boolean?
+  controlled      Boolean?
+
+  sourceText String? @db.Text
+  confidence Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([extractionId])
+  @@index([allergenKey])
+}
+
+model ExtractedTechnicalField {
+  id String @id @default(cuid())
+
+  extractionId String
+  extraction   TechnicalSheetExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+
+  category TechnicalFieldCategory
+  fieldKey String
+  label    String
+
+  value      String? @db.Text
+  unit       String?
+  method     String?
+  sourceText String? @db.Text
+  confidence Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([extractionId])
+  @@index([category])
+  @@index([fieldKey])
+}
+
+model EnterpriseLabelProject {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  baseTableId String?
+  baseTable   GeneratedTable? @relation(fields: [baseTableId], references: [id], onDelete: SetNull)
+
+  title  String
+  market String
+  status EnterpriseApprovalStatus @default(DRAFT)
+
+  currentVersionId String?
+
+  versions  EnterpriseLabelVersion[]
+  approvals EnterpriseApproval[]
+  exports   EnterpriseExport[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, baseTableId, market])
+  @@index([userId])
+  @@index([baseTableId])
+  @@index([market])
+  @@index([status])
+}
+
+model EnterpriseLabelVersion {
+  id String @id @default(cuid())
+
+  projectId String
+  project   EnterpriseLabelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  baseTableId String?
+  baseTable   GeneratedTable? @relation(fields: [baseTableId], references: [id], onDelete: SetNull)
+
+  version Int
+
+  title          String
+  market         String
+  foodState      String
+  approvalStatus EnterpriseApprovalStatus @default(DRAFT)
+
+  tableSnapshot         Json
+  legalData             Json?
+  nutritionSnapshot     Json?
+  validationSnapshot    Json?
+  frontWarningsSnapshot Json?
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@index([userId])
+  @@index([baseTableId])
+  @@index([market])
+  @@index([approvalStatus])
+}
+
+model EnterpriseApproval {
+  id String @id @default(cuid())
+
+  projectId String
+  project   EnterpriseLabelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status EnterpriseApprovalStatus
+  owner  String?
+  note   String?                  @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([status])
+}
+
+model EnterpriseExport {
+  id String @id @default(cuid())
+
+  projectId String
+  project   EnterpriseLabelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  versionId String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  exportType EnterpriseExportType
+  fileName   String?
+  payload    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([versionId])
+  @@index([userId])
+  @@index([exportType])
 }

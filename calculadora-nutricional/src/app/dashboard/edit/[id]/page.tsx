@@ -44,6 +44,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
             fiber: item.fiber,
             sodium: item.sodium,
             sugarTotal: item.sugarTotal,
+            sugarAdded: item.sugarAdded,
             // Defaults for missing fields in snapshot
             humidity: 0,
             ashes: 0,

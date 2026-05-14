@@ -31,8 +31,9 @@ export async function GET() {
 
             await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ${columnsSql};`);
             results.push(`Success: Updated table ${table}`);
-        } catch (e: any) {
-            errors.push(`Error updating table ${table}: ${e.message}`);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            errors.push(`Error updating table ${table}: ${message}`);
         }
     }
 

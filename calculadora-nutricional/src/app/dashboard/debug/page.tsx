@@ -3,12 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
+type ColumnRow = {
+    column_name: string;
+};
+
 export default async function DebugPage() {
     const session = await getServerSession(authOptions);
     if (!session) redirect("/login");
 
-    let columns: any[] = [];
-    let error = null;
+    let columns: ColumnRow[] = [];
+    let error: string | null = null;
 
     try {
         // Query information_schema to check if columns exist
@@ -17,8 +21,8 @@ export default async function DebugPage() {
             FROM information_schema.columns 
             WHERE table_name = 'CustomIngredient';
         `;
-    } catch (e: any) {
-        error = e.message;
+    } catch (e: unknown) {
+        error = e instanceof Error ? e.message : String(e);
     }
 
     return (
@@ -37,7 +41,7 @@ export default async function DebugPage() {
 
                     <h3 className="font-semibold mt-4 mb-2">Columns Found:</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {columns.map((col: any) => (
+                        {columns.map((col) => (
                             <div key={col.column_name} className="bg-white p-2 rounded shadow-sm text-sm border">
                                 {col.column_name}
                             </div>
