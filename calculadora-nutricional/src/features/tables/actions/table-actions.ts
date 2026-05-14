@@ -6,7 +6,6 @@ import { authOptions } from "@/lib/auth";
 import { SelectedIngredient } from "@/features/tables/domain/nutrients";
 import { PopGroup } from "@/features/tables/domain/constants";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
 export async function saveTable(data: {
@@ -48,20 +47,24 @@ export async function saveTable(data: {
             uiState: uiStateValue,
         };
 
-        const itemsPayload = data.ingredients.map(i => ({
-            name: i.ingredient.name,
-            quantity: i.quantity,
-            isAddedSugar: i.isAddedSugar,
-            energy: i.ingredient.energy || 0,
-            protein: i.ingredient.protein || 0,
-            carbs: i.ingredient.carbs || 0,
-            fatTotal: i.ingredient.fatTotal || 0,
-            fatSat: i.ingredient.fatSat || 0,
-            fatTrans: i.ingredient.fatTrans || 0,
-            fiber: i.ingredient.fiber || 0,
-            sodium: i.ingredient.sodium || 0,
-            sugarTotal: i.ingredient.sugarTotal || 0,
-        }));
+        const itemsPayload = data.ingredients.map(i => {
+            const ingredient = i.ingredient as typeof i.ingredient & { sugarAdded?: number | null };
+            return {
+                name: i.ingredient.name,
+                quantity: i.quantity,
+                isAddedSugar: i.isAddedSugar,
+                energy: i.ingredient.energy || 0,
+                protein: i.ingredient.protein || 0,
+                carbs: i.ingredient.carbs || 0,
+                fatTotal: i.ingredient.fatTotal || 0,
+                fatSat: i.ingredient.fatSat || 0,
+                fatTrans: i.ingredient.fatTrans || 0,
+                fiber: i.ingredient.fiber || 0,
+                sodium: i.ingredient.sodium || 0,
+                sugarTotal: i.ingredient.sugarTotal || 0,
+                sugarAdded: ingredient.sugarAdded || 0,
+            };
+        });
 
         if (data.id) {
             // Check ownership
