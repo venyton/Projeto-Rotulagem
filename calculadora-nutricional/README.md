@@ -137,6 +137,7 @@ APIs:
 /api/auth/[...nextauth]
 /api/export/excel
 /api/export/complete
+/api/open-food-facts/products
 /api/debug-auth
 /api/debug/force-migrate
 ```
@@ -150,7 +151,10 @@ POSTGRES_PRISMA_URL
 POSTGRES_URL_NON_POOLING
 NEXTAUTH_SECRET
 NEXTAUTH_URL
+OPEN_FOOD_FACTS_USER_AGENT
 ```
+
+`OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar o app nas chamadas ao Open Food Facts. Ao importar um produto, o sistema salva uma copia normalizada na tabela `Ingredient` com id `off-{codigo_de_barras}`, reduzindo dependencia da API externa nas proximas buscas.
 
 ## Como rodar
 
@@ -202,6 +206,8 @@ src/features/tables/domain/anvisa.ts
 src/features/tables/domain/constants.ts
 src/features/ingredients/components/AddIngredientForm.tsx
 src/features/ingredients/actions/custom-ingredient-actions.ts
+src/features/open-food-facts/components/OpenFoodFactsImporter.tsx
+src/app/api/open-food-facts/products/route.ts
 src/app/api/export/excel/route.ts
 src/app/api/export/complete/route.ts
 src/lib/export/excel-generator.ts
