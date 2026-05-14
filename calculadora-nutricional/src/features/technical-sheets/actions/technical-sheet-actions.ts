@@ -17,8 +17,6 @@ import {
   parseApprovalFormData,
   validateApprovalValues,
 } from "@/features/technical-sheets/domain/technical-sheet-validator";
-import {
-} from "@/features/technical-sheets/domain/technical-sheet-schema";
 import type {
   TechnicalSheetAdditionalInfoGroup,
   TechnicalSheetActionState,
@@ -34,9 +32,6 @@ import {
   TechnicalSheetFileError,
   type ValidatedTechnicalSheetFile,
 } from "@/features/technical-sheets/services/technical-sheet-file-service";
-import {
-  mapNutrientsToEditableValues,
-} from "@/features/technical-sheets/domain/technical-sheet-validator";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -388,6 +383,7 @@ export async function getTechnicalSheetReviewData(
       documentType: extraction.document.documentType,
       status: extraction.document.status,
       confidence: extraction.document.confidence,
+      errorMessage: extraction.document.errorMessage,
       createdAt: extraction.document.createdAt.toISOString(),
     },
     extraction: {
