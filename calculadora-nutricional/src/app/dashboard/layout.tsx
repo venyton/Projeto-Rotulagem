@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutGrid, UserCircle2, LogOut, PackageSearch } from "lucide-react";
+import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -15,10 +15,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/theme-toggle";
+import { LanguageSwitcher, useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
+import type { SiteCopyKey } from "@/features/i18n/domain/site-i18n";
 
-const NAV_ITEMS = [
-    { href: "/dashboard", label: "Tabelas", icon: LayoutGrid },
-    { href: "/dashboard/ingredients", label: "Ingredientes", icon: PackageSearch },
+const NAV_ITEMS: Array<{ href: string; labelKey: SiteCopyKey; icon: typeof LayoutGrid }> = [
+    { href: "/dashboard", labelKey: "tables", icon: LayoutGrid },
+    { href: "/dashboard/ingredients", labelKey: "ingredients", icon: PackageSearch },
+    { href: "/dashboard/enterprise", labelKey: "enterprise", icon: Globe2 },
 ];
 
 export default function DashboardLayout({
@@ -27,6 +30,7 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const { copy } = useSiteLanguage();
     const isNavActive = (href: string) => {
         if (href === "/dashboard") {
             return pathname === "/dashboard";
@@ -67,7 +71,7 @@ export default function DashboardLayout({
                                 >
                                     <Link href={item.href} className="inline-flex items-center gap-1.5">
                                         <Icon className="h-4 w-4" />
-                                        {item.label}
+                                        {copy[item.labelKey] || item.labelKey}
                                     </Link>
                                 </Button>
                             );
@@ -75,23 +79,24 @@ export default function DashboardLayout({
                     </nav>
 
                     <div className="ml-auto flex items-center gap-2">
+                        <LanguageSwitcher />
                         <ModeToggle />
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="h-9 gap-2 px-2.5 text-[13px]">
                                     <UserCircle2 className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Conta</span>
+                                    <span className="hidden sm:inline">{copy.account}</span>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
-                                <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
+                                <DropdownMenuLabel>{copy.myAccount}</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem asChild>
-                                    <Link href="/dashboard/profile">Perfil e Segurança</Link>
+                                    <Link href="/dashboard/profile">{copy.profileSecurity}</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
-                                    <Link href="/dashboard">Minhas tabelas</Link>
+                                    <Link href="/dashboard">{copy.myTables}</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -102,7 +107,7 @@ export default function DashboardLayout({
                                     className="text-red-600 focus:text-red-700"
                                 >
                                     <LogOut className="mr-2 h-4 w-4" />
-                                    Sair
+                                    {copy.logout}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -123,7 +128,7 @@ export default function DashboardLayout({
                                 >
                                     <Link href={item.href} className="inline-flex items-center gap-1.5">
                                         <Icon className="h-3.5 w-3.5" />
-                                        {item.label}
+                                        {copy[item.labelKey] || item.labelKey}
                                     </Link>
                                 </Button>
                             );
