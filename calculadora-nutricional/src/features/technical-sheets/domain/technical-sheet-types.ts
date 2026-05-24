@@ -1,4 +1,5 @@
 import type { ReviewStatus } from "@prisma/client";
+import type { AnnexIiOptionalNutrientKey } from "./technical-sheet-nutrients";
 
 export type TechnicalSheetActionState = {
   error?: string;
@@ -15,6 +16,9 @@ export type TechnicalSheetActionState = {
 
 export type EditableTechnicalSheetValues = {
   productName: string;
+  productCode: string | null;
+  manufacturer: string | null;
+  brand: string | null;
   energy: number;
   carbs: number;
   sugarTotal: number;
@@ -26,8 +30,20 @@ export type EditableTechnicalSheetValues = {
   fiber: number;
   sodium: number;
   containsGluten: boolean | null;
+  glutenText: string | null;
+  gmoText: string | null;
   ingredientsText: string | null;
   allergensText: string | null;
+  description: string | null;
+  applicationAndDosage: string | null;
+  shelfLife: string | null;
+  storageConditions: string | null;
+  optionalNutrients: Record<AnnexIiOptionalNutrientKey, number | null>;
+  otherNutrient: {
+    label: string | null;
+    value: number | null;
+    unit: string | null;
+  };
 };
 
 export type TechnicalSheetDocumentListItem = {

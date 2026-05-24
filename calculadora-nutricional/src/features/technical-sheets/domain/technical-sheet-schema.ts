@@ -1,5 +1,18 @@
 import { z } from "zod/v3";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { NUTRIENT_KEYS } from "./technical-sheet-nutrients";
+
+export {
+  ADDITIONAL_NUTRIENT_KEYS,
+  ANNEX_II_OPTIONAL_NUTRIENT_FIELDS,
+  ANNEX_II_OPTIONAL_NUTRIENT_KEYS,
+  EDITABLE_NUTRIENT_FIELDS,
+  EDITABLE_NUTRIENT_LABELS,
+  MAIN_NUTRIENT_FIELDS,
+  NUTRIENT_KEYS,
+  OTHER_NUTRIENT_KEY,
+  REQUIRED_NUTRIENT_KEYS,
+} from "./technical-sheet-nutrients";
 
 export const DOCUMENT_TYPES = [
   "NUTRITION_TABLE_ONLY",
@@ -16,53 +29,6 @@ export const DECLARATION_TYPES = [
   "DOES_NOT_CONTAIN",
   "PRESENT_IN_LINE",
   "UNKNOWN",
-] as const;
-
-export const REQUIRED_NUTRIENT_KEYS = [
-  "energy",
-  "carbs",
-  "sugarTotal",
-  "sugarAdded",
-  "protein",
-  "fatTotal",
-  "fatSat",
-  "fatTrans",
-  "fiber",
-  "sodium",
-] as const;
-
-export const ADDITIONAL_NUTRIENT_KEYS = [
-  "lactose",
-  "cholesterol",
-  "fatMono",
-  "fatPoly",
-  "omega3",
-  "omega6",
-  "calcium",
-  "iron",
-  "potassium",
-  "vitaminA",
-  "vitaminC",
-  "vitaminD",
-  "vitaminE",
-  "vitaminK",
-  "thiamin",
-  "riboflavin",
-  "niacin",
-  "vitaminB6",
-  "folicAcid",
-  "vitaminB12",
-  "magnesium",
-  "zinc",
-  "phosphorus",
-  "moisture",
-  "ash",
-  "other",
-] as const;
-
-export const NUTRIENT_KEYS = [
-  ...REQUIRED_NUTRIENT_KEYS,
-  ...ADDITIONAL_NUTRIENT_KEYS,
 ] as const;
 
 const nullableString = z.string().nullable();

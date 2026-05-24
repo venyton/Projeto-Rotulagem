@@ -1,3 +1,5 @@
+import { ANNEX_II_NUTRIENT_PROMPT_LIST } from "./technical-sheet-nutrients";
+
 export const TECHNICAL_SHEET_SYSTEM_PROMPT = `
 Você é um extrator técnico de fichas técnicas de alimentos, ingredientes, aditivos e materiais alimentícios.
 Extraia somente informações presentes no documento.
@@ -36,7 +38,11 @@ Tarefas:
 7. Extraia lactose como declaração própria quando houver texto de "contém lactose", "baixo teor de lactose", "zero lactose" ou valor em tabela.
 8. Extraia a informação nutricional e preserve sourceText de cada nutriente.
 9. Identifique a base nutricional: 100 g, 100 ml, porção ou outra.
-10. Use as chaves padronizadas de nutrientes. As obrigatórias são energy, carbs, sugarTotal, sugarAdded, protein, fatTotal, fatSat, fatTrans, fiber e sodium.
+10. Use as chaves padronizadas de nutrientes. Campos editáveis da IN 75/2020 Anexo II e da tabela básica: ${ANNEX_II_NUTRIENT_PROMPT_LIST}.
+   a. As obrigatórias para aprovação são energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber e sodium.
+   b. sugarTotal e sugarAdded podem ficar null quando não declarados.
+   c. Vitaminas, minerais, gorduras mono/poli, ômegas e colesterol são opcionais; extraia apenas quando houver valor explícito.
+   d. Para cafeína, creatina, probióticos, enzimas, polióis ou qualquer constituinte fora da lista, use key "other", label com o nome do constituinte, value e unit conforme o documento.
 11. Extraia dados regulatórios quando existirem: categoria do produto, classificação legal, registro ANVISA, MAPA, SIF, função tecnológica, códigos INS, números CAS e referências legais citadas.
 12. Extraia especificações técnicas quando existirem: características sensoriais, físico-químicas, microbiológicas e contaminantes como metais pesados, pesticidas, micotoxinas ou aflatoxinas.
 13. Extraia rastreabilidade e logística quando existirem: origem, origem animal, padrão de lote, validade após aberto, transporte, distribuição, peso líquido e material da embalagem.
@@ -50,4 +56,3 @@ Tarefas:
 Responda apenas com JSON. Não inclua markdown.
 `.trim();
 }
-

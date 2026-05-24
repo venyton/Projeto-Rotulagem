@@ -1,5 +1,6 @@
 import { REQUIRED_NUTRIENT_KEYS } from "./technical-sheet-schema";
 import { parseNumberish } from "./technical-sheet-normalizer";
+import { ANNEX_II_OPTIONAL_NUTRIENT_FIELDS } from "./technical-sheet-nutrients";
 import type { EditableTechnicalSheetValues } from "./technical-sheet-types";
 
 const REQUIRED_APPROVAL_FIELDS = [
@@ -14,8 +15,18 @@ const REQUIRED_APPROVAL_FIELDS = [
 ] as const;
 
 export function parseApprovalFormData(formData: FormData): EditableTechnicalSheetValues {
+  const optionalNutrients = Object.fromEntries(
+    ANNEX_II_OPTIONAL_NUTRIENT_FIELDS.map((field) => [
+      field.key,
+      optionalNumberValue(formData, field.key),
+    ])
+  ) as EditableTechnicalSheetValues["optionalNutrients"];
+
   return {
     productName: stringValue(formData, "productName"),
+    productCode: nullableStringValue(formData, "productCode"),
+    manufacturer: nullableStringValue(formData, "manufacturer"),
+    brand: nullableStringValue(formData, "brand"),
     energy: numberValue(formData, "energy"),
     carbs: numberValue(formData, "carbs"),
     sugarTotal: numberValue(formData, "sugarTotal"),
@@ -27,8 +38,20 @@ export function parseApprovalFormData(formData: FormData): EditableTechnicalShee
     fiber: numberValue(formData, "fiber"),
     sodium: numberValue(formData, "sodium"),
     containsGluten: nullableBooleanValue(formData, "containsGluten"),
+    glutenText: nullableStringValue(formData, "glutenText"),
+    gmoText: nullableStringValue(formData, "gmoText"),
     ingredientsText: nullableStringValue(formData, "ingredientsText"),
     allergensText: nullableStringValue(formData, "allergensText"),
+    description: nullableStringValue(formData, "description"),
+    applicationAndDosage: nullableStringValue(formData, "applicationAndDosage"),
+    shelfLife: nullableStringValue(formData, "shelfLife"),
+    storageConditions: nullableStringValue(formData, "storageConditions"),
+    optionalNutrients,
+    otherNutrient: {
+      label: nullableStringValue(formData, "otherNutrientLabel"),
+      value: optionalNumberValue(formData, "otherNutrientValue"),
+      unit: nullableStringValue(formData, "otherNutrientUnit"),
+    },
   };
 }
 
@@ -67,6 +90,13 @@ function numberValue(formData: FormData, key: string) {
   const parsed = parseNumberish(formData.get(key));
   if (parsed === null) return Number.NaN;
   return parsed;
+}
+
+function optionalNumberValue(formData: FormData, key: string) {
+  const raw = formData.get(key);
+  if (typeof raw !== "string") return null;
+  if (!raw.trim()) return null;
+  return parseNumberish(raw);
 }
 
 function nullableBooleanValue(formData: FormData, key: string) {

@@ -1,6 +1,5 @@
 import { TechnicalFieldCategory, type DocumentType, type Prisma } from "@prisma/client";
 import {
-  REQUIRED_NUTRIENT_KEYS,
   type TechnicalSheetAiAllergen,
   type TechnicalSheetCertification,
   type TechnicalSheetEvidenceItem,
@@ -8,6 +7,7 @@ import {
   type TechnicalSheetAiNutrient,
   type TechnicalSheetWarning,
 } from "./technical-sheet-schema";
+import { REQUIRED_NUTRIENT_KEYS } from "./technical-sheet-nutrients";
 
 export type NormalizedExtractedNutrient = {
   nutrientKey: string;
@@ -92,39 +92,39 @@ const CUSTOM_NUTRIENT_DEFAULTS = {
   sodium: 0,
   sugarTotal: 0,
   sugarAdded: 0,
-  fatMono: 0,
-  fatPoly: 0,
-  omega6: 0,
-  omega3: 0,
-  cholesterol: 0,
-  vitaminA: 0,
-  vitaminD: 0,
-  vitaminE: 0,
-  vitaminK: 0,
-  vitaminC: 0,
-  thiamin: 0,
-  riboflavin: 0,
-  niacin: 0,
-  vitaminB6: 0,
-  biotin: 0,
-  folicAcid: 0,
-  pantothenicAcid: 0,
-  vitaminB12: 0,
-  calcium: 0,
-  chloride: 0,
-  copper: 0,
-  chromium: 0,
-  iron: 0,
-  fluoride: 0,
-  phosphorus: 0,
-  iodine: 0,
-  magnesium: 0,
-  manganese: 0,
-  molybdenum: 0,
-  potassium: 0,
-  selenium: 0,
-  zinc: 0,
-  choline: 0,
+  fatMono: null,
+  fatPoly: null,
+  omega6: null,
+  omega3: null,
+  cholesterol: null,
+  vitaminA: null,
+  vitaminD: null,
+  vitaminE: null,
+  vitaminK: null,
+  vitaminC: null,
+  thiamin: null,
+  riboflavin: null,
+  niacin: null,
+  vitaminB6: null,
+  biotin: null,
+  folicAcid: null,
+  pantothenicAcid: null,
+  vitaminB12: null,
+  calcium: null,
+  chloride: null,
+  copper: null,
+  chromium: null,
+  iron: null,
+  fluoride: null,
+  phosphorus: null,
+  iodine: null,
+  magnesium: null,
+  manganese: null,
+  molybdenum: null,
+  potassium: null,
+  selenium: null,
+  zinc: null,
+  choline: null,
 };
 
 type CustomNutrientData = typeof CUSTOM_NUTRIENT_DEFAULTS;
@@ -221,11 +221,15 @@ export function mapNutrientsToCustomIngredient(
       value *= 1000;
     }
 
+    if (key === "omega3" && normalizeUnit(nutrient.unit) === "g") {
+      value *= 1000;
+    }
+
     if (key === "energy" && normalizeUnit(nutrient.unit) === "kj") {
       value = value / 4.184;
     }
 
-    mapped[key] = roundNumber(value);
+    (mapped as Record<string, number | null>)[key] = roundNumber(value);
   }
 
   return mapped;
@@ -261,17 +265,28 @@ export function normalizeNutrientKey(value: string | null | undefined) {
     colesterol: "cholesterol",
     fatmono: "fatMono",
     gorduramonoinsaturada: "fatMono",
+    gordurasmonoinsaturadas: "fatMono",
     fatpoly: "fatPoly",
     gordurapoliinsaturada: "fatPoly",
+    gorduraspoliinsaturadas: "fatPoly",
     omega3: "omega3",
     omega6: "omega6",
     calcium: "calcium",
     calcio: "calcium",
+    chloride: "chloride",
+    cloreto: "chloride",
+    copper: "copper",
+    cobre: "copper",
+    chromium: "chromium",
+    cromo: "chromium",
     iron: "iron",
     ferro: "iron",
+    fluoride: "fluoride",
+    fluor: "fluoride",
     potassium: "potassium",
     potassio: "potassium",
     vitamina: "vitaminA",
+    vitaminaa: "vitaminA",
     vitaminc: "vitaminC",
     vitamind: "vitaminD",
     vitamine: "vitaminE",
@@ -283,8 +298,13 @@ export function normalizeNutrientKey(value: string | null | undefined) {
     niacin: "niacin",
     niacina: "niacin",
     vitaminb6: "vitaminB6",
+    biotin: "biotin",
+    biotina: "biotin",
     folicacid: "folicAcid",
     acidofolico: "folicAcid",
+    pantothenicacid: "pantothenicAcid",
+    acidopantotenico: "pantothenicAcid",
+    vitaminab5: "pantothenicAcid",
     vitaminb12: "vitaminB12",
     magnesium: "magnesium",
     magnesio: "magnesium",
@@ -292,6 +312,16 @@ export function normalizeNutrientKey(value: string | null | undefined) {
     zinco: "zinc",
     phosphorus: "phosphorus",
     fosforo: "phosphorus",
+    iodine: "iodine",
+    iodo: "iodine",
+    manganese: "manganese",
+    manganes: "manganese",
+    molybdenum: "molybdenum",
+    molibdenio: "molybdenum",
+    selenium: "selenium",
+    selenio: "selenium",
+    choline: "choline",
+    colina: "choline",
   };
 
   return map[normalized] ?? null;
@@ -387,7 +417,7 @@ function normalizeAiNutrient(
   fallbackBaseUnit: string
 ): NormalizedExtractedNutrient {
   const key = normalizeNutrientKey(nutrient.key) ?? nutrient.key;
-  const unit = normalizeUnit(nutrient.unit);
+  let unit = normalizeUnit(nutrient.unit);
   const sourceText = cleanString(nutrient.sourceText);
   let value = toFiniteNumber(nutrient.value);
 
@@ -397,17 +427,24 @@ function normalizeAiNutrient(
 
   if (key === "sodium" && value !== null && unit === "g") {
     value *= 1000;
+    unit = "mg";
+  }
+
+  if (key === "omega3" && value !== null && unit === "g") {
+    value *= 1000;
+    unit = "mg";
   }
 
   if (key === "energy" && value !== null && unit === "kj") {
     value = value / 4.184;
+    unit = "kcal";
   }
 
   return {
     nutrientKey: key,
     label: nutrient.label,
     value: value === null ? null : roundNumber(value),
-    unit: key === "sodium" && unit === "g" ? "mg" : key === "energy" && unit === "kj" ? "kcal" : unit,
+    unit,
     baseQuantity: toFiniteNumber(nutrient.baseQuantity) || fallbackBaseQuantity,
     baseUnit: normalizeUnit(nutrient.baseUnit) ?? fallbackBaseUnit,
     dailyValuePercent: toFiniteNumber(nutrient.dailyValuePercent),
