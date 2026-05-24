@@ -127,6 +127,8 @@ model User {
   twoFactorPendingSecret    String?                    @db.Text
   twoFactorConfirmedAt      DateTime?
   twoFactorLastUsedAt       DateTime?
+  resetPasswordToken        String?                    @unique @db.Text
+  resetPasswordExpiresAt    DateTime?
   ownedOrganizations        Organization[]             @relation("OrganizationOwner")
   organizationMemberships   OrganizationMember[]
   billingCustomers          BillingCustomer[]
