@@ -968,7 +968,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 const wasNewTable = !tableId;
                 setTableId(savedId);
                 if (wasNewTable) {
-                    router.replace(`/dashboard/edit/${savedId}`);
+                    window.history.replaceState(null, "", `/dashboard/edit/${savedId}`);
                 }
             }
 
