@@ -39,7 +39,7 @@ A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](
         `npx prisma generate --schema=./prisma/schema.prisma`
     
     *   **Criar Usuário de Teste:**
-        Rode o script que cria o usuário `teste@teste.com` (senha: `teste`):
+        Rode o script que cria o usuário `teste@teste.com`. A senha padrão local é `TesteSeguro2026`; para outra senha, defina `SEED_TEST_PASSWORD`.
         `node scripts/seed-test-user.js`
     
     *   **Carregar Ingredientes (TACO):**
@@ -65,6 +65,7 @@ POSTGRES_PRISMA_URL
 POSTGRES_URL_NON_POOLING
 NEXTAUTH_SECRET
 NEXTAUTH_URL
+NEXT_PUBLIC_APP_URL
 ```
 
 Recomendadas/opcionais por funcionalidade:
@@ -75,6 +76,24 @@ GEMINI_API_KEY
 GEMINI_MODEL
 TECHNICAL_SHEET_MAX_FILE_SIZE_MB
 TECHNICAL_SHEET_MAX_BATCH_FILES
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+META_CLIENT_ID
+META_CLIENT_SECRET
+MICROSOFT_ENTRA_ID_CLIENT_ID
+MICROSOFT_ENTRA_ID_CLIENT_SECRET
+MICROSOFT_ENTRA_TENANT_ID
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_PROFESSIONAL_MONTH
+STRIPE_PRICE_PROFESSIONAL_YEAR
+STRIPE_PRICE_ENTERPRISE_MONTH
+STRIPE_PRICE_ENTERPRISE_YEAR
+ANALYTICS_HASH_SALT
+RATE_LIMIT_HASH_SALT
+NEXT_PUBLIC_MARKETING_TRACKING_ENABLED
+NEXT_PUBLIC_GA_MEASUREMENT_ID
+NEXT_PUBLIC_META_PIXEL_ID
 ```
 
 SQL manual organizado para DBA:
