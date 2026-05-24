@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +115,18 @@ END $$;`,
 
 const tableSteps: MigrationStep[] = [
     {
+        name: "User 2FA columns",
+        sql: `
+ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "twoFactorSecret" TEXT,
+  ADD COLUMN IF NOT EXISTS "twoFactorPendingSecret" TEXT,
+  ADD COLUMN IF NOT EXISTS "twoFactorConfirmedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "twoFactorLastUsedAt" TIMESTAMP(3);
+
+CREATE INDEX IF NOT EXISTS "User_twoFactorEnabled_idx" ON "User"("twoFactorEnabled");`,
+    },
+    {
         name: "CustomIngredient technical columns",
         sql: `
 ALTER TABLE "CustomIngredient"
@@ -205,7 +220,40 @@ ALTER TABLE "CustomIngredient"
         name: "TableItem and GeneratedTable columns",
         sql: `
 ALTER TABLE "TableItem"
-  ADD COLUMN IF NOT EXISTS "sugarAdded" DOUBLE PRECISION DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS "sugarAdded" DOUBLE PRECISION DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "fatMono" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "fatPoly" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "omega6" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "omega3" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "cholesterol" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminA" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminD" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminE" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminK" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminC" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "thiamin" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "riboflavin" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "niacin" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminB6" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "biotin" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "folicAcid" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "pantothenicAcid" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "vitaminB12" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "calcium" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "chloride" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "copper" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "chromium" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "iron" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "fluoride" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "phosphorus" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "iodine" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "magnesium" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "manganese" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "molybdenum" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "potassium" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "selenium" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "zinc" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "choline" DOUBLE PRECISION;
 
 ALTER TABLE "GeneratedTable"
   ADD COLUMN IF NOT EXISTS "packageContent" DOUBLE PRECISION,
@@ -469,6 +517,25 @@ END $$;`,
 ];
 
 export async function GET() {
+    return NextResponse.json(
+        { error: "Método não permitido" },
+        { status: 405, headers: { Allow: "POST" } }
+    );
+}
+
+export async function POST(req: NextRequest) {
+    const originError = rejectCrossOriginRequest(req);
+    if (originError) return originError;
+
+    if (process.env.NODE_ENV === "production") {
+        return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
+    }
+
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
     const results: string[] = [];
     const errors: string[] = [];
 

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { access } from "node:fs/promises";
 import path from "path";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/lib/auth";
+import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
   calculateVD,
@@ -13,6 +17,8 @@ import {
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 type SheetType =
   | "VERT"
@@ -58,6 +64,11 @@ type ExportBody = {
   servingsPerPackage?: string;
   selectedNutrients?: string[];
   selectedTableTypes?: SheetType[];
+  extraConstituents?: Array<{
+    name?: string;
+    amount?: string;
+    unit?: string;
+  }>;
   showDailyValue?: boolean;
 };
 
@@ -197,7 +208,7 @@ function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFal
   const portionValues = (body.perPortion ?? {}) as unknown as Record<string, number>;
   const vdrValues = vdr as Record<string, number | null | undefined>;
 
-  return MICRONUTRIENTS.filter((micro) => selected.has(micro.name)).map((micro) => {
+  const micros = MICRONUTRIENTS.filter((micro) => selected.has(micro.name)).map((micro) => {
     const per100Raw = per100Values[micro.name] ?? 0;
     const portionRaw = portionValues[micro.name] ?? 0;
     const ref = vdrValues[micro.name];
@@ -210,6 +221,20 @@ function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFal
       vdPortion: body.showDailyValue === false ? "" : calculateVD(portionRaw, ref ?? null),
     };
   });
+
+  const extras = Array.isArray(body.extraConstituents)
+    ? body.extraConstituents
+        .filter((item) => item.name?.trim() && item.amount?.trim())
+        .map((item) => ({
+          label: item.name!.trim(),
+          per100: "-",
+          portion: `${item.amount!.trim()}${item.unit?.trim() ? ` ${item.unit.trim()}` : ""}`,
+          vd100: "",
+          vdPortion: "",
+        }))
+    : [];
+
+  return [...micros, ...extras];
 }
 
 function nutrientRows(n: NutrientMap): Metric[] {
@@ -499,6 +524,23 @@ function sanitizeSelectedTableTypes(selected: SheetType[] | undefined, isSupplem
 
 export async function POST(req: NextRequest) {
   try {
+    const originError = rejectCrossOriginRequest(req);
+    if (originError) return originError;
+
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    try {
+      await requireModuleAccess(SAAS_MODULES.EXPORTS);
+    } catch (error) {
+      if (error instanceof ModuleAccessError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+
     const body = (await req.json()) as Partial<ExportBody>;
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
@@ -518,6 +560,7 @@ export async function POST(req: NextRequest) {
       servingsPerPackage: typeof body.servingsPerPackage === "string" ? body.servingsPerPackage : undefined,
       selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
       selectedTableTypes: Array.isArray(body.selectedTableTypes) ? (body.selectedTableTypes as SheetType[]) : [],
+      extraConstituents: Array.isArray(body.extraConstituents) ? body.extraConstituents : [],
       showDailyValue: body.showDailyValue !== false,
     };
 
@@ -605,10 +648,8 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": `attachment; filename="tabela-${safeTitle}.xlsx"`,
       },
     });
-  } catch (error) {
-    console.error(error);
-    const message = error instanceof Error ? error.message : "Failed to generate Excel";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Falha ao gerar o Excel." }, { status: 500 });
   }
 }
 

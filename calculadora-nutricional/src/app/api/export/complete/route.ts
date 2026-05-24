@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/lib/auth";
+import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 export const runtime = "nodejs";
 
@@ -14,6 +20,11 @@ type CompleteExportBody = {
   servingsPerPackage?: string;
   selectedNutrients?: string[];
   selectedTableTypes?: string[];
+  extraConstituents?: Array<{
+    name?: string;
+    amount?: string;
+    unit?: string;
+  }>;
   showDailyValue?: boolean;
   imageDataUrl?: string;
   imageDataUrls?: Record<string, string>;
@@ -76,6 +87,23 @@ function readFileNameFromDisposition(contentDisposition: string | null, fallback
 
 export async function POST(req: NextRequest) {
   try {
+    const originError = rejectCrossOriginRequest(req);
+    if (originError) return originError;
+
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    try {
+      await requireModuleAccess(SAAS_MODULES.EXPORTS);
+    } catch (error) {
+      if (error instanceof ModuleAccessError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+
     const body = (await req.json()) as CompleteExportBody;
 
     if (!body?.per100g || !body?.perPortion) {
@@ -93,12 +121,16 @@ export async function POST(req: NextRequest) {
       servingsPerPackage: body.servingsPerPackage,
       selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
       selectedTableTypes: Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes : [],
+      extraConstituents: Array.isArray(body.extraConstituents) ? body.extraConstituents : [],
       showDailyValue: body.showDailyValue !== false,
     };
 
     const excelResponse = await fetch(`${req.nextUrl.origin}/api/export/excel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: req.headers.get("cookie") ?? "",
+      },
       body: JSON.stringify(excelPayload),
       cache: "no-store",
     });
@@ -169,9 +201,7 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": `attachment; filename="${safeTitle}-completo.zip"`,
       },
     });
-  } catch (error) {
-    console.error(error);
-    const message = error instanceof Error ? error.message : "Erro ao exportar pacote completo";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Erro ao exportar pacote completo" }, { status: 500 });
   }
 }

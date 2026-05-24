@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import {
     ingredientToCacheData,
     normalizeOpenFoodFactsProduct,
     productFromCachedIngredient,
 } from "@/features/open-food-facts/domain/open-food-facts";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 const PRODUCT_FIELDS = [
     "code",
@@ -108,6 +114,20 @@ async function cacheProductByCode(code: string) {
 }
 
 export async function GET(request: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ products: [], error: "Não autorizado" }, { status: 401 });
+    }
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) {
+            return NextResponse.json({ products: [], error: error.message }, { status: error.status });
+        }
+        throw error;
+    }
+
     const query = request.nextUrl.searchParams.get("query")?.trim() || "";
 
     if (query.length < 3) {
@@ -127,8 +147,7 @@ export async function GET(request: NextRequest) {
             .slice(0, 8);
 
         return NextResponse.json({ products });
-    } catch (error) {
-        console.error(error);
+    } catch {
         return NextResponse.json(
             { products: [], error: "Não foi possível buscar no Open Food Facts agora." },
             { status: 502 },
@@ -137,6 +156,23 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    const originError = rejectCrossOriginRequest(request);
+    if (originError) return originError;
+
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ product: null, error: "Não autorizado" }, { status: 401 });
+    }
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) {
+            return NextResponse.json({ product: null, error: error.message }, { status: error.status });
+        }
+        throw error;
+    }
+
     const body = await request.json().catch(() => null) as { code?: unknown } | null;
     const code = typeof body?.code === "string" ? body.code.trim() : "";
 
@@ -150,8 +186,7 @@ export async function POST(request: NextRequest) {
 
         const cached = await findCachedProduct(code);
         return NextResponse.json({ product: cached });
-    } catch (error) {
-        console.error(error);
+    } catch {
         const cached = await findCachedProduct(code);
         if (cached) return NextResponse.json({ product: cached });
 
