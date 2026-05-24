@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react";
-import { Languages } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -69,8 +69,14 @@ export function LanguageSwitcher() {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="h-9 gap-2 px-2.5 text-[13px]">
-                    <Languages className="h-4 w-4" />
-                    <span aria-hidden>{activeLanguage.flag}</span>
+                    <Image
+                        src={activeLanguage.flagSrc}
+                        alt={activeLanguage.flagAlt}
+                        width={22}
+                        height={16}
+                        unoptimized
+                        className="h-4 w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+                    />
                     <span className="hidden sm:inline">{activeLanguage.shortLabel}</span>
                 </Button>
             </DropdownMenuTrigger>
@@ -78,9 +84,16 @@ export function LanguageSwitcher() {
                 <DropdownMenuLabel>{copy.language}</DropdownMenuLabel>
                 {SITE_LANGUAGES.map((item) => (
                     <DropdownMenuItem key={item.value} onClick={() => setLanguage(item.value)}>
-                        <span className="mr-2 w-10 text-xs font-semibold text-muted-foreground">
-                            <span className="mr-1" aria-hidden>{item.flag}</span>
-                            {item.shortLabel}
+                        <span className="mr-3 inline-flex w-11 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                            <Image
+                                src={item.flagSrc}
+                                alt={item.flagAlt}
+                                width={22}
+                                height={16}
+                                unoptimized
+                                className="h-4 w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+                            />
+                            <span>{item.shortLabel}</span>
                         </span>
                         {item.label}
                     </DropdownMenuItem>

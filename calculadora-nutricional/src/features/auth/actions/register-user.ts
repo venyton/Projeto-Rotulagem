@@ -3,19 +3,43 @@
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { redirect } from "next/navigation";
+import { MarketingEventType } from "@prisma/client";
+import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
+import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 
 export async function registerUser(prevState: unknown, formData: FormData): Promise<{ error?: string }> {
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
+    const name = ((formData.get("name") as string | null) ?? "").trim();
+    const companyName = ((formData.get("companyName") as string | null) ?? "").trim();
+    const document = ((formData.get("document") as string | null) ?? "").trim();
+    const phone = ((formData.get("phone") as string | null) ?? "").trim();
+    const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
-    if (!email || !password || !name) {
+    if (!email || !password || !name || !companyName || !phone) {
         return { error: "Todos os campos são obrigatórios." };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return { error: "Informe um email válido." };
+    }
+
+    if (name.length < 2 || name.length > 80) {
+        return { error: "O nome deve ter entre 2 e 80 caracteres." };
+    }
+
+    if (companyName.length < 2 || companyName.length > 120) {
+        return { error: "Informe o nome da empresa." };
     }
 
     if (password !== confirmPassword) {
         return { error: "As senhas não coincidem." };
+    }
+
+    const passwordError = validatePasswordStrength(password, { email, name });
+    if (passwordError) {
+        return { error: passwordError };
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -26,15 +50,33 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
         return { error: "Email já cadastrado." };
     }
 
-    const hashedPassword = await hash(password, 10);
+    const hashedPassword = await hash(password, PASSWORD_HASH_ROUNDS);
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
         data: {
             name,
             email,
             password: hashedPassword,
         },
     });
+
+    const organization = await ensureDefaultWorkspaceForUser(user, {
+        organizationName: companyName,
+        entitlementSource: "DEFAULT",
+    });
+
+    await prisma.marketingEvent.create({
+        data: {
+            organizationId: organization.id,
+            userId: user.id,
+            eventType: MarketingEventType.SIGNUP_COMPLETED,
+            metadata: {
+                companyName,
+                document: document || null,
+                phone,
+            },
+        },
+    }).catch(() => null);
 
     redirect("/login");
 }
