@@ -110,28 +110,28 @@ export default async function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               {isLoggedIn ? (
                 <>
-                  <Button asChild size="lg" className="h-12 rounded-full bg-emerald-500 px-7 text-base font-semibold text-white hover:bg-emerald-400">
+                  <Button asChild size="lg" className="h-12 rounded-md bg-emerald-500 px-7 text-base font-semibold text-white hover:bg-emerald-400">
                     <Link href="/dashboard">Abrir minhas tabelas</Link>
                   </Button>
                   <Button
                     asChild
                     size="lg"
                     variant="outline"
-                    className="h-12 rounded-full border-white/60 bg-white/12 px-7 text-base font-semibold text-white hover:bg-white/20"
+                    className="h-12 rounded-md border-white/60 bg-white/12 px-7 text-base font-semibold text-white hover:bg-white/20"
                   >
                     <Link href="/dashboard/ingredients">Ver ingredientes</Link>
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button asChild size="lg" className="h-12 rounded-full bg-emerald-500 px-7 text-base font-semibold text-white hover:bg-emerald-400">
+                  <Button asChild size="lg" className="h-12 rounded-md bg-emerald-500 px-7 text-base font-semibold text-white hover:bg-emerald-400">
                     <Link href="/register">Começar agora</Link>
                   </Button>
                   <Button
                     asChild
                     size="lg"
                     variant="outline"
-                    className="h-12 rounded-full border-white/60 bg-white/12 px-7 text-base font-semibold text-white hover:bg-white/20"
+                    className="h-12 rounded-md border-white/60 bg-white/12 px-7 text-base font-semibold text-white hover:bg-white/20"
                   >
                     <Link href="/login">Já tenho conta</Link>
                   </Button>
@@ -144,7 +144,7 @@ export default async function Home() {
 
       <main className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <section id="sobre-nos" className="scroll-mt-24 grid gap-10 lg:grid-cols-[1fr_1.05fr] lg:items-center">
-          <div className="relative h-[340px] overflow-hidden rounded-[2.2rem] sm:h-[420px]">
+          <div className="relative h-[340px] overflow-hidden rounded-xl sm:h-[420px]">
             <Image
               src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1400&q=80"
               alt="Mesa com alimentos frescos e coloridos"
@@ -185,7 +185,7 @@ export default async function Home() {
         </section>
 
         <section id="o-que-fazemos" className="mt-18 scroll-mt-24">
-          <div className="rounded-[2.3rem] border border-border/70 bg-card/70 p-8 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] sm:p-10">
+          <div className="rounded-xl p-8 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] sm:p-10">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
               Plataforma
             </p>
@@ -208,7 +208,7 @@ export default async function Home() {
 
           <div className="mt-8 grid gap-8 md:grid-cols-3">
             {AUDIENCE.map((item) => (
-              <article key={item.title} className="rounded-[1.8rem] border border-border/70 bg-card/80 p-6 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] backdrop-blur">
+              <article key={item.title} className="rounded-lg p-6 shadow-[0_10px_40px_-28px_rgba(0,0,0,0.45)] backdrop-blur">
                 <item.icon className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
                 <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.text}</p>
@@ -217,8 +217,8 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="dayane" className="mt-18 scroll-mt-24 overflow-hidden rounded-[2.3rem] border border-emerald-500/25 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-8 sm:p-10">
-          <div className="relative mb-8 h-[240px] overflow-hidden rounded-[1.9rem] border border-border/70 sm:h-[280px]">
+        <section id="dayane" className="mt-18 scroll-mt-24 overflow-hidden rounded-xl bg-gradient-to-r to-transparent p-8 sm:p-10">
+          <div className="relative mb-8 h-[240px] overflow-hidden rounded-lg border border-border/70 sm:h-[280px]">
             <Image
               src={DAYANE_LINKEDIN_COVER_FALLBACK}
               alt="Capa de apresentação profissional da Dayane"
@@ -240,7 +240,7 @@ export default async function Home() {
 
           <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
             <div className="mx-auto w-full max-w-[260px]">
-              <div className="relative aspect-square overflow-hidden rounded-[1.9rem] border border-border/70 bg-card">
+              <div className="relative aspect-square overflow-hidden rounded-lg border border-border/70 bg-card">
                 <Image
                   src="https://unavatar.io/linkedin/doutoraday"
                   alt="Foto de perfil pública do LinkedIn da Dayane"
@@ -275,7 +275,7 @@ export default async function Home() {
                 ))}
               </ul>
 
-              <div className="mt-6 rounded-[1.4rem] border border-border/70 bg-background/60 p-4">
+              <div className="mt-6 rounded-lg border border-border/70 bg-background/60 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
                   Linha do tempo
                 </p>
@@ -287,12 +287,12 @@ export default async function Home() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <Button asChild size="lg" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="https://linkedin.com/in/doutoraday/" target="_blank" rel="noopener noreferrer">
                     Ver perfil da Dayane
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="#inicio">Voltar ao topo</Link>
                 </Button>
               </div>
@@ -300,7 +300,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="acesso" className="mt-18 scroll-mt-24 rounded-[2.2rem] border border-border/70 bg-card/80 p-8 sm:p-10">
+        <section id="acesso" className="mt-18 scroll-mt-24 rounded-xl p-8 sm:p-10">
           <h2 className={`${titleFont.className} text-4xl leading-tight text-zinc-900 dark:text-zinc-100 sm:text-5xl`}>
             Pronto para usar?
           </h2>
@@ -310,19 +310,19 @@ export default async function Home() {
           <div className="mt-6 flex flex-wrap gap-3">
             {isLoggedIn ? (
               <>
-                <Button asChild size="lg" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="/dashboard">Continuar no painel</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="/dashboard/new">Criar nova tabela</Link>
                 </Button>
               </>
             ) : (
               <>
-                <Button asChild size="lg" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="/login">Login</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full px-7 text-base font-semibold">
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-md px-7 text-base font-semibold">
                   <Link href="/register">Criar conta</Link>
                 </Button>
               </>

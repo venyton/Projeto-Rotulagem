@@ -4,6 +4,19 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { TableGenerator } from "@/features/tables/components/TableGenerator";
 import { SelectedIngredient } from "@/features/tables/domain/nutrients";
+import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
+import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+
+function readItemMicronutrients(item: Record<string, unknown>) {
+    return Object.fromEntries(
+        MICRO_KEYS.map((key) => {
+            const value = item[key];
+            return [key, typeof value === "number" && Number.isFinite(value) ? value : null];
+        })
+    );
+}
 
 export default async function EditTablePage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -13,9 +26,14 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) redirect("/login");
 
+    const context = await getCurrentSaaSContext();
+    if (!context || !contextHasModuleAccess(context, SAAS_MODULES.TABLES)) {
+        return <ModuleGateMessage moduleKey={SAAS_MODULES.TABLES} />;
+    }
+
     const table = await prisma.generatedTable.findUnique({
         where: { id: params.id },
-        include: { items: true }
+        include: { items: { orderBy: { id: "asc" } } }
     });
 
     if (!table || table.userId !== user.id) {
@@ -45,57 +63,8 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
             sodium: item.sodium,
             sugarTotal: item.sugarTotal,
             sugarAdded: item.sugarAdded,
-            // Defaults for missing fields in snapshot
-            humidity: 0,
-            ashes: 0,
-            nitrogen: 0,
-
-            // Macros / Micros defaults
-            alcohol: 0,
-
-            // Micronutrients (Added defaults to satisfy Ingredient type)
-            fatMono: 0,
-            fatPoly: 0,
-            omega6: 0,
-            omega3: 0,
-            cholesterol: 0,
-
-            vitaminA: 0,
-            vitaminD: 0,
-            vitaminE: 0,
-            vitaminK: 0,
-            vitaminC: 0,
-            thiamin: 0,
-            riboflavin: 0,
-            niacin: 0,
-            vitaminB6: 0,
-            biotin: 0,
-            folicAcid: 0,
-            pantothenicAcid: 0,
-            vitaminB12: 0,
-
-            calcium: 0,
-            chloride: 0,
-            copper: 0,
-            chromium: 0,
-            iron: 0,
-            fluoride: 0,
-            phosphorus: 0,
-            iodine: 0,
-            magnesium: 0,
-            manganese: 0,
-            molybdenum: 0,
-            potassium: 0,
-            selenium: 0,
-            zinc: 0,
-            choline: 0,
-
-            catRef: "",
-            catDesc: "",
-            userId: null,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        }
+            ...readItemMicronutrients(item as unknown as Record<string, unknown>),
+        } as SelectedIngredient["ingredient"] & { sugarAdded?: number | null }
     }));
 
     const initialData = {
@@ -113,8 +82,11 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     };
 
     return (
-        <div className="container mx-auto pt-8">
-            <h1 className="text-3xl font-bold mb-6">Editar Tabela</h1>
+        <div className="container mx-auto px-4 py-8 md:px-6">
+            <div className="mb-6 border-b border-border/70 pb-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Tabela</p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-tight">Editar Tabela</h1>
+            </div>
             <TableGenerator initialData={initialData} />
         </div>
     );

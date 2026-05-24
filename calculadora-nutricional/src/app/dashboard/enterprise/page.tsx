@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import type { EnterpriseApprovalStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { EnterpriseWorkspace } from "@/features/enterprise/components/EnterpriseWorkspace";
 import type {
     ApprovalStatus,
@@ -27,6 +30,11 @@ export default async function EnterprisePage() {
 
     if (!user) {
         redirect("/login");
+    }
+
+    const context = await getCurrentSaaSContext();
+    if (!context || !contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)) {
+        return <ModuleGateMessage moduleKey={SAAS_MODULES.ENTERPRISE_LABELS} />;
     }
 
     const tables = await prisma.generatedTable.findMany({
