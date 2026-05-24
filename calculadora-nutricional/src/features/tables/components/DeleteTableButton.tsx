@@ -46,8 +46,8 @@ export function DeleteTableButton({ tableId, title }: { tableId: string; title: 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button type="button" variant="outline" className="w-full gap-2 text-red-600 hover:text-red-700">
-                    <Trash2 className="h-4 w-4" />
+                <Button type="button" size="sm" variant="outline" className="w-full gap-2 text-red-600 hover:text-red-700">
+                    <Trash2 className="h-3.5 w-3.5" />
                     Excluir
                 </Button>
             </DialogTrigger>

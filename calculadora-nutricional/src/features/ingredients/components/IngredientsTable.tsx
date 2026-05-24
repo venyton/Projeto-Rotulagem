@@ -9,6 +9,8 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
 import ExcelJS from "exceljs";
@@ -37,6 +39,7 @@ type Ingredient = {
 
 export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] }) {
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
 
     const handleExport = async () => {
         const data = ingredients.map(ing => ({
@@ -108,6 +111,16 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
                 <h2 className="text-lg font-semibold tracking-tight">Tabela de Ingredientes</h2>
                 <div className="flex gap-2">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Buscar ingrediente..."
+                            className="w-full sm:w-[250px] pl-8 bg-background shadow-sm"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
                     <ImportIngredientsDialog />
                     <Button onClick={handleExport} variant="outline" className="shadow-sm">
                         <Download className="mr-2 h-4 w-4" />
@@ -130,14 +143,14 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {ingredients.length === 0 ? (
+                        {ingredients.filter(ing => ing.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center h-24">
                                     Nenhum ingrediente cadastrado. Importe ou adicione o primeiro!
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            ingredients.map((ingredient) => (
+                            ingredients.filter(ing => ing.name.toLowerCase().includes(searchQuery.toLowerCase())).map((ingredient) => (
                                 <TableRow key={ingredient.id} className="transition-colors hover:bg-muted/30">
                                     <TableCell className="font-medium">{ingredient.name}</TableCell>
                                     <TableCell>{ingredient.energy}</TableCell>
