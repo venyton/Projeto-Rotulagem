@@ -45,14 +45,14 @@ const getZeroWhenNoVd = (value: number, vdr?: number | null) => {
     return vd === "-" ? "0" : vd;
 };
 
-type NutrientKey = keyof CalculatedNutrients;
+type NutrientKey = keyof Omit<CalculatedNutrients, "customNutrients">;
 type VdrValues = (typeof VDR)[PopGroup];
 type VdrKey = keyof VdrValues;
 type IndentLevel = 0 | 1 | 2;
 const DEFAULT_VD_SUGAR_ADDED = 50;
 const DEFAULT_VD_FAT_TRANS = 2;
 
-const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => nutrients[key] || 0;
+const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => (nutrients[key] as number) || 0;
 
 const getVdrValue = (vdr: VdrValues, key: NutrientKey): number | null | undefined => {
     if (key in vdr) {
@@ -277,6 +277,29 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
             });
         }
     });
+
+    if (perPortion.customNutrients) {
+        Object.keys(perPortion.customNutrients).sort().forEach((key) => {
+            const val100 = per100g.customNutrients[key]?.value || 0;
+            const valPortion = perPortion.customNutrients[key]?.value || 0;
+            const unit = perPortion.customNutrients[key]?.unit || "g";
+
+            const format = (v: number) => {
+                if (v === 0) return "0";
+                if (v < 1) return v.toFixed(1).replace(".", ",");
+                return Math.round(v).toString();
+            };
+
+            baseRows.push({
+                label: `${key} (${unit})`,
+                nutrientKey: "energy" as NutrientKey,
+                per100: format(val100),
+                portion: format(valPortion),
+                vdPortion: "",
+                vd100: ""
+            });
+        });
+    }
 
     extraConstituents
         .filter((item) => item.name.trim() && item.amount.trim())
