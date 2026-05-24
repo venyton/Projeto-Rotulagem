@@ -102,6 +102,7 @@ function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: strin
         fiber: firstNumber(nutriments, ["fiber_100g", "fiber"]),
         sodium: sodiumMg(nutriments),
         sugarTotal: firstNumber(nutriments, ["sugars_100g", "sugars"]),
+        sugarAdded: 0,
         origin: "Open Food Facts",
         fatMono: firstNumber(nutriments, ["monounsaturated-fat_100g", "monounsaturated-fat"]),
         fatPoly: firstNumber(nutriments, ["polyunsaturated-fat_100g", "polyunsaturated-fat"]),
