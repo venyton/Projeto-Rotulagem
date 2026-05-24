@@ -30,14 +30,14 @@ export default async function TablesPage() {
         orderBy: { createdAt: "desc" }
     });
 
-    
+
 
     return (
         <div className="mx-auto max-w-[88rem] space-y-8 px-4 py-6 md:px-6">
-            <header className="relative mb-8 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-50/40 via-background to-primary/5 p-6 dark:from-emerald-950/20 dark:to-primary/10 md:p-8">
+            <header className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50/40 via-background to-primary/5 p-6 dark:from-emerald-950/20 dark:to-primary/10 md:p-8">
                 <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl dark:bg-emerald-600/10" />
                 <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary/10 blur-2xl dark:bg-primary/10" />
-                
+
                 <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-3">
                         <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
@@ -62,7 +62,7 @@ export default async function TablesPage() {
                 </div>
             </header>
 
-                        <TablesGrid tables={tables} hasEnterprise={contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)} />
+            <TablesGrid tables={tables} hasEnterprise={contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)} />
         </div>
     );
 }

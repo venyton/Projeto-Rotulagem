@@ -46,7 +46,7 @@ export async function IngredientsPageContent({
 
   return (
     <div className="mx-auto max-w-[88rem] space-y-8 px-4 py-6 md:px-6">
-      <header className="relative mb-8 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-blue-50/40 via-background to-primary/5 p-6 dark:from-blue-950/20 dark:to-primary/10 md:p-8">
+      <header className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50/40 via-background to-primary/5 p-6 dark:from-blue-950/20 dark:to-primary/10 md:p-8">
         <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-600/10" />
         <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary/10 blur-2xl dark:bg-primary/10" />
 
