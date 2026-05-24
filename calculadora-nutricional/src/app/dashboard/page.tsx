@@ -61,7 +61,7 @@ export default async function DashboardHomePage() {
     const firstName = session.user?.name?.split(" ")[0] ?? "por aqui";
 
     return (
-        <div className="container mx-auto space-y-10 px-4 py-10 md:px-6">
+        <div className="mx-auto max-w-[88rem] space-y-10 px-4 py-10 md:px-6">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-background to-emerald-50/40 p-8 dark:from-primary/10 dark:to-emerald-950/20 md:p-12">
                 <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/5 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-emerald-400/10 blur-2xl" />

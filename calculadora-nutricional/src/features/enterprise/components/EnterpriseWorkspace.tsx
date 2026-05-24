@@ -658,7 +658,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                 
                 <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-3">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/50 px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
+                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
                             <ShieldCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                             {copy.firstTableTitle}
                         </div>
