@@ -14,7 +14,7 @@ type TableType = {
     portion: number;
     uom: string;
     popGroup: string;
-    createdAt: Date;
+    createdAt: string;
 };
 
 export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], hasEnterprise: boolean }) {
@@ -24,7 +24,7 @@ export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], has
         table.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const formatDateBR = (value: Date) =>
+    const formatDateBR = (value: string) =>
         new Date(value).toLocaleDateString("pt-BR", {
             timeZone: "America/Sao_Paulo",
         });

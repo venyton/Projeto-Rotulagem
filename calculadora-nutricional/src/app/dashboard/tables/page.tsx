@@ -23,12 +23,17 @@ export default async function TablesPage() {
         return <ModuleGateMessage moduleKey={SAAS_MODULES.TABLES} />;
     }
 
-    const tables = await prisma.generatedTable.findMany({
+    const rawTables = await prisma.generatedTable.findMany({
         where: {
             user: { email: session.user?.email || "" }
         },
         orderBy: { createdAt: "desc" }
     });
+
+    const tables = rawTables.map(t => ({
+        ...t,
+        createdAt: t.createdAt.toISOString()
+    }));
 
 
 

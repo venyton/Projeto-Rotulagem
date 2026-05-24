@@ -23,7 +23,12 @@ export async function IngredientsPageContent({
   let error: string | null = null;
 
   try {
-    ingredients = await getUserIngredients();
+    const rawIngredients = await getUserIngredients();
+
+    ingredients = rawIngredients.map(ing => ({
+        ...ing,
+        createdAt: ing.createdAt.toISOString()
+    }));
   } catch (err) {
     error = err instanceof Error ? err.message : 'Erro desconhecido ao carregar ingredientes.';
   }
