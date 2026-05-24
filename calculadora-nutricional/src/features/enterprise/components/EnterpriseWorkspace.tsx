@@ -68,6 +68,9 @@ const CLAIM_STYLES = {
     attention: "border-amber-200 bg-gradient-to-br from-amber-50 to-white text-amber-950 dark:border-amber-900/60 dark:from-amber-950/35 dark:to-background dark:text-amber-100",
     "not-eligible": "border-slate-200 bg-gradient-to-br from-slate-50 to-white text-slate-700 dark:border-slate-800 dark:from-slate-900/70 dark:to-background dark:text-slate-300",
 };
+const SAFE_TEXT_CLASS = "min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere]";
+const ENTERPRISE_SELECT_TRIGGER_CLASS = "min-h-10 w-full min-w-0 *:data-[slot=select-value]:truncate";
+const ENTERPRISE_INPUT_CLASS = "min-w-0 overflow-hidden text-ellipsis";
 
 type LocalizedMetadata = LegalLabelData;
 type LegalFieldDefinition = {
@@ -684,7 +687,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                 <div className="grid gap-4 p-4 md:grid-cols-4">
                     <ControlSelect label={copy.productBase} help="Escolha a tabela brasileira salva que servirá como origem. Ela não será alterada por este módulo.">
                         <Select value={selectedTable.id} onValueChange={setSelectedTableId}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -699,7 +702,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.market} help="Define o formato visual, idioma obrigatório do rótulo, ordem dos nutrientes, símbolos frontais e alertas regulatórios.">
                         <Select value={market} onValueChange={(value) => setMarket(value as InternationalMarket)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -714,7 +717,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.foodBase} help="Alguns países usam limites diferentes para alimentos sólidos e líquidos.">
                         <Select value={foodState} onValueChange={(value) => setFoodState(value as FoodPhysicalState)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -726,7 +729,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.status} help="Marque em que ponto o rótulo está no fluxo interno de aprovação.">
                         <Select value={approvalStatus} onValueChange={(value) => setApprovalStatus(value as ApprovalStatus)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -834,6 +837,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                         <div className="grid gap-4 p-4 md:grid-cols-6">
                             <Field className="md:col-span-3" label={copy.localName} help="Nome comercial usado na prévia local. Edite na cópia se o país exigir adaptação de idioma ou descrição.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.title}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("title", event.target.value)}
@@ -841,6 +845,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field label={copy.portion} help="Quantidade de alimento usada como serving/porção local. Confira a regra de referência do país.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     type="number"
                                     value={workingTable.portion || ""}
                                     disabled={!isLocalizedDraft}
@@ -853,7 +858,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                     onValueChange={(value) => updateLocalizedDraft("uom", value)}
                                     disabled={!isLocalizedDraft}
                                 >
-                                    <SelectTrigger className="min-h-10">
+                                    <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -865,6 +870,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field label={copy.content} help="Conteúdo líquido da embalagem. Necessário para porções por embalagem e auditoria.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     type="number"
                                     value={workingTable.packageContent || ""}
                                     disabled={!isLocalizedDraft}
@@ -873,6 +879,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.localMeasure} help="Texto de medida compreensível no país, como serving, porción, portion ou medida local.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.householdMeasure}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("householdMeasure", event.target.value)}
@@ -880,6 +887,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.servings} help="Declaração local de quantidade de porções por embalagem/contêiner/envase.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.servingsPerPackage || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("servingsPerPackage", event.target.value)}
@@ -887,6 +895,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.legalName} help="Nome legal revisado para o país. Use quando o nome comercial não for suficiente para a legislação local.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.legalName || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("legalName", event.target.value)}
@@ -894,6 +903,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.category} help="Categoria regulatória local usada para confirmar porção de referência, idioma, claims e exceções.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.category || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("category", event.target.value)}
@@ -901,6 +911,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.labelLanguage} help="Idioma que deverá aparecer no rótulo final deste mercado.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.language || marketConfig.languageRequirement}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("language", event.target.value)}
@@ -908,6 +919,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.intendedClaims} help="Alegações comerciais pretendidas. O painel de claims ajuda a decidir o que pode seguir para revisão.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.intendedClaims || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("intendedClaims", event.target.value)}
@@ -915,6 +927,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-6" label={copy.adjustmentNotes} help="Espaço para registrar a decisão regulatória, troca de ingrediente, alteração de porção ou justificativa de aprovação.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.adjustmentNotes || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("adjustmentNotes", event.target.value)}
@@ -928,6 +941,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                     help={item.help}
                                 >
                                     <Input
+                                        className={ENTERPRISE_INPUT_CLASS}
                                         value={(metadata?.[item.field] as string | undefined) || ""}
                                         disabled={!isLocalizedDraft}
                                         onChange={(event) => updateMetadata(item.field, event.target.value)}
@@ -1012,10 +1026,10 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                 <tbody className="divide-y divide-border/70">
                                     {analysis.nutritionLines.map((line) => (
                                         <tr key={`${line.key}-${line.label}`}>
-                                            <td className="py-2 pr-3 font-medium">{line.label}</td>
-                                            <td className="px-3 py-2">{formatNutrientValue(line.per100, line.unit)}</td>
-                                            <td className="px-3 py-2">{formatNutrientValue(line.perPortion, line.unit)}</td>
-                                            <td className="px-3 py-2">{line.dailyValueLabel || "-"}</td>
+                                            <td className="min-w-0 py-2 pr-3 font-medium break-words [overflow-wrap:anywhere]">{line.label}</td>
+                                            <td className="px-3 py-2 break-words [overflow-wrap:anywhere]">{formatNutrientValue(line.per100, line.unit)}</td>
+                                            <td className="px-3 py-2 break-words [overflow-wrap:anywhere]">{formatNutrientValue(line.perPortion, line.unit)}</td>
+                                            <td className="px-3 py-2 break-words [overflow-wrap:anywhere]">{line.dailyValueLabel || "-"}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1047,10 +1061,10 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                         <PanelHeader title="GS1 Digital Link" detail={copy.gs1Detail} />
                         <div className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
                             <Field label="GTIN">
-                                <Input value={gtin} onChange={(event) => setGtin(event.target.value)} placeholder="7890000000000" />
+                                <Input className={ENTERPRISE_INPUT_CLASS} value={gtin} onChange={(event) => setGtin(event.target.value)} placeholder="7890000000000" />
                             </Field>
                             <Field label={copy.lot}>
-                                <Input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
+                                <Input className={ENTERPRISE_INPUT_CLASS} value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
                             </Field>
                             <Button variant="outline" className="gap-2" onClick={copyGs1Link}>
                                 <Link2 className="h-4 w-4" />
@@ -1068,7 +1082,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-    return <section className="rounded-lg border border-border bg-background">{children}</section>;
+    return <section className={`min-w-0 rounded-lg border border-border bg-background ${SAFE_TEXT_CLASS}`}>{children}</section>;
 }
 
 function PanelHeader({ title, detail }: { title: string; detail?: string }) {
@@ -1081,17 +1095,17 @@ function PanelHeader({ title, detail }: { title: string; detail?: string }) {
 
 function PanelTitle({ title, detail }: { title: string; detail?: string }) {
     return (
-        <div>
-            <h2 className="text-sm font-semibold">{title}</h2>
-            {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
+        <div className={SAFE_TEXT_CLASS}>
+            <h2 className="text-sm font-semibold break-words [overflow-wrap:anywhere]">{title}</h2>
+            {detail && <p className="mt-1 text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">{detail}</p>}
         </div>
     );
 }
 
 function ControlSelect({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className={`space-y-2 ${SAFE_TEXT_CLASS}`}>
+            <Label className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
                 {label}
                 {help && <HelpTip>{help}</HelpTip>}
             </Label>
@@ -1102,8 +1116,8 @@ function ControlSelect({ label, help, children }: { label: string; help?: string
 
 function Field({ label, help, className, children }: { label: string; help?: string; className?: string; children: React.ReactNode }) {
     return (
-        <div className={className ? `space-y-2 ${className}` : "space-y-2"}>
-            <Label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className={className ? `space-y-2 ${SAFE_TEXT_CLASS} ${className}` : `space-y-2 ${SAFE_TEXT_CLASS}`}>
+            <Label className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
                 {label}
                 {help && <HelpTip>{help}</HelpTip>}
             </Label>
@@ -1113,7 +1127,7 @@ function Field({ label, help, className, children }: { label: string; help?: str
 }
 
 function StackList({ children }: { children: React.ReactNode }) {
-    return <div className="space-y-2 p-4">{children}</div>;
+    return <div className={`space-y-2 p-4 ${SAFE_TEXT_CLASS}`}>{children}</div>;
 }
 
 function StatusRow({
@@ -1128,16 +1142,16 @@ function StatusRow({
     muted?: boolean;
 }) {
     return (
-        <div className={`rounded-md border px-3 py-2 text-sm shadow-sm ${tone} ${muted ? "opacity-75" : ""}`}>
-            <div className="font-semibold">{title}</div>
-            <div className="mt-1 text-xs leading-relaxed opacity-80">{detail}</div>
+        <div className={`rounded-md border px-3 py-2 text-sm shadow-sm ${SAFE_TEXT_CLASS} ${tone} ${muted ? "opacity-75" : ""}`}>
+            <div className="font-semibold break-words [overflow-wrap:anywhere]">{title}</div>
+            <div className="mt-1 text-xs leading-relaxed opacity-80 break-words [overflow-wrap:anywhere]">{detail}</div>
         </div>
     );
 }
 
 function EmptyRow({ text }: { text: string }) {
     return (
-        <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+        <div className={`rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground ${SAFE_TEXT_CLASS}`}>
             {text}
         </div>
     );

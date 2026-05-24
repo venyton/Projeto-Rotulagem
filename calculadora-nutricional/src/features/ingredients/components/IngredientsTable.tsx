@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
-import * as XLSX from 'xlsx';
+import ExcelJS from "exceljs";
 import { InspectIngredientDialog } from "./InspectIngredientDialog";
 import { AddIngredientForm } from "./AddIngredientForm";
 import { deleteCustomIngredient } from "@/features/ingredients/actions/custom-ingredient-actions";
@@ -38,7 +38,7 @@ type Ingredient = {
 export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] }) {
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const handleExport = () => {
+    const handleExport = async () => {
         const data = ingredients.map(ing => ({
             'Nome': ing.name.replace(/^\[Meu\]\s*/, ''),
             'Energia': ing.energy,
@@ -53,10 +53,43 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
             'Açúcares Adicionados': ing.sugarAdded,
         }));
 
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(wb, ws, "Meus Ingredientes");
-        XLSX.writeFile(wb, "meus-ingredientes.xlsx");
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet("Meus Ingredientes");
+            const headers = Object.keys(data[0] ?? {
+                'Nome': '',
+                'Energia': '',
+                'Proteína': '',
+                'Carboidratos': '',
+                'Gorduras Totais': '',
+                'Gorduras Saturadas': '',
+                'Gorduras Trans': '',
+                'Fibra': '',
+                'Sódio': '',
+                'Açúcares Totais': '',
+                'Açúcares Adicionados': '',
+            });
+
+            worksheet.columns = headers.map((header) => ({
+                header,
+                key: header,
+                width: Math.max(14, header.length + 2),
+            }));
+            worksheet.addRows(data);
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "meus-ingredientes.xlsx";
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            toast.error("Erro ao exportar ingredientes.");
+        }
     };
 
     const handleDelete = async (id: string, name: string) => {
@@ -72,8 +105,8 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Tabela de Ingredientes</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-xl font-semibold tracking-tight">Tabela de Ingredientes</h2>
                 <div className="flex gap-2">
                     <ImportIngredientsDialog />
                     <Button onClick={handleExport} variant="outline">
@@ -83,10 +116,10 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                 </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border/70 bg-card/95 shadow-sm">
+            <div className="overflow-hidden rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_40px_-34px_rgba(15,23,42,0.65)]">
                 <Table>
                     <TableHeader>
-                        <TableRow className="bg-muted/[0.22]">
+                        <TableRow className="bg-muted/35">
                             <TableHead className="w-[300px]">Nome</TableHead>
                             <TableHead>Energia (kcal)</TableHead>
                             <TableHead>Carboidratos (g)</TableHead>
@@ -105,7 +138,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                             </TableRow>
                         ) : (
                             ingredients.map((ingredient) => (
-                                <TableRow key={ingredient.id}>
+                                <TableRow key={ingredient.id} className="hover:bg-muted/25">
                                     <TableCell className="font-medium">{ingredient.name}</TableCell>
                                     <TableCell>{ingredient.energy}</TableCell>
                                     <TableCell>{ingredient.carbs}</TableCell>

@@ -45,11 +45,12 @@ export async function IngredientsPageContent({
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div className="container mx-auto px-4 py-8 md:px-6">
+      <div className="mb-6 flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-1">{title}</h1>
-          <p className="text-muted-foreground">{description}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Biblioteca</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         {showAddButton && (
           <div className="flex flex-wrap gap-2">

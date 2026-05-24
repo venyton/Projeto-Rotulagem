@@ -4,6 +4,31 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+
+async function requireCustomIngredientsModule() {
+    try {
+        await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
+        return null;
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return error.message;
+        throw error;
+    }
+}
+
+function optionalNumber(formData: FormData, key: string) {
+    const value = formData.get(key);
+    if (typeof value !== "string" || value.trim() === "") return null;
+    const normalized = value.replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function optionalMicronutrientPayload(formData: FormData) {
+    return Object.fromEntries(MICRO_KEYS.map((key) => [key, optionalNumber(formData, key)]));
+}
 
 export async function createCustomIngredient(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
     const session = await getServerSession(authOptions);
@@ -11,6 +36,8 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
     const energy = parseFloat(formData.get("energy") as string) || 0;
@@ -60,6 +87,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     const selenium = parseFloat(formData.get("selenium") as string) || 0;
     const zinc = parseFloat(formData.get("zinc") as string) || 0;
     const choline = parseFloat(formData.get("choline") as string) || 0;
+    const micronutrients = optionalMicronutrientPayload(formData);
 
     if (!name) return { error: "Nome é obrigatório" };
 
@@ -71,7 +99,8 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
                 energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline
+                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
+                ...micronutrients,
             }
         });
 
@@ -88,6 +117,8 @@ export async function deleteCustomIngredient(id: string) {
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     try {
         // Ensure ownership
@@ -108,6 +139,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
     const energy = parseFloat(formData.get("energy") as string) || 0;
@@ -157,6 +190,7 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     const selenium = parseFloat(formData.get("selenium") as string) || 0;
     const zinc = parseFloat(formData.get("zinc") as string) || 0;
     const choline = parseFloat(formData.get("choline") as string) || 0;
+    const micronutrients = optionalMicronutrientPayload(formData);
 
     if (!name) return { error: "Nome é obrigatório" };
 
@@ -170,7 +204,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
                 name, energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline
+                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
+                ...micronutrients,
             }
         });
 

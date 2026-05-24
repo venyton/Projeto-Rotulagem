@@ -46,7 +46,7 @@ const MICRONUTRIENT_GROUPS: Array<{ title: string; items: NutrientField[] }> = [
             { name: "fatMono", label: "Gord. Mono", unit: "g" },
             { name: "fatPoly", label: "Gord. Poli", unit: "g" },
             { name: "omega6", label: "Ômega 6", unit: "g" },
-            { name: "omega3", label: "Ômega 3", unit: "g" },
+            { name: "omega3", label: "Ômega 3", unit: "mg" },
             { name: "cholesterol", label: "Colesterol", unit: "mg" },
         ],
     },
@@ -54,6 +54,7 @@ const MICRONUTRIENT_GROUPS: Array<{ title: string; items: NutrientField[] }> = [
         title: "Minerais",
         items: [
             { name: "calcium", label: "Cálcio", unit: "mg" },
+            { name: "chloride", label: "Cloreto", unit: "mg" },
             { name: "magnesium", label: "Magnésio", unit: "mg" },
             { name: "manganese", label: "Manganês", unit: "mg" },
             { name: "phosphorus", label: "Fósforo", unit: "mg" },
