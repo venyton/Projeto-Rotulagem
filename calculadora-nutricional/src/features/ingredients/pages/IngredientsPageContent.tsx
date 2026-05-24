@@ -19,7 +19,7 @@ export async function IngredientsPageContent({
   description,
   showAddButton = false,
 }: IngredientsPageContentProps) {
-  let ingredients: Awaited<ReturnType<typeof getUserIngredients>> = [];
+  let ingredients: any[] = [];
   let error: string | null = null;
 
   try {
