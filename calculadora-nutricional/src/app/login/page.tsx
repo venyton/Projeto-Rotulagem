@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { ArrowRight, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { ExternalAuthButtons } from "@/features/auth/components/ExternalAuthButtons";
 
@@ -21,7 +21,7 @@ export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [twoFactorCode, setTwoFactorCode] = useState("");
-    const [useTwoFactor, setUseTwoFactor] = useState(false);
+    const [step, setStep] = useState<"CREDENTIALS" | "2FA">("CREDENTIALS");
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -31,17 +31,21 @@ export default function LoginPage() {
         const res = await signIn("credentials", {
             email,
             password,
-            twoFactorCode: useTwoFactor ? twoFactorCode : "",
+            twoFactorCode: step === "2FA" ? twoFactorCode : "",
             redirect: false,
         });
 
         setLoading(false);
 
-        if (res?.error) {
-            toast.error("Email, senha ou código 2FA inválidos.");
+        if (res?.error === "2FA_REQUIRED") {
+            setStep("2FA");
+        } else if (res?.error === "2FA_INVALID") {
+            toast.error("Código 2FA incorreto.");
+        } else if (res?.error) {
+            toast.error("Email ou senha inválidos.");
         } else {
             router.push("/dashboard");
-            router.refresh(); // Update server components
+            router.refresh();
         }
     };
 
@@ -62,75 +66,74 @@ export default function LoginPage() {
                         </div>
                     </div>
                     <div>
-                        <CardTitle className="text-3xl text-white">Entrar</CardTitle>
+                        <CardTitle className="text-3xl text-white">
+                            {step === "CREDENTIALS" ? "Entrar" : "Verificação em Duas Etapas"}
+                        </CardTitle>
                         <CardDescription className="mt-2 max-w-sm text-primary-foreground/78">
-                            Acesse sua conta SoIZI.
+                            {step === "CREDENTIALS" 
+                                ? "Acesse sua conta SoIZI." 
+                                : "Sua conta está protegida. Insira o código do seu aplicativo autenticador."}
                         </CardDescription>
                     </div>
                     </div>
                 </CardHeader>
                 <CardContent className="px-6 py-7 sm:px-8">
-                    <ExternalAuthButtons />
-                    <div className="my-5 h-px bg-border" />
+                    {step === "CREDENTIALS" && (
+                        <>
+                            <ExternalAuthButtons />
+                            <div className="my-5 h-px bg-border" />
+                        </>
+                    )}
+                    
                     <form onSubmit={handleSubmit} className="grid gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="email">E-mail</Label>
-                            <div className="relative">
-                                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="voce@empresa.com"
-                                    required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="pl-9"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid gap-2">
-                            <div className="flex items-center justify-between gap-3">
-                                <Label htmlFor="password">Senha</Label>
-                                <Link href="#" className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">
-                                    Esqueci a senha
-                                </Link>
-                            </div>
-                            <div className="relative">
-                                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="pl-9"
-                                />
-                            </div>
-                        </div>
+                        {step === "CREDENTIALS" && (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="email">E-mail</Label>
+                                    <div className="relative">
+                                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            placeholder="voce@empresa.com"
+                                            required
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="pl-9"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid gap-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <Label htmlFor="password">Senha</Label>
+                                        <Link href="#" className="text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">
+                                            Esqueci a senha
+                                        </Link>
+                                    </div>
+                                    <div className="relative">
+                                        <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            id="password"
+                                            type="password"
+                                            required
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="pl-9"
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
-                        <div className="rounded-lg border border-border/70 bg-muted/[0.16] p-3 transition-colors">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setUseTwoFactor((value) => !value);
-                                    if (useTwoFactor) setTwoFactorCode("");
-                                }}
-                                className="flex w-full items-center justify-between gap-3 text-left"
-                            >
-                                <span className="flex items-center gap-2 text-sm font-medium">
-                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background text-primary">
-                                        <ShieldCheck className="h-4 w-4" />
-                                    </span>
-                                    Tenho 2FA ativo
-                                </span>
-                                <span className={useTwoFactor ? "text-xs font-medium text-primary" : "text-xs text-muted-foreground"}>
-                                    {useTwoFactor ? "Ativado" : "Opcional"}
-                                </span>
-                            </button>
-
-                            {useTwoFactor && (
-                                <div className="mt-3 grid gap-2 border-t border-border/70 pt-3">
-                                    <Label htmlFor="twoFactorCode">Código do aplicativo</Label>
+                        {step === "2FA" && (
+                            <div className="grid gap-4 py-4">
+                                <div className="flex flex-col items-center justify-center space-y-4">
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                        <ShieldCheck className="h-8 w-8" />
+                                    </div>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="twoFactorCode" className="text-center">Código do aplicativo (6 dígitos)</Label>
                                     <Input
                                         id="twoFactorCode"
                                         inputMode="numeric"
@@ -139,23 +142,42 @@ export default function LoginPage() {
                                         placeholder="000000"
                                         value={twoFactorCode}
                                         onChange={(e) => setTwoFactorCode(formatOtp(e.target.value))}
-                                        className="h-12 text-center font-mono text-lg tracking-[0.45em]"
-                                        required={useTwoFactor}
+                                        className="h-14 text-center font-mono text-2xl tracking-[0.3em] mx-auto w-full max-w-[200px]"
+                                        required
+                                        autoFocus
                                     />
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
-                        <Button type="submit" className="h-11 w-full gap-2" disabled={loading}>
-                            {loading ? "Entrando..." : "Entrar"}
-                            {!loading && <ArrowRight className="h-4 w-4" />}
+                        <Button type="submit" className="h-11 w-full gap-2 mt-2" disabled={loading || (step === "2FA" && twoFactorCode.length < 6)}>
+                            {loading ? "Verificando..." : step === "CREDENTIALS" ? "Entrar" : "Validar Código"}
+                            {!loading && step === "CREDENTIALS" && <ArrowRight className="h-4 w-4" />}
                         </Button>
-                        <div className="mt-4 text-center text-sm">
-                            Não tem uma conta?{" "}
-                            <Link href="/register" className="font-medium text-primary underline-offset-4 hover:underline">
-                                Cadastre-se
-                            </Link>
-                        </div>
+                        
+                        {step === "CREDENTIALS" && (
+                            <div className="mt-4 text-center text-sm">
+                                Não tem uma conta?{" "}
+                                <Link href="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+                                    Cadastre-se
+                                </Link>
+                            </div>
+                        )}
+
+                        {step === "2FA" && (
+                            <Button 
+                                type="button" 
+                                variant="ghost" 
+                                className="mt-2 w-full gap-2 text-muted-foreground"
+                                onClick={() => {
+                                    setStep("CREDENTIALS");
+                                    setTwoFactorCode("");
+                                }}
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Voltar para credenciais
+                            </Button>
+                        )}
                     </form>
                 </CardContent>
             </Card>

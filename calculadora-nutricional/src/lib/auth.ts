@@ -150,6 +150,10 @@ export const authOptions: NextAuthOptions = {
                     }
 
                     if (user.twoFactorEnabled) {
+                        if (!twoFactorCode) {
+                            throw new Error("2FA_REQUIRED");
+                        }
+                        
                         if (!user.twoFactorSecret) {
                             recordLoginFailure(rateLimitKey);
                             await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
@@ -162,7 +166,7 @@ export const authOptions: NextAuthOptions = {
                         if (!isTwoFactorValid) {
                             recordLoginFailure(rateLimitKey);
                             await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
-                            return null;
+                            throw new Error("2FA_INVALID");
                         }
 
                         await prisma.user.update({
