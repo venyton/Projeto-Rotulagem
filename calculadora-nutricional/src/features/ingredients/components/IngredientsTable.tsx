@@ -105,28 +105,28 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-xl font-semibold tracking-tight">Tabela de Ingredientes</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+                <h2 className="text-lg font-semibold tracking-tight">Tabela de Ingredientes</h2>
                 <div className="flex gap-2">
                     <ImportIngredientsDialog />
-                    <Button onClick={handleExport} variant="outline">
+                    <Button onClick={handleExport} variant="outline" className="shadow-sm">
                         <Download className="mr-2 h-4 w-4" />
                         Exportar
                     </Button>
                 </div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_40px_-34px_rgba(15,23,42,0.65)]">
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
                 <Table>
-                    <TableHeader>
-                        <TableRow className="bg-muted/35">
-                            <TableHead className="w-[300px]">Nome</TableHead>
-                            <TableHead>Energia (kcal)</TableHead>
-                            <TableHead>Carboidratos (g)</TableHead>
-                            <TableHead>Proteínas (g)</TableHead>
-                            <TableHead>Gord. Totais (g)</TableHead>
-                            <TableHead>Sódio (mg)</TableHead>
-                            <TableHead className="w-[100px]">Ações</TableHead>
+                    <TableHeader className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+                        <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-[300px] h-12 font-semibold">Nome</TableHead>
+                            <TableHead className="h-12 font-semibold">Energia (kcal)</TableHead>
+                            <TableHead className="h-12 font-semibold">Carboidratos (g)</TableHead>
+                            <TableHead className="h-12 font-semibold">Proteínas (g)</TableHead>
+                            <TableHead className="h-12 font-semibold">Gord. Totais (g)</TableHead>
+                            <TableHead className="h-12 font-semibold">Sódio (mg)</TableHead>
+                            <TableHead className="w-[100px] h-12 font-semibold">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -138,7 +138,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                             </TableRow>
                         ) : (
                             ingredients.map((ingredient) => (
-                                <TableRow key={ingredient.id} className="hover:bg-muted/25">
+                                <TableRow key={ingredient.id} className="transition-colors hover:bg-muted/30">
                                     <TableCell className="font-medium">{ingredient.name}</TableCell>
                                     <TableCell>{ingredient.energy}</TableCell>
                                     <TableCell>{ingredient.carbs}</TableCell>
