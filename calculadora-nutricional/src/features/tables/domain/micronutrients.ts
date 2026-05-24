@@ -2,10 +2,11 @@ export const MICRONUTRIENTS = [
     { name: "fatMono", label: "Gorduras monoinsaturadas", unit: "g" },
     { name: "fatPoly", label: "Gorduras poli-insaturadas", unit: "g" },
     { name: "omega6", label: "Ômega 6", unit: "g" },
-    { name: "omega3", label: "Ômega 3", unit: "g" },
+    { name: "omega3", label: "Ômega 3", unit: "mg" },
     { name: "cholesterol", label: "Colesterol", unit: "mg" },
 
     { name: "calcium", label: "Cálcio", unit: "mg" },
+    { name: "chloride", label: "Cloreto", unit: "mg" },
     { name: "magnesium", label: "Magnésio", unit: "mg" },
     { name: "manganese", label: "Manganês", unit: "mg" },
     { name: "phosphorus", label: "Fósforo", unit: "mg" },

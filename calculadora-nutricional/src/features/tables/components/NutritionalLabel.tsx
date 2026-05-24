@@ -314,6 +314,8 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const hasSideHeader = sideHeaderTypes.includes(previewType);
     const hasServingBlock = !hasSideHeader && previewType !== "B2B";
     const hasFootnote = previewType !== "B2B";
+    const activeFopCount = fop ? [fop.highSugar, fop.highFat, fop.highSodium].filter(Boolean).length : 0;
+    const fopLayout: "horizontal" | "rectangular" = activeFopCount > 1 ? "rectangular" : "horizontal";
     const simplifiedAbsentText =
         "Não contém quantidades significativas de valor energético, açúcares totais, açúcares adicionados, proteínas, gorduras totais, gorduras saturadas, gorduras trans, fibras alimentares e sódio.";
     const sideHeader = (
@@ -703,7 +705,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
             </div>
 
             {fop && (fop.highSugar || fop.highFat || fop.highSodium) && (
-                <div className="mt-3 flex justify-center w-full pt-1">
+                <div className="mt-5 flex w-full justify-center pb-8 pt-2">
                     <div
                         className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
                         style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
@@ -712,7 +714,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             highSugar={!!fop.highSugar}
                             highFat={!!fop.highFat}
                             highSodium={!!fop.highSodium}
-                            layout="horizontal"
+                            layout={fopLayout}
                         />
                     </div>
                 </div>

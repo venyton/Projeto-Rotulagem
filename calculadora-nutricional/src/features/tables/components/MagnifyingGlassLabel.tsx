@@ -36,7 +36,7 @@ export function MagnifyingGlassLabel({
     // Assuming all images have same height (e.g. 50px-ish)?
 
     return (
-        <div id={id} className="inline-block" style={{ backgroundColor: '#ffffff' }}>
+        <div id={id} className="inline-block max-w-full" style={{ backgroundColor: '#ffffff' }}>
             {layout === 'horizontal' ? (
                 <div className="flex flex-row items-start gap-[2px]">
                     <img src={headerImg} alt="Alto Em" className="h-[50px] object-contain block" />
@@ -54,15 +54,15 @@ export function MagnifyingGlassLabel({
                 </div>
             ) : (
                 // Rectangular Layout (2x2 Grid)
-                <div className="flex flex-col gap-[2px]">
-                    <div className="flex flex-row gap-[2px]">
+                <div className="flex flex-col items-center gap-[2px]">
+                    <div className="flex flex-row justify-center gap-[2px]">
                         <img src={headerImg} alt="Alto Em" className="h-[50px] object-contain block" />
                         {activeAttributes[0] && (
                             <img src={activeAttributes[0].src} alt={activeAttributes[0].alt} className="h-[50px] object-contain block" />
                         )}
                     </div>
                     {(activeAttributes.length > 1) && (
-                        <div className="flex flex-row gap-[2px]">
+                        <div className="flex flex-row justify-center gap-[2px]">
                             {activeAttributes[1] && (
                                 <img src={activeAttributes[1].src} alt={activeAttributes[1].alt} className="h-[50px] object-contain block" />
                             )}
@@ -76,4 +76,3 @@ export function MagnifyingGlassLabel({
         </div>
     );
 }
-
