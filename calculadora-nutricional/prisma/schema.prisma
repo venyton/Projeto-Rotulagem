@@ -58,11 +58,80 @@ enum EnterpriseExportType {
   GS1_DIGITAL_LINK
 }
 
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  BILLING
+  MEMBER
+}
+
+enum SaaSModuleKey {
+  TABLES
+  CUSTOM_INGREDIENTS
+  TECHNICAL_SHEETS
+  OPEN_FOOD_FACTS
+  ENTERPRISE_LABELS
+  EXPORTS
+  AI_IMPORT
+  MARKETING_ANALYTICS
+  API_ACCESS
+  BILLING
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  UNPAID
+  PAUSED
+}
+
+enum PaymentProvider {
+  STRIPE
+  MANUAL
+}
+
+enum BillingWebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+enum MarketingEventType {
+  SIGNUP_STARTED
+  SIGNUP_COMPLETED
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+  CHECKOUT_ABANDONED
+  LOGIN
+  MODULE_USED
+  LEAD_CAPTURED
+}
+
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
-  password                  String
+  password                  String?
   name                      String?
+  twoFactorEnabled          Boolean                    @default(false)
+  twoFactorSecret           String?                    @db.Text
+  twoFactorPendingSecret    String?                    @db.Text
+  twoFactorConfirmedAt      DateTime?
+  twoFactorLastUsedAt       DateTime?
+  ownedOrganizations        Organization[]             @relation("OrganizationOwner")
+  organizationMemberships   OrganizationMember[]
+  billingCustomers          BillingCustomer[]
+  marketingEvents           MarketingEvent[]
+  securityAuditLogs         SecurityAuditLog[]
   tables                    GeneratedTable[]
   customIngredients         CustomIngredient[]
   technicalDocuments        TechnicalDocument[]
@@ -73,6 +142,273 @@ model User {
   enterpriseExports         EnterpriseExport[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+}
+
+model Organization {
+  id      String             @id @default(cuid())
+  ownerId String
+  owner   User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  name    String
+  slug    String             @unique
+  status  OrganizationStatus @default(ACTIVE)
+
+  members           OrganizationMember[]
+  entitlements      OrganizationEntitlement[]
+  billingCustomers  BillingCustomer[]
+  subscriptions     Subscription[]
+  marketingKeywords MarketingKeyword[]
+  marketingEvents   MarketingEvent[]
+  securityAuditLogs SecurityAuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           OrganizationRole @default(MEMBER)
+  active         Boolean          @default(true)
+
+  moduleGrants    ParticipantModuleGrant[]
+  marketingEvents MarketingEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([role])
+}
+
+model Plan {
+  id                   String         @id @default(cuid())
+  code                 String         @unique
+  name                 String
+  description          String?        @db.Text
+  monthlyPriceCents    Int            @default(0)
+  quarterlyPriceCents  Int            @default(0)
+  semiannualPriceCents Int            @default(0)
+  yearlyPriceCents     Int            @default(0)
+  stripeMonthlyPriceId String?
+  stripeQuarterlyPriceId String?
+  stripeSemiannualPriceId String?
+  stripeYearlyPriceId  String?
+  active               Boolean        @default(true)
+  modules              PlanModule[]
+  subscriptions        Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+model PlanModule {
+  id         String        @id @default(cuid())
+  planId     String
+  plan       Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  moduleKey  SaaSModuleKey
+  usageLimit Int?
+  enabled    Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([planId, moduleKey])
+  @@index([moduleKey])
+}
+
+model OrganizationEntitlement {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  moduleKey      SaaSModuleKey
+  enabled        Boolean       @default(true)
+  usageLimit     Int?
+  source         String        @default("MANUAL")
+  expiresAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, moduleKey])
+  @@index([moduleKey])
+  @@index([enabled])
+}
+
+model ParticipantModuleGrant {
+  id                   String             @id @default(cuid())
+  organizationMemberId String
+  organizationMember   OrganizationMember @relation(fields: [organizationMemberId], references: [id], onDelete: Cascade)
+  moduleKey            SaaSModuleKey
+  enabled              Boolean            @default(true)
+  usageLimit           Int?
+  expiresAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationMemberId, moduleKey])
+  @@index([moduleKey])
+  @@index([enabled])
+}
+
+model BillingCustomer {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider           PaymentProvider @default(STRIPE)
+  providerCustomerId String          @unique
+  email              String?
+  metadata           Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, provider])
+  @@index([userId])
+  @@index([provider])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  organizationId         String
+  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId                 String?
+  plan                   Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
+  provider               PaymentProvider    @default(STRIPE)
+  providerSubscriptionId String?            @unique
+  providerPriceId        String?
+  status                 SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  trialEndsAt            DateTime?
+  metadata               Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([planId])
+  @@index([status])
+}
+
+model BillingWebhookEvent {
+  id              String               @id @default(cuid())
+  provider        PaymentProvider      @default(STRIPE)
+  providerEventId String               @unique
+  type            String
+  status          BillingWebhookStatus @default(RECEIVED)
+  payload         Json
+  processedAt     DateTime?
+  errorMessage    String?              @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider])
+  @@index([type])
+  @@index([status])
+}
+
+model MarketingKeyword {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  keyword        String
+  source         String?
+  medium         String?
+  campaign       String?
+  costCents      Int?
+  active         Boolean       @default(true)
+
+  events MarketingEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, keyword, source, medium, campaign])
+  @@index([organizationId])
+  @@index([keyword])
+  @@index([active])
+}
+
+model MarketingEvent {
+  id                   String              @id @default(cuid())
+  organizationId       String?
+  organization         Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationMemberId String?
+  organizationMember   OrganizationMember? @relation(fields: [organizationMemberId], references: [id], onDelete: SetNull)
+  userId               String?
+  user                 User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  keywordId            String?
+  keyword              MarketingKeyword?   @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  eventType          MarketingEventType
+  moduleKey          SaaSModuleKey?
+  anonymousId        String?
+  route              String?
+  source             String?
+  medium             String?
+  campaign           String?
+  checkoutSessionId  String?
+  providerCustomerId String?
+  metadata           Json?
+  occurredAt         DateTime           @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([organizationMemberId])
+  @@index([userId])
+  @@index([keywordId])
+  @@index([eventType])
+  @@index([moduleKey])
+  @@index([occurredAt])
+}
+
+model SecurityAuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String
+  riskLevel      String        @default("INFO")
+  ipHash         String?
+  userAgent      String?       @db.Text
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([riskLevel])
+  @@index([createdAt])
+}
+
+model RateLimitBucket {
+  id        String   @id @default(cuid())
+  scope     String
+  keyHash   String
+  attempts  Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, keyHash])
+  @@index([resetAt])
 }
 
 model Ingredient {
@@ -95,6 +431,7 @@ model Ingredient {
   omega6      Float? @default(0)
   omega3      Float? @default(0)
   cholesterol Float? @default(0)
+  customNutrients Json?
 
   vitaminA        Float? @default(0)
   vitaminD        Float? @default(0)
@@ -159,6 +496,7 @@ model CustomIngredient {
   omega6      Float? @default(0)
   omega3      Float? @default(0)
   cholesterol Float? @default(0)
+  customNutrients Json?
 
   vitaminA        Float? @default(0)
   vitaminD        Float? @default(0)
@@ -234,6 +572,44 @@ model TableItem {
   sodium     Float
   sugarTotal Float?
   sugarAdded Float? @default(0)
+
+  // Optional IN 75 Annex II components snapshotted per 100g.
+  fatMono     Float?
+  fatPoly     Float?
+  omega6      Float?
+  omega3      Float?
+  cholesterol Float?
+  customNutrients Json?
+
+  vitaminA        Float?
+  vitaminD        Float?
+  vitaminE        Float?
+  vitaminK        Float?
+  vitaminC        Float?
+  thiamin         Float?
+  riboflavin      Float?
+  niacin          Float?
+  vitaminB6       Float?
+  biotin          Float?
+  folicAcid       Float?
+  pantothenicAcid Float?
+  vitaminB12      Float?
+
+  calcium    Float?
+  chloride   Float?
+  copper     Float?
+  chromium   Float?
+  iron       Float?
+  fluoride   Float?
+  phosphorus Float?
+  iodine     Float?
+  magnesium  Float?
+  manganese  Float?
+  molybdenum Float?
+  potassium  Float?
+  selenium   Float?
+  zinc       Float?
+  choline    Float?
 }
 
 model TechnicalDocument {

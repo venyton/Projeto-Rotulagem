@@ -4,12 +4,17 @@ const { hash } = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-    const email = 'izidoro.venyton@gmail.com';
-    const newPassword = '123456';
+    const email = process.env.RESET_EMAIL;
+    const newPassword = process.env.RESET_PASSWORD;
+    const name = process.env.RESET_NAME || 'Usuario';
 
-    console.log(`Resetting password for ${email}...`);
+    if (!email || !newPassword) {
+        throw new Error('Defina RESET_EMAIL e RESET_PASSWORD para resetar senha.');
+    }
 
-    const hashedPassword = await hash(newPassword, 10);
+    console.log('Resetting password...');
+
+    const hashedPassword = await hash(newPassword, 12);
 
     try {
         const user = await prisma.user.upsert({
@@ -19,12 +24,11 @@ async function main() {
             },
             create: {
                 email,
-                name: 'Izidoro Venyton',
+                name,
                 password: hashedPassword,
             },
         });
-        console.log('Success! User updated:', user.email);
-        console.log('New password is:', newPassword);
+        console.log('Success! User updated:', user.id);
     } catch (e) {
         console.error('Error updating user:', e);
     } finally {

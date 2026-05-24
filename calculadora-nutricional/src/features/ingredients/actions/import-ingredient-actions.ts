@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 export type IngredientData = {
     name: string;
@@ -89,6 +91,13 @@ export async function importIngredients(ingredients: IngredientData[]) {
     }
 
     try {
+        await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return { error: error.message };
+        throw error;
+    }
+
+    try {
         await prisma.customIngredient.createMany({
             data: ingredients.map(ing => ({
                 ...ing,
@@ -98,8 +107,7 @@ export async function importIngredients(ingredients: IngredientData[]) {
 
         revalidatePath('/my-ingredients');
         return { success: true, count: ingredients.length };
-    } catch (error) {
-        console.error("Error importing ingredients:", error);
+    } catch {
         return { error: "Erro ao importar ingredientes." };
     }
 }

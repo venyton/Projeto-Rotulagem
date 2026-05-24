@@ -45,14 +45,14 @@ const getZeroWhenNoVd = (value: number, vdr?: number | null) => {
     return vd === "-" ? "0" : vd;
 };
 
-type NutrientKey = keyof CalculatedNutrients;
+type NutrientKey = keyof Omit<CalculatedNutrients, "customNutrients">;
 type VdrValues = (typeof VDR)[PopGroup];
 type VdrKey = keyof VdrValues;
 type IndentLevel = 0 | 1 | 2;
 const DEFAULT_VD_SUGAR_ADDED = 50;
 const DEFAULT_VD_FAT_TRANS = 2;
 
-const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => nutrients[key] || 0;
+const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => (nutrients[key] as number) || 0;
 
 const getVdrValue = (vdr: VdrValues, key: NutrientKey): number | null | undefined => {
     if (key in vdr) {
@@ -278,6 +278,29 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         }
     });
 
+    if (perPortion.customNutrients) {
+        Object.keys(perPortion.customNutrients).sort().forEach((key) => {
+            const val100 = per100g.customNutrients[key]?.value || 0;
+            const valPortion = perPortion.customNutrients[key]?.value || 0;
+            const unit = perPortion.customNutrients[key]?.unit || "g";
+
+            const format = (v: number) => {
+                if (v === 0) return "0";
+                if (v < 1) return v.toFixed(1).replace(".", ",");
+                return Math.round(v).toString();
+            };
+
+            baseRows.push({
+                label: `${key} (${unit})`,
+                nutrientKey: "energy" as NutrientKey,
+                per100: format(val100),
+                portion: format(valPortion),
+                vdPortion: "",
+                vd100: ""
+            });
+        });
+    }
+
     extraConstituents
         .filter((item) => item.name.trim() && item.amount.trim())
         .forEach((item) => {
@@ -314,6 +337,8 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const hasSideHeader = sideHeaderTypes.includes(previewType);
     const hasServingBlock = !hasSideHeader && previewType !== "B2B";
     const hasFootnote = previewType !== "B2B";
+    const activeFopCount = fop ? [fop.highSugar, fop.highFat, fop.highSodium].filter(Boolean).length : 0;
+    const fopLayout: "horizontal" | "rectangular" = activeFopCount > 1 ? "rectangular" : "horizontal";
     const simplifiedAbsentText =
         "Não contém quantidades significativas de valor energético, açúcares totais, açúcares adicionados, proteínas, gorduras totais, gorduras saturadas, gorduras trans, fibras alimentares e sódio.";
     const sideHeader = (
@@ -703,7 +728,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
             </div>
 
             {fop && (fop.highSugar || fop.highFat || fop.highSodium) && (
-                <div className="mt-3 flex justify-center w-full pt-1">
+                <div className="mt-5 flex w-full justify-center pb-8 pt-2">
                     <div
                         className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
                         style={{ borderColor: '#000000', backgroundColor: '#ffffff' }}
@@ -712,7 +737,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             highSugar={!!fop.highSugar}
                             highFat={!!fop.highFat}
                             highSodium={!!fop.highSodium}
-                            layout="horizontal"
+                            layout={fopLayout}
                         />
                     </div>
                 </div>

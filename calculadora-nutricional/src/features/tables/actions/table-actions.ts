@@ -7,6 +7,19 @@ import { SelectedIngredient } from "@/features/tables/domain/nutrients";
 import { PopGroup } from "@/features/tables/domain/constants";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+
+function readOptionalNutrientSnapshot(ingredient: SelectedIngredient["ingredient"]) {
+    const source = ingredient as unknown as Record<string, unknown>;
+    return Object.fromEntries(
+        MICRO_KEYS.map((key) => {
+            const value = source[key];
+            return [key, typeof value === "number" && Number.isFinite(value) ? value : null];
+        })
+    );
+}
 
 export async function saveTable(data: {
     id?: string;
@@ -30,6 +43,13 @@ export async function saveTable(data: {
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.TABLES);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return { error: error.message };
+        throw error;
+    }
 
     try {
         const uiStateValue = data.uiState ? (data.uiState as Prisma.InputJsonValue) : undefined;
@@ -63,8 +83,11 @@ export async function saveTable(data: {
                 sodium: i.ingredient.sodium || 0,
                 sugarTotal: i.ingredient.sugarTotal || 0,
                 sugarAdded: ingredient.sugarAdded || 0,
+                ...readOptionalNutrientSnapshot(i.ingredient),
             };
         });
+
+        let savedTableId = data.id;
 
         if (data.id) {
             // Check ownership
@@ -88,7 +111,7 @@ export async function saveTable(data: {
                 )
             ]);
         } else {
-            await prisma.generatedTable.create({
+            const created = await prisma.generatedTable.create({
                 data: {
                     ...payload,
                     items: {
@@ -96,11 +119,15 @@ export async function saveTable(data: {
                     }
                 }
             });
+            savedTableId = created.id;
         }
 
         revalidatePath("/dashboard");
-        revalidatePath(`/dashboard/edit/${data.id}`); // Revalidate edit page
-        return { success: true };
+        revalidatePath("/dashboard/tables");
+        if (savedTableId) {
+            revalidatePath(`/dashboard/edit/${savedTableId}`);
+        }
+        return { success: true, id: savedTableId };
     } catch (e) {
         console.error(e);
         return { error: "Erro ao salvar tabela" };

@@ -17,21 +17,14 @@ import type {
   TechnicalSheetActionState,
   TechnicalSheetReviewData,
 } from "@/features/technical-sheets/domain/technical-sheet-types";
+import {
+  ANNEX_II_OPTIONAL_NUTRIENT_FIELDS,
+  MAIN_NUTRIENT_FIELDS,
+  OTHER_NUTRIENT_KEY,
+  type TechnicalSheetNutrientField,
+} from "@/features/technical-sheets/domain/technical-sheet-nutrients";
 
 const initialState: TechnicalSheetActionState = {};
-
-const MAIN_FIELDS = [
-  ["energy", "Valor energético", "kcal"],
-  ["carbs", "Carboidratos", "g"],
-  ["sugarTotal", "Açúcares totais", "g"],
-  ["sugarAdded", "Açúcares adicionados", "g"],
-  ["protein", "Proteínas", "g"],
-  ["fatTotal", "Gorduras totais", "g"],
-  ["fatSat", "Gorduras saturadas", "g"],
-  ["fatTrans", "Gorduras trans", "g"],
-  ["fiber", "Fibra alimentar", "g"],
-  ["sodium", "Sódio", "mg"],
-] as const;
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   PRODUCT_TECHNICAL: "Ficha técnica",
@@ -92,6 +85,10 @@ const FIELD_HELP: Record<string, string> = {
     "Fibra alimentar por porção/100g, em gramas.",
   sodium:
     "Sódio por porção/100g, em miligramas (mg).",
+  annexIiOptional:
+    "Componente opcional do Anexo II da IN 75. Pode ficar vazio quando o documento não declarar.",
+  otherNutrient:
+    "Use para constituintes fora da lista, como cafeína, creatina, polióis, probióticos ou enzimas.",
 
   // Gluten, GMO
   containsGluten:
@@ -120,7 +117,7 @@ const FIELD_HELP: Record<string, string> = {
 
 // ── Nutrient help lookup (same keys as MAIN_FIELDS) ──────────────────────
 const NUTRIENT_HELP: Record<string, string> = Object.fromEntries(
-  MAIN_FIELDS.map(([key]) => [key, FIELD_HELP[key] || ""])
+  MAIN_NUTRIENT_FIELDS.map((field) => [field.key, FIELD_HELP[field.key] || ""])
 );
 
 /**
@@ -297,25 +294,25 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
             Informação nutricional
           </h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            {MAIN_FIELDS.map(([key, label, unit]) => (
+            {MAIN_NUTRIENT_FIELDS.map((field) => (
               <FieldContainer
-                key={key}
-                label={label}
-                helpText={NUTRIENT_HELP[key]}
-                inReview={isFieldInReview(key)}
-                reviewExplanation={getReviewExplanation(key)}
+                key={field.key}
+                label={field.label}
+                helpText={NUTRIENT_HELP[field.key]}
+                inReview={isFieldInReview(field.key)}
+                reviewExplanation={getReviewExplanation(field.key)}
                 labelClass="text-[10px] text-muted-foreground uppercase tracking-wider"
               >
                 <Input
-                  name={key}
+                  name={field.key}
                   type="number"
                   step="any"
-                  defaultValue={nutrientValue(data, key)}
-                  placeholder={unit}
-                  required={!key.startsWith("sugar")}
-                  onChange={() => handleFieldChange(key)}
+                  defaultValue={nutrientValue(data, field.key)}
+                  placeholder={field.unit}
+                  required={"required" in field ? field.required : undefined}
+                  onChange={() => handleFieldChange(field.key)}
                   className={
-                    isFieldInReview(key)
+                    isFieldInReview(field.key)
                       ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]"
                       : ""
                   }
@@ -324,6 +321,31 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
             ))}
           </div>
         </section>
+
+        <section className="space-y-3">
+          <h3 className="border-b border-border/70 pb-2 text-sm font-semibold">
+            Componentes do Anexo II (opcionais)
+          </h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            {ANNEX_II_OPTIONAL_NUTRIENT_FIELDS.map((field) => (
+              <OptionalNutrientInput
+                key={field.key}
+                field={field}
+                data={data}
+                inReview={isFieldInReview(field.key)}
+                reviewExplanation={getReviewExplanation(field.key)}
+                onChange={() => handleFieldChange(field.key)}
+              />
+            ))}
+          </div>
+        </section>
+
+        <OtherNutrientFields
+          data={data}
+          inReview={isFieldInReview(OTHER_NUTRIENT_KEY)}
+          reviewExplanation={getReviewExplanation(OTHER_NUTRIENT_KEY)}
+          onChange={() => handleFieldChange(OTHER_NUTRIENT_KEY)}
+        />
 
         {/* Gluten / GMO */}
         <section className="grid gap-4 md:grid-cols-3">
@@ -527,6 +549,108 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
 function nutrientValue(data: TechnicalSheetReviewData, key: string) {
   const nutrient = data.nutrients.find((item) => item.nutrientKey === key);
   return nutrient?.value ?? "";
+}
+
+function nutrientUnit(data: TechnicalSheetReviewData, key: string, fallback: string) {
+  const nutrient = data.nutrients.find((item) => item.nutrientKey === key);
+  return nutrient?.unit || fallback;
+}
+
+function nutrientLabel(data: TechnicalSheetReviewData, key: string, fallback: string) {
+  const nutrient = data.nutrients.find((item) => item.nutrientKey === key);
+  return nutrient?.label || fallback;
+}
+
+function OptionalNutrientInput({
+  field,
+  data,
+  inReview,
+  reviewExplanation,
+  onChange,
+}: {
+  field: TechnicalSheetNutrientField;
+  data: TechnicalSheetReviewData;
+  inReview: boolean;
+  reviewExplanation?: string;
+  onChange: () => void;
+}) {
+  return (
+    <FieldContainer
+      label={field.label}
+      helpText={FIELD_HELP.annexIiOptional}
+      inReview={inReview}
+      reviewExplanation={reviewExplanation}
+      labelClass="text-[10px] text-muted-foreground uppercase tracking-wider"
+    >
+      <Input
+        name={field.key}
+        type="number"
+        step="any"
+        defaultValue={nutrientValue(data, field.key)}
+        placeholder={nutrientUnit(data, field.key, field.unit)}
+        onChange={onChange}
+        className={
+          inReview ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]" : ""
+        }
+      />
+    </FieldContainer>
+  );
+}
+
+function OtherNutrientFields({
+  data,
+  inReview,
+  reviewExplanation,
+  onChange,
+}: {
+  data: TechnicalSheetReviewData;
+  inReview: boolean;
+  reviewExplanation?: string;
+  onChange: () => void;
+}) {
+  const otherName = nutrientLabel(data, OTHER_NUTRIENT_KEY, "");
+  const defaultName = otherName === "Outros" ? "" : otherName;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="border-b border-border/70 pb-2 text-sm font-semibold">
+        Outros constituintes
+      </h3>
+      <div className="grid gap-3 md:grid-cols-[1fr_10rem_8rem]">
+        <FieldContainer
+          label="Nome"
+          helpText={FIELD_HELP.otherNutrient}
+          inReview={inReview}
+          reviewExplanation={reviewExplanation}
+        >
+          <Input
+            name="otherNutrientLabel"
+            defaultValue={defaultName}
+            placeholder="ex: Cafeína"
+            onChange={onChange}
+          />
+        </FieldContainer>
+        <FieldContainer label="Valor" inReview={inReview}>
+          <Input
+            name="otherNutrientValue"
+            type="number"
+            step="any"
+            defaultValue={nutrientValue(data, OTHER_NUTRIENT_KEY)}
+            placeholder="ex: 80"
+            onChange={onChange}
+          />
+        </FieldContainer>
+        <FieldContainer label="Unidade" inReview={inReview}>
+          <Input
+            name="otherNutrientUnit"
+            defaultValue={nutrientUnit(data, OTHER_NUTRIENT_KEY, "")}
+            placeholder="mg"
+            onChange={onChange}
+          />
+        </FieldContainer>
+      </div>
+    </section>
+  );
 }
 
 function ApproveButton({ disabled }: { disabled: boolean }) {

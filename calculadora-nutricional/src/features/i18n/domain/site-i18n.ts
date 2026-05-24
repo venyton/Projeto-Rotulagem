@@ -4,16 +4,17 @@ export const SITE_LANGUAGE_STORAGE_KEY = "soizi-site-language";
 export const SITE_LANGUAGE_EXPLICIT_STORAGE_KEY = "soizi-site-language-explicit";
 export const SITE_LANGUAGE_EVENT = "soizi-language-change";
 
-export const SITE_LANGUAGES: Array<{ value: SiteLanguage; label: string; shortLabel: string; flag: string }> = [
-    { value: "pt-BR", label: "Português do Brasil", shortLabel: "PT", flag: "🇧🇷" },
-    { value: "en-US", label: "English (US)", shortLabel: "EN", flag: "🇺🇸" },
-    { value: "es-MX", label: "Español (MX)", shortLabel: "MX", flag: "🇲🇽" },
-    { value: "es-CL", label: "Español (CL)", shortLabel: "CL", flag: "🇨🇱" },
-    { value: "fr-CA", label: "Français (CA)", shortLabel: "FR", flag: "🇨🇦" },
+export const SITE_LANGUAGES: Array<{ value: SiteLanguage; label: string; shortLabel: string; flagSrc: string; flagAlt: string }> = [
+    { value: "pt-BR", label: "Português do Brasil", shortLabel: "PT", flagSrc: "/images/flags/br.svg", flagAlt: "Bandeira do Brasil" },
+    { value: "en-US", label: "English (US)", shortLabel: "EN", flagSrc: "/images/flags/us.svg", flagAlt: "United States flag" },
+    { value: "es-MX", label: "Español (MX)", shortLabel: "MX", flagSrc: "/images/flags/mx.svg", flagAlt: "Bandera de México" },
+    { value: "es-CL", label: "Español (CL)", shortLabel: "CL", flagSrc: "/images/flags/cl.svg", flagAlt: "Bandera de Chile" },
+    { value: "fr-CA", label: "Français (CA)", shortLabel: "FR", flagSrc: "/images/flags/ca.svg", flagAlt: "Drapeau du Canada" },
 ];
 
 export const SITE_COPY = {
     "pt-BR": {
+        home: "Início",
         tables: "Tabelas",
         ingredients: "Ingredientes",
         enterprise: "Enterprise",
@@ -25,6 +26,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "en-US": {
+        home: "Home",
         tables: "Labels",
         ingredients: "Ingredients",
         enterprise: "Enterprise",
@@ -36,6 +38,7 @@ export const SITE_COPY = {
         language: "Language",
     },
     "es-MX": {
+        home: "Inicio",
         tables: "Etiquetas",
         ingredients: "Ingredientes",
         enterprise: "Empresarial",
@@ -47,6 +50,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "es-CL": {
+        home: "Inicio",
         tables: "Etiquetas",
         ingredients: "Ingredientes",
         enterprise: "Empresarial",
@@ -58,6 +62,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "fr-CA": {
+        home: "Accueil",
         tables: "Étiquettes",
         ingredients: "Ingrédients",
         enterprise: "Entreprise",

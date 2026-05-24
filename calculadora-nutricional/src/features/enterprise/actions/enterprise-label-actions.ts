@@ -22,6 +22,8 @@ import {
     type InternationalMarket,
     type LegalLabelData,
 } from "@/features/enterprise/domain/enterprise";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 export type SaveEnterpriseLabelProjectInput = {
     baseTableId: string;
@@ -84,6 +86,13 @@ export async function saveEnterpriseLabelProject(
 ): Promise<SaveEnterpriseLabelProjectResult> {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return { error: error.message };
+        throw error;
+    }
 
     if (!isMarket(input.market) || !isFoodState(input.foodState)) {
         return { error: "Mercado ou base do alimento inválidos." };
@@ -199,6 +208,14 @@ export async function saveEnterpriseLabelProject(
 export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportInput) {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
+        await requireModuleAccess(SAAS_MODULES.EXPORTS);
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return { error: error.message };
+        throw error;
+    }
 
     const project = await prisma.enterpriseLabelProject.findFirst({
         where: { id: input.projectId, userId: user.id },

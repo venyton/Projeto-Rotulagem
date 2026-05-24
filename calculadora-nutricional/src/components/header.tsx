@@ -68,32 +68,34 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
     }
 
     return (
-        <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-md">
-            <div className="container mx-auto flex h-16 items-center gap-2 px-4 md:px-6">
+        <header className="sticky top-0 z-50 border-b border-border/70 bg-background/88 backdrop-blur-xl">
+            <div className="container mx-auto flex h-16 items-center gap-3 px-4 md:px-6">
                 <Link
                     href={isLoggedIn ? "/dashboard" : "/"}
-                    className="group -ml-2 flex items-center gap-2 rounded-full px-2 py-1 hover:bg-accent/60"
+                    className="group -ml-2 flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-secondary"
                 >
-                    <div className="relative h-9 w-28">
+                    <div className="relative h-9 w-32">
                         <Image
                             src="/logo.png"
                             alt="SoIZI"
                             fill
+                            sizes="128px"
+                            priority
                             className="object-contain"
                         />
                     </div>
                 </Link>
 
                 {isHome ? (
-                    <nav className="ml-1 hidden items-center gap-1 md:flex">
+                    <nav className="ml-2 hidden items-center gap-1 rounded-md  shadow-[0_12px_32px_-28px_rgba(15,23,42,0.6)] md:flex">
                         {HOME_SECTIONS.map((section) => {
                             const isActive = activeSection === section.id;
                             return (
                                 <Button
                                     key={section.id}
                                     asChild
-                                    variant={isActive ? "default" : "ghost"}
-                                    className="h-9 rounded-full px-3 text-[13px]"
+                                    variant={isActive ? "secondary" : "ghost"}
+                                    className="h-8 rounded-md px-3 text-[13px]"
                                 >
                                     <Link
                                         href={`#${section.id}`}
@@ -109,21 +111,21 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
 
                 <div className="ml-auto flex items-center gap-2">
                     {(pathname === "/login" || pathname === "/register") ? (
-                        <Button asChild variant="ghost" className="h-9 rounded-full text-sm">
+                        <Button asChild variant="ghost" className="h-9 rounded-md text-sm">
                             <Link href={isLoggedIn ? "/dashboard" : "/"}>{isLoggedIn ? "Minhas tabelas" : "Início"}</Link>
                         </Button>
                     ) : null}
                     {isLoggedIn && pathname === "/" ? (
-                        <Button asChild variant="ghost" className="h-9 rounded-full text-sm">
+                        <Button asChild variant="ghost" className="h-9 rounded-md text-sm">
                             <Link href="/dashboard">Minhas tabelas</Link>
                         </Button>
                     ) : null}
                     {!isLoggedIn && isHome ? (
                         <>
-                            <Button asChild variant="ghost" className="h-9 rounded-full text-sm">
+                            <Button asChild variant="ghost" className="h-9 rounded-md text-sm">
                                 <Link href="/login">Login</Link>
                             </Button>
-                            <Button asChild className="h-9 rounded-full px-4 text-sm">
+                            <Button asChild className="h-9 rounded-md px-4 text-sm">
                                 <Link href="/register">Criar conta</Link>
                             </Button>
                         </>

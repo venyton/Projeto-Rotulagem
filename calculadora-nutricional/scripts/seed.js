@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
-const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const { readWorkbook, worksheetToRows } = require('./excel-helpers');
 
 // Explicitly pass url to avoid config resolution issues in script context
 const prisma = new PrismaClient({
@@ -20,13 +20,13 @@ async function main() {
         throw new Error(`File not found: ${filePath}`);
     }
 
-    const workbook = XLSX.readFile(filePath);
+    const workbook = await readWorkbook(filePath);
 
     // -- Process Tabela1 (Main Macros) --
-    const s1 = workbook.Sheets['Tabela1'];
+    const s1 = workbook.getWorksheet('Tabela1');
     if (!s1) throw new Error("Tabela1 not found");
 
-    const data1 = XLSX.utils.sheet_to_json(s1, { header: 1 });
+    const data1 = worksheetToRows(s1);
 
     // Find header row for Tabela1 (Look for "Energia")
     let h1RowIndex = -1;
@@ -62,13 +62,13 @@ async function main() {
     if (idxEnergy === -1) throw new Error("Energia column not found");
 
     // -- Process Tabela2 (Fatty Acids) --
-    const s2 = workbook.Sheets['Tabela2'];
+    const s2 = workbook.getWorksheet('Tabela2');
     const fatMap = new Map(); // Num -> { sat, trans }
     let h2RowIndex = -1;
     let data2 = [];
 
     if (s2) {
-        data2 = XLSX.utils.sheet_to_json(s2, { header: 1 });
+        data2 = worksheetToRows(s2);
         for (let i = 0; i < 20; i++) {
             const rowStr = JSON.stringify(data2[i]);
             if (rowStr && rowStr.includes("Saturados")) {

@@ -40,9 +40,9 @@ function UsNutritionFacts({ table, market, id }: InternationalNutritionLabelProp
             <h2 className="border-b-[8px] border-black text-[34px] font-black leading-none tracking-[-0.5px]">Nutrition Facts</h2>
             <div className="border-b border-black py-1 text-[12px] leading-tight">
                 <div className="font-bold">{table.servingsPerPackage || "-"} servings per container</div>
-                <div className="flex justify-between gap-3">
-                    <span className="font-bold">Serving size</span>
-                    <span className="text-right font-bold">{formatServing(table)}</span>
+                <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 font-bold break-words [overflow-wrap:anywhere]">Serving size</span>
+                    <span className="min-w-0 text-right font-bold break-words [overflow-wrap:anywhere]">{formatServing(table)}</span>
                 </div>
             </div>
             <div className="border-b-[4px] border-black py-1">
@@ -55,11 +55,11 @@ function UsNutritionFacts({ table, market, id }: InternationalNutritionLabelProp
             <div className="border-b border-black py-1 text-right text-[11px] font-bold">% Daily Value*</div>
             <div className="divide-y divide-black text-[12px] leading-tight">
                 {detailLines.map((line) => (
-                    <div key={line.key} className={cn("flex justify-between gap-3 py-[3px]", isIndentedUs(line.label) && "pl-4")}>
-                        <span>
+                    <div key={line.key} className={cn("flex items-start justify-between gap-3 py-[3px]", isIndentedUs(line.label) && "pl-4")}>
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                             <strong>{getBoldPart(line.label)}</strong>{getPlainPart(line.label)} {formatValue(line.perPortion, line.unit)}
                         </span>
-                        <strong>{line.dailyValueLabel || ""}</strong>
+                        <strong className="shrink-0">{line.dailyValueLabel || ""}</strong>
                     </div>
                 ))}
             </div>
@@ -81,7 +81,7 @@ function CanadaNutritionFacts({ table, market, id }: InternationalNutritionLabel
             <div className="border-b-[7px] border-black pb-1">
                 <h2 className="text-[26px] font-black leading-none">Nutrition Facts</h2>
                 <h3 className="text-[22px] font-black leading-none">Valeur nutritive</h3>
-                <div className="mt-1 text-[12px] font-bold leading-tight">Per {formatServing(table)} / par {formatServing(table)}</div>
+                <div className="mt-1 text-[12px] font-bold leading-tight break-words [overflow-wrap:anywhere]">Per {formatServing(table)} / par {formatServing(table)}</div>
             </div>
             <div className="border-b-[4px] border-black py-1">
                 <div className="flex justify-between text-[20px] font-black leading-tight">
@@ -92,11 +92,11 @@ function CanadaNutritionFacts({ table, market, id }: InternationalNutritionLabel
             <div className="border-b border-black py-1 text-right text-[11px] font-bold">% Daily Value* / % valeur quotidienne*</div>
             <div className="divide-y divide-black text-[12px] leading-tight">
                 {detailLines.map((line) => (
-                    <div key={line.key} className="flex justify-between gap-3 py-[3px]">
-                        <span>
+                    <div key={line.key} className="flex items-start justify-between gap-3 py-[3px]">
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                             <strong>{line.label}</strong> {formatValue(line.perPortion, line.unit)}
                         </span>
-                        <strong>{line.dailyValueLabel || ""}</strong>
+                        <strong className="shrink-0">{line.dailyValueLabel || ""}</strong>
                     </div>
                 ))}
             </div>
@@ -114,7 +114,7 @@ function EuropeanNutritionDeclaration({ table, market, id }: InternationalNutrit
         <LabelShell id={id} className="w-[360px] border border-black bg-white font-[Arial] text-black">
             <div className="border-b border-black bg-black px-3 py-2 text-white">
                 <h2 className="text-[18px] font-bold leading-tight">Nutrition declaration</h2>
-                <p className="text-[10px]">Typical values · {getMarketRules(market).legalBase.join(" · ")}</p>
+                <p className="text-[10px] break-words [overflow-wrap:anywhere]">Typical values · {getMarketRules(market).legalBase.join(" · ")}</p>
             </div>
             <table className="w-full border-collapse text-[12px]">
                 <thead>
@@ -127,9 +127,9 @@ function EuropeanNutritionDeclaration({ table, market, id }: InternationalNutrit
                 <tbody>
                     {lines.map((line) => (
                         <tr key={line.key} className="border-b border-black/60">
-                            <td className="px-3 py-1.5 font-medium">{line.label}</td>
-                            <td className="px-2 py-1.5 text-right">{formatValue(line.per100, line.unit)}</td>
-                            <td className="px-2 py-1.5 text-right">{formatValue(line.perPortion, line.unit)}</td>
+                            <td className="px-3 py-1.5 font-medium break-words [overflow-wrap:anywhere]">{line.label}</td>
+                            <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.per100, line.unit)}</td>
+                            <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.perPortion, line.unit)}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -149,7 +149,7 @@ function MexicoNutritionLabel({ table, market, foodState, id }: InternationalNut
             <div className="mt-3 border-2 border-black bg-white">
                 <div className="border-b-2 border-black px-3 py-2">
                     <h2 className="text-[18px] font-black leading-tight">Declaración nutrimental</h2>
-                    <p className="text-[11px]">Por 100 g o 100 ml y por porción</p>
+                    <p className="text-[11px] break-words [overflow-wrap:anywhere]">Por 100 g o 100 ml y por porción</p>
                 </div>
                 <table className="w-full border-collapse text-[12px]">
                     <thead>
@@ -162,9 +162,9 @@ function MexicoNutritionLabel({ table, market, foodState, id }: InternationalNut
                     <tbody>
                         {lines.map((line) => (
                             <tr key={line.key} className="border-b border-black/60">
-                                <td className="px-3 py-1.5 font-medium">{line.label}</td>
-                                <td className="px-2 py-1.5 text-right">{formatValue(line.per100, line.unit)}</td>
-                                <td className="px-2 py-1.5 text-right">{formatValue(line.perPortion, line.unit)}</td>
+                                <td className="px-3 py-1.5 font-medium break-words [overflow-wrap:anywhere]">{line.label}</td>
+                                <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.per100, line.unit)}</td>
+                                <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.perPortion, line.unit)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -184,7 +184,7 @@ function ChileNutritionLabel({ table, market, foodState, id }: InternationalNutr
             <div className="mt-3 border-2 border-black bg-white">
                 <div className="border-b-2 border-black px-3 py-2">
                     <h2 className="text-[18px] font-black leading-tight">Información nutricional</h2>
-                    <p className="text-[11px]">Por 100 g/ml y por porción: {formatServing(table)}</p>
+                    <p className="text-[11px] break-words [overflow-wrap:anywhere]">Por 100 g/ml y por porción: {formatServing(table)}</p>
                 </div>
                 <table className="w-full border-collapse text-[12px]">
                     <thead>
@@ -197,9 +197,9 @@ function ChileNutritionLabel({ table, market, foodState, id }: InternationalNutr
                     <tbody>
                         {lines.map((line) => (
                             <tr key={line.key} className="border-b border-black/60">
-                                <td className="px-3 py-1.5 font-medium">{line.label}</td>
-                                <td className="px-2 py-1.5 text-right">{formatValue(line.per100, line.unit)}</td>
-                                <td className="px-2 py-1.5 text-right">{formatValue(line.perPortion, line.unit)}</td>
+                                <td className="px-3 py-1.5 font-medium break-words [overflow-wrap:anywhere]">{line.label}</td>
+                                <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.per100, line.unit)}</td>
+                                <td className="px-2 py-1.5 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.perPortion, line.unit)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -221,8 +221,8 @@ function BrazilNutritionLabel({ table, market, foodState, id }: InternationalNut
             <div className="mt-3 border-2 border-black bg-white p-3">
                 <h2 className="border-b border-black pb-1 text-center text-[14px] font-black">INFORMAÇÃO NUTRICIONAL</h2>
                 <div className="py-2 text-[11px] leading-tight">
-                    <p>Porções por embalagem: {table.servingsPerPackage || "-"}</p>
-                    <p>Porção: {formatServing(table)} ({table.householdMeasure})</p>
+                    <p className="break-words [overflow-wrap:anywhere]">Porções por embalagem: {table.servingsPerPackage || "-"}</p>
+                    <p className="break-words [overflow-wrap:anywhere]">Porção: {formatServing(table)} ({table.householdMeasure})</p>
                 </div>
                 <table className="w-full border-collapse text-[11px]">
                     <thead>
@@ -236,10 +236,10 @@ function BrazilNutritionLabel({ table, market, foodState, id }: InternationalNut
                     <tbody>
                         {lines.map((line) => (
                             <tr key={line.key} className="border-b border-black">
-                                <td className="py-1 font-medium">{line.label}</td>
-                                <td className="px-2 py-1 text-right">{formatValue(line.per100, line.unit)}</td>
-                                <td className="px-2 py-1 text-right">{formatValue(line.perPortion, line.unit)}</td>
-                                <td className="px-2 py-1 text-right">{line.dailyValueLabel || ""}</td>
+                                <td className="py-1 font-medium break-words [overflow-wrap:anywhere]">{line.label}</td>
+                                <td className="px-2 py-1 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.per100, line.unit)}</td>
+                                <td className="px-2 py-1 text-right break-words [overflow-wrap:anywhere]">{formatValue(line.perPortion, line.unit)}</td>
+                                <td className="px-2 py-1 text-right break-words [overflow-wrap:anywhere]">{line.dailyValueLabel || ""}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -259,7 +259,7 @@ function FrontOctagons({ warnings }: { warnings: ReturnType<typeof getFrontWarni
             {active.map((warning) => (
                 <div
                     key={warning.code}
-                    className="flex h-[78px] w-[78px] items-center justify-center bg-black px-2 text-center text-[9px] font-black uppercase leading-[1.05] text-white"
+                    className="flex h-[78px] w-[78px] items-center justify-center overflow-hidden bg-black px-2 text-center text-[9px] font-black uppercase leading-[1.05] text-white break-words [overflow-wrap:anywhere]"
                     style={{ clipPath: "polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%)" }}
                 >
                     {warning.label}
@@ -280,7 +280,7 @@ function BrazilLupa({ warnings }: { warnings: ReturnType<typeof getFrontWarnings
             </div>
             <div className="space-y-0.5 px-2 text-[9px] font-black uppercase leading-tight">
                 {active.map((warning) => (
-                    <div key={warning.code}>{warning.label.replace("ALTO EM ", "")}</div>
+                    <div key={warning.code} className="break-words [overflow-wrap:anywhere]">{warning.label.replace("ALTO EM ", "")}</div>
                 ))}
             </div>
         </div>
@@ -289,7 +289,11 @@ function BrazilLupa({ warnings }: { warnings: ReturnType<typeof getFrontWarnings
 
 function LabelShell({ id, className, children }: { id?: string; className?: string; children: React.ReactNode }) {
     return (
-        <div id={id} className={cn("bg-white", className)} style={{ letterSpacing: "normal" }}>
+        <div
+            id={id}
+            className={cn("max-w-full overflow-hidden bg-white break-words [overflow-wrap:anywhere]", className)}
+            style={{ letterSpacing: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}
+        >
             {children}
         </div>
     );

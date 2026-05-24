@@ -47,6 +47,11 @@ import {
     RotateCcw,
     Save,
     ShieldCheck,
+    AlertCircle,
+    CheckCircle,
+    Info,
+    Check,
+    Lock
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
@@ -68,6 +73,9 @@ const CLAIM_STYLES = {
     attention: "border-amber-200 bg-gradient-to-br from-amber-50 to-white text-amber-950 dark:border-amber-900/60 dark:from-amber-950/35 dark:to-background dark:text-amber-100",
     "not-eligible": "border-slate-200 bg-gradient-to-br from-slate-50 to-white text-slate-700 dark:border-slate-800 dark:from-slate-900/70 dark:to-background dark:text-slate-300",
 };
+const SAFE_TEXT_CLASS = "min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere]";
+const ENTERPRISE_SELECT_TRIGGER_CLASS = "min-h-10 w-full min-w-0 *:data-[slot=select-value]:truncate";
+const ENTERPRISE_INPUT_CLASS = "min-w-0 overflow-hidden text-ellipsis";
 
 type LocalizedMetadata = LegalLabelData;
 type LegalFieldDefinition = {
@@ -644,47 +652,52 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
     return (
         <div className="mx-auto max-w-[88rem] px-4 py-6 md:px-6">
-            <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
-                <div className="space-y-2">
-                    <div className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                        <ShieldCheck className="h-4 w-4" />
-                        {copy.firstTableTitle}
+            <header className="relative mb-8 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-violet-50/40 via-background to-primary/5 p-6 dark:from-violet-950/20 dark:to-primary/10 md:p-8">
+                <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-400/10 blur-3xl dark:bg-violet-600/10" />
+                <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary/10 blur-2xl dark:bg-primary/10" />
+                
+                <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
+                            <ShieldCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                            {copy.firstTableTitle}
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{copy.heading}</h1>
+                            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
+                                {copy.subheading}
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{copy.heading}</h1>
-                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                            {copy.subheading}
-                        </p>
-                    </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline" className="gap-2">
-                        <a href="/dashboard/new">
-                            {copy.newProduct}
-                            <ArrowUpRight className="h-4 w-4" />
-                        </a>
-                    </Button>
-                    <Button onClick={saveCurrentVersion} variant="outline" className="gap-2" disabled={isSaving}>
-                        <Save className="h-4 w-4" />
-                        {isSaving ? copy.saving : copy.saveVersion}
-                    </Button>
-                    <Button onClick={downloadLabelImage} variant="outline" className="gap-2">
-                        <Download className="h-4 w-4" />
-                        PNG
-                    </Button>
-                    <Button onClick={downloadPassport} className="gap-2">
-                        <FileJson className="h-4 w-4" />
-                        JSON
-                    </Button>
+                    <div className="flex flex-wrap gap-2 lg:flex-nowrap">
+                        <Button asChild variant="secondary" className="gap-2 bg-background/50 backdrop-blur-sm hover:bg-background/80">
+                            <a href="/dashboard/new">
+                                {copy.newProduct}
+                                <ArrowUpRight className="h-4 w-4" />
+                            </a>
+                        </Button>
+                        <Button onClick={downloadLabelImage} variant="secondary" className="gap-2 bg-background/50 backdrop-blur-sm hover:bg-background/80">
+                            <Download className="h-4 w-4" />
+                            PNG
+                        </Button>
+                        <Button onClick={downloadPassport} variant="default" className="gap-2">
+                            <FileJson className="h-4 w-4" />
+                            JSON
+                        </Button>
+                        <Button onClick={saveCurrentVersion} variant="default" className="gap-2 bg-violet-600 hover:bg-violet-700 text-white" disabled={isSaving}>
+                            <Save className="h-4 w-4" />
+                            {isSaving ? copy.saving : copy.saveVersion}
+                        </Button>
+                    </div>
                 </div>
             </header>
 
-            <section className="mb-6 rounded-lg border border-border bg-background">
-                <div className="grid gap-4 p-4 md:grid-cols-4">
+            <section className="mb-8 rounded-xl border border-border/80 bg-card/80 p-5 shadow-sm backdrop-blur-sm transition-all hover:shadow-md">
+                <div className="grid gap-5 md:grid-cols-4">
                     <ControlSelect label={copy.productBase} help="Escolha a tabela brasileira salva que servirá como origem. Ela não será alterada por este módulo.">
                         <Select value={selectedTable.id} onValueChange={setSelectedTableId}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -699,7 +712,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.market} help="Define o formato visual, idioma obrigatório do rótulo, ordem dos nutrientes, símbolos frontais e alertas regulatórios.">
                         <Select value={market} onValueChange={(value) => setMarket(value as InternationalMarket)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -714,7 +727,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.foodBase} help="Alguns países usam limites diferentes para alimentos sólidos e líquidos.">
                         <Select value={foodState} onValueChange={(value) => setFoodState(value as FoodPhysicalState)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -726,7 +739,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <ControlSelect label={copy.status} help="Marque em que ponto o rótulo está no fluxo interno de aprovação.">
                         <Select value={approvalStatus} onValueChange={(value) => setApprovalStatus(value as ApprovalStatus)}>
-                            <SelectTrigger className="min-h-10">
+                            <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -744,9 +757,15 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
             <div className="grid gap-6 xl:grid-cols-[minmax(28rem,0.95fr)_minmax(28rem,1.05fr)]">
                 <section className="space-y-4 xl:sticky xl:top-24 xl:self-start">
                     <Panel>
-                        <PanelHeader title={copy.countryLabel} detail={`${marketConfig.authority} · ${marketConfig.tableName}`} />
-                        <div className="overflow-x-auto bg-neutral-100 p-5 dark:bg-neutral-950/40">
-                            <div className="flex min-w-max justify-center">
+                        <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <PanelTitle title={copy.countryLabel} detail={`${marketConfig.authority} · ${marketConfig.tableName}`} />
+                            <div className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
+                                {getMarketLabel(market, language)}
+                            </div>
+                        </div>
+                        <div className="relative overflow-x-auto bg-neutral-50/80 p-8 shadow-inner dark:bg-neutral-950/50">
+                            <div className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '16px 16px' }}></div>
+                            <div className="relative flex min-w-max justify-center rounded-xl ring-1 ring-border/40 p-4 bg-white/50 dark:bg-black/20 backdrop-blur-sm shadow-sm">
                                 <InternationalNutritionLabel
                                     id="international-label-preview"
                                     table={workingTable}
@@ -759,44 +778,59 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <Panel>
                         <PanelHeader title={copy.approval} detail={copy.approvalDetail} />
-                        <div className="grid gap-2 p-4 sm:grid-cols-5">
-                            {APPROVAL_FLOW.map((step, index) => {
-                                const active = index === activeApprovalIndex;
-                                const done = index < activeApprovalIndex;
-                                return (
-                                    <button
-                                        key={step.status}
-                                        type="button"
-                                        onClick={() => setApprovalStatus(step.status)}
-                                        className={`rounded-md border px-3 py-2 text-left text-xs transition ${
-                                            active ? "border-primary bg-muted/30" : done ? "border-border bg-muted/20" : "border-border hover:bg-muted/30"
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="font-semibold">{getApprovalLabel(step.status, language)}</span>
-                                            {done && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
-                                        </div>
-                                        <div className="mt-1 text-muted-foreground">{getApprovalOwner(step.status, language)}</div>
-                                    </button>
-                                );
-                            })}
+                        <div className="p-6">
+                            <div className="relative flex justify-between">
+                                <div className="absolute left-0 top-4 -z-10 h-0.5 w-full -translate-y-1/2 bg-border/50"></div>
+                                {APPROVAL_FLOW.map((step, index) => {
+                                    const active = index === activeApprovalIndex;
+                                    const done = index < activeApprovalIndex;
+                                    const future = index > activeApprovalIndex;
+                                    return (
+                                        <button
+                                            key={step.status}
+                                            type="button"
+                                            onClick={() => setApprovalStatus(step.status)}
+                                            className="group flex flex-col items-center gap-2"
+                                        >
+                                            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                                                active ? "border-primary bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110" :
+                                                done ? "border-emerald-500 bg-emerald-500 text-white" :
+                                                "border-border bg-background text-muted-foreground group-hover:border-primary/50 group-hover:bg-muted/50"
+                                            }`}>
+                                                {done ? <CheckCircle2 className="h-5 w-5" /> : <span className="text-xs font-semibold">{index + 1}</span>}
+                                            </div>
+                                            <div className="text-center mt-1">
+                                                <div className={`text-xs font-semibold transition-colors ${active ? "text-foreground" : future ? "text-muted-foreground" : "text-foreground"}`}>
+                                                    {getApprovalLabel(step.status, language)}
+                                                </div>
+                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                                    {getApprovalOwner(step.status, language)}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </Panel>
                 </section>
 
                 <section className="space-y-4">
                     <Panel>
-                        <div className="flex flex-col gap-4 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
-                            <PanelTitle
-                                title={copy.localCopy}
-                                detail={
-                                    savedProject?.currentVersion
-                                        ? `${copy.savedVersion} v${savedProject.currentVersion.version}`
-                                        : isLocalizedDraft
-                                            ? copy.localCopyDraft
-                                            : copy.localCopyLocked
-                                }
-                            />
+                        <div className="flex flex-col gap-4 border-b border-border/60 bg-muted/10 p-5 md:flex-row md:items-center md:justify-between">
+                            <div className="flex items-center gap-3">
+                                <PanelTitle
+                                    title={copy.localCopy}
+                                    detail={
+                                        savedProject?.currentVersion
+                                            ? `${copy.savedVersion} v${savedProject.currentVersion.version}`
+                                            : isLocalizedDraft
+                                                ? copy.localCopyDraft
+                                                : copy.localCopyLocked
+                                    }
+                                />
+                                {!isLocalizedDraft && <Lock className="h-5 w-5 text-muted-foreground/50" />}
+                            </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button
                                     type="button"
@@ -831,9 +865,12 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </div>
                         </div>
 
-                        <div className="grid gap-4 p-4 md:grid-cols-6">
+                        <div className="p-6">
+                            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informações Básicas</h3>
+                            <div className="grid gap-5 md:grid-cols-6 mb-8">
                             <Field className="md:col-span-3" label={copy.localName} help="Nome comercial usado na prévia local. Edite na cópia se o país exigir adaptação de idioma ou descrição.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.title}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("title", event.target.value)}
@@ -841,6 +878,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field label={copy.portion} help="Quantidade de alimento usada como serving/porção local. Confira a regra de referência do país.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     type="number"
                                     value={workingTable.portion || ""}
                                     disabled={!isLocalizedDraft}
@@ -853,7 +891,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                     onValueChange={(value) => updateLocalizedDraft("uom", value)}
                                     disabled={!isLocalizedDraft}
                                 >
-                                    <SelectTrigger className="min-h-10">
+                                    <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -865,6 +903,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field label={copy.content} help="Conteúdo líquido da embalagem. Necessário para porções por embalagem e auditoria.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     type="number"
                                     value={workingTable.packageContent || ""}
                                     disabled={!isLocalizedDraft}
@@ -873,6 +912,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.localMeasure} help="Texto de medida compreensível no país, como serving, porción, portion ou medida local.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.householdMeasure}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("householdMeasure", event.target.value)}
@@ -880,6 +920,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.servings} help="Declaração local de quantidade de porções por embalagem/contêiner/envase.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={workingTable.servingsPerPackage || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateLocalizedDraft("servingsPerPackage", event.target.value)}
@@ -887,6 +928,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.legalName} help="Nome legal revisado para o país. Use quando o nome comercial não for suficiente para a legislação local.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.legalName || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("legalName", event.target.value)}
@@ -894,6 +936,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.category} help="Categoria regulatória local usada para confirmar porção de referência, idioma, claims e exceções.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.category || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("category", event.target.value)}
@@ -901,6 +944,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.labelLanguage} help="Idioma que deverá aparecer no rótulo final deste mercado.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.language || marketConfig.languageRequirement}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("language", event.target.value)}
@@ -908,6 +952,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-3" label={copy.intendedClaims} help="Alegações comerciais pretendidas. O painel de claims ajuda a decidir o que pode seguir para revisão.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.intendedClaims || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("intendedClaims", event.target.value)}
@@ -915,11 +960,18 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             </Field>
                             <Field className="md:col-span-6" label={copy.adjustmentNotes} help="Espaço para registrar a decisão regulatória, troca de ingrediente, alteração de porção ou justificativa de aprovação.">
                                 <Input
+                                    className={ENTERPRISE_INPUT_CLASS}
                                     value={metadata?.adjustmentNotes || ""}
                                     disabled={!isLocalizedDraft}
                                     onChange={(event) => updateMetadata("adjustmentNotes", event.target.value)}
                                 />
                             </Field>
+                            </div>
+                            <div className="mb-5 flex items-center gap-3">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Dados Legais e Metadados</h3>
+                                <div className="h-px flex-1 bg-border/50"></div>
+                            </div>
+                            <div className="grid gap-5 md:grid-cols-6">
                             {legalFields.map((item) => (
                                 <Field
                                     key={item.field}
@@ -928,21 +980,27 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                     help={item.help}
                                 >
                                     <Input
+                                        className={ENTERPRISE_INPUT_CLASS}
                                         value={(metadata?.[item.field] as string | undefined) || ""}
                                         disabled={!isLocalizedDraft}
                                         onChange={(event) => updateMetadata(item.field, event.target.value)}
                                     />
                                 </Field>
                             ))}
+                            </div>
                         </div>
                     </Panel>
 
                     <div className="grid gap-4 lg:grid-cols-2">
                         <Panel>
-                            <PanelHeader
-                                title={copy.pending}
-                                detail={`${totals.blocker} ${copy.blockers}, ${totals.warning} ${copy.alerts}.`}
-                            />
+                            <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <PanelTitle title={copy.pending} />
+                                <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                                    {totals.blocker > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100/80 px-2.5 py-1 text-red-700 ring-1 ring-red-600/20 dark:bg-red-950/50 dark:text-red-300"><AlertCircle className="h-3.5 w-3.5"/>{totals.blocker} {copy.blockers}</span>}
+                                    {totals.warning > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2.5 py-1 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-300"><AlertCircle className="h-3.5 w-3.5"/>{totals.warning} {copy.alerts}</span>}
+                                    {totals.blocker === 0 && totals.warning === 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/50 dark:text-emerald-300"><CheckCircle className="h-3.5 w-3.5"/>0 pendências</span>}
+                                </div>
+                            </div>
                             <StackList>
                                 {analysis.validations.map((item) => (
                                     <StatusRow
@@ -956,10 +1014,13 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                         </Panel>
 
                         <Panel>
-                            <PanelHeader
-                                title={copy.front}
-                                detail={activeFrontWarnings.length > 0 ? `${activeFrontWarnings.length} ${copy.activeSymbols}` : copy.noSymbol}
-                            />
+                            <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <PanelTitle title={copy.front} />
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${activeFrontWarnings.length > 0 ? "bg-amber-100/80 text-amber-700 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-300" : "bg-emerald-100/80 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-950/50 dark:text-emerald-300"}`}>
+                                    {activeFrontWarnings.length > 0 ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                                    {activeFrontWarnings.length > 0 ? `${activeFrontWarnings.length} ${copy.activeSymbols}` : copy.noSymbol}
+                                </span>
+                            </div>
                             <StackList>
                                 {analysis.frontWarnings.length === 0 ? (
                                     <EmptyRow text={copy.noFrontSymbol} />
@@ -983,9 +1044,9 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                         <StackList>
                             {analysis.validations
                                 .filter((item) => item.level !== "ok")
-                                .map((item) => (
+                                .map((item, index) => (
                                     <StatusRow
-                                        key={`guide-${item.title}`}
+                                        key={`guide-${item.title}-${index}`}
                                         tone={STATUS_STYLES[item.level]}
                                         title={getIssueTitle(item.title, language)}
                                         detail={buildAdjustmentInstruction(item.detail, market, language)}
@@ -998,28 +1059,32 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                     </Panel>
 
                     <Panel>
-                        <PanelHeader title={copy.technicalTable} detail={marketConfig.servingBasis} />
-                        <div className="overflow-x-auto p-4">
-                            <table className="w-full min-w-[34rem] border-collapse text-sm">
-                                <thead>
-                                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                                        <th className="py-2 pr-3 font-semibold">{copy.nutrient}</th>
-                                        <th className="px-3 py-2 font-semibold">100 g/ml</th>
-                                        <th className="px-3 py-2 font-semibold">{copy.perServing}</th>
-                                        <th className="px-3 py-2 font-semibold">%DV</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border/70">
-                                    {analysis.nutritionLines.map((line) => (
-                                        <tr key={`${line.key}-${line.label}`}>
-                                            <td className="py-2 pr-3 font-medium">{line.label}</td>
-                                            <td className="px-3 py-2">{formatNutrientValue(line.per100, line.unit)}</td>
-                                            <td className="px-3 py-2">{formatNutrientValue(line.perPortion, line.unit)}</td>
-                                            <td className="px-3 py-2">{line.dailyValueLabel || "-"}</td>
+                        <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 p-5">
+                            <PanelTitle title={copy.technicalTable} detail={marketConfig.servingBasis} />
+                        </div>
+                        <div className="overflow-x-auto p-5">
+                            <div className="overflow-hidden rounded-lg border border-border shadow-sm">
+                                <table className="w-full min-w-[34rem] border-collapse text-sm text-left">
+                                    <thead className="bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <tr>
+                                            <th className="py-3 px-4">{copy.nutrient}</th>
+                                            <th className="py-3 px-4">100 g/ml</th>
+                                            <th className="py-3 px-4">{copy.perServing}</th>
+                                            <th className="py-3 px-4">%DV</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/50">
+                                        {analysis.nutritionLines.map((line) => (
+                                            <tr key={`${line.key}-${line.label}`} className="transition-colors hover:bg-muted/30">
+                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere]">{line.label}</td>
+                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.per100, line.unit)}</td>
+                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.perPortion, line.unit)}</td>
+                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{line.dailyValueLabel || "-"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </Panel>
 
@@ -1037,7 +1102,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <PanelHeader title={copy.reformulation} detail={copy.reformulationDetail} />
                             <StackList>
                                 {analysis.suggestions.map((item) => (
-                                    <StatusRow key={item.title} tone="border-l-slate-400" title={item.title} detail={`${item.detail} ${item.impact}`} />
+                                    <StatusRow key={item.title} tone="border-blue-200 bg-gradient-to-br from-blue-50 to-white text-blue-950 dark:border-blue-900/60 dark:from-blue-950/35 dark:to-background dark:text-blue-100" title={item.title} detail={`${item.detail} ${item.impact}`} />
                                 ))}
                             </StackList>
                         </Panel>
@@ -1045,19 +1110,22 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
                     <Panel>
                         <PanelHeader title="GS1 Digital Link" detail={copy.gs1Detail} />
-                        <div className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                        <div className="grid gap-5 p-5 md:grid-cols-[1fr_1fr_auto] md:items-end">
                             <Field label="GTIN">
-                                <Input value={gtin} onChange={(event) => setGtin(event.target.value)} placeholder="7890000000000" />
+                                <Input className={ENTERPRISE_INPUT_CLASS} value={gtin} onChange={(event) => setGtin(event.target.value)} placeholder="7890000000000" />
                             </Field>
                             <Field label={copy.lot}>
-                                <Input value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
+                                <Input className={ENTERPRISE_INPUT_CLASS} value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
                             </Field>
-                            <Button variant="outline" className="gap-2" onClick={copyGs1Link}>
+                            <Button variant="outline" className="gap-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" onClick={copyGs1Link}>
                                 <Link2 className="h-4 w-4" />
                                 {copy.copy}
                             </Button>
-                            <div className="break-all rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground md:col-span-3">
-                                {analysis.gs1Link}
+                            <div className="relative mt-2 md:col-span-3">
+                                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary/10 to-violet-500/10 blur-sm opacity-50"></div>
+                                <div className="relative break-all rounded-lg border border-border/50 bg-black/5 p-4 font-mono text-xs text-foreground shadow-inner dark:bg-black/40">
+                                    {analysis.gs1Link}
+                                </div>
                             </div>
                         </div>
                     </Panel>
@@ -1068,12 +1136,12 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-    return <section className="rounded-lg border border-border bg-background">{children}</section>;
+    return <section className={`min-w-0 rounded-xl border border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md ${SAFE_TEXT_CLASS}`}>{children}</section>;
 }
 
 function PanelHeader({ title, detail }: { title: string; detail?: string }) {
     return (
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border/60 bg-muted/10 p-5">
             <PanelTitle title={title} detail={detail} />
         </div>
     );
@@ -1081,17 +1149,17 @@ function PanelHeader({ title, detail }: { title: string; detail?: string }) {
 
 function PanelTitle({ title, detail }: { title: string; detail?: string }) {
     return (
-        <div>
-            <h2 className="text-sm font-semibold">{title}</h2>
-            {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
+        <div className={SAFE_TEXT_CLASS}>
+            <h2 className="text-base font-semibold tracking-tight break-words [overflow-wrap:anywhere]">{title}</h2>
+            {detail && <p className="mt-1.5 text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">{detail}</p>}
         </div>
     );
 }
 
 function ControlSelect({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className={`space-y-2 ${SAFE_TEXT_CLASS}`}>
+            <Label className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground break-words [overflow-wrap:anywhere]">
                 {label}
                 {help && <HelpTip>{help}</HelpTip>}
             </Label>
@@ -1102,8 +1170,8 @@ function ControlSelect({ label, help, children }: { label: string; help?: string
 
 function Field({ label, help, className, children }: { label: string; help?: string; className?: string; children: React.ReactNode }) {
     return (
-        <div className={className ? `space-y-2 ${className}` : "space-y-2"}>
-            <Label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className={className ? `space-y-2 ${SAFE_TEXT_CLASS} ${className}` : `space-y-2 ${SAFE_TEXT_CLASS}`}>
+            <Label className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground break-words [overflow-wrap:anywhere]">
                 {label}
                 {help && <HelpTip>{help}</HelpTip>}
             </Label>
@@ -1113,7 +1181,7 @@ function Field({ label, help, className, children }: { label: string; help?: str
 }
 
 function StackList({ children }: { children: React.ReactNode }) {
-    return <div className="space-y-2 p-4">{children}</div>;
+    return <div className={`space-y-3 p-5 ${SAFE_TEXT_CLASS}`}>{children}</div>;
 }
 
 function StatusRow({
@@ -1127,17 +1195,29 @@ function StatusRow({
     detail: string;
     muted?: boolean;
 }) {
+    const isOk = tone.includes("emerald");
+    const isWarning = tone.includes("amber");
+    const isBlocker = tone.includes("red");
+    
     return (
-        <div className={`rounded-md border px-3 py-2 text-sm shadow-sm ${tone} ${muted ? "opacity-75" : ""}`}>
-            <div className="font-semibold">{title}</div>
-            <div className="mt-1 text-xs leading-relaxed opacity-80">{detail}</div>
+        <div className={`group flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm transition-all hover:shadow-md ${SAFE_TEXT_CLASS} ${tone} ${muted ? "opacity-75" : ""}`}>
+            <div className="mt-0.5 shrink-0">
+                {isOk && <CheckCircle className="h-4 w-4 opacity-80" />}
+                {isWarning && <AlertCircle className="h-4 w-4 opacity-80" />}
+                {isBlocker && <AlertCircle className="h-4 w-4 opacity-80" />}
+                {!isOk && !isWarning && !isBlocker && <Info className="h-4 w-4 opacity-80" />}
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="font-semibold break-words [overflow-wrap:anywhere]">{title}</div>
+                <div className="mt-1.5 text-xs leading-relaxed opacity-80 break-words [overflow-wrap:anywhere]">{detail}</div>
+            </div>
         </div>
     );
 }
 
 function EmptyRow({ text }: { text: string }) {
     return (
-        <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+        <div className={`rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground ${SAFE_TEXT_CLASS}`}>
             {text}
         </div>
     );
@@ -1455,12 +1535,12 @@ function translateLegalHelp(help: string, language: SiteLanguage) {
 
 function getMarketLabel(market: InternationalMarket, language: SiteLanguage) {
     const labels: Record<InternationalMarket, Record<SiteLanguage, string>> = {
-        br: { "pt-BR": "Brasil", "en-US": "Brazil", "es-MX": "Brasil", "es-CL": "Brasil", "fr-CA": "Brésil" },
-        us: { "pt-BR": "Estados Unidos", "en-US": "United States", "es-MX": "Estados Unidos", "es-CL": "Estados Unidos", "fr-CA": "États-Unis" },
-        eu: { "pt-BR": "União Europeia", "en-US": "European Union", "es-MX": "Unión Europea", "es-CL": "Unión Europea", "fr-CA": "Union européenne" },
-        ca: { "pt-BR": "Canadá", "en-US": "Canada", "es-MX": "Canadá", "es-CL": "Canadá", "fr-CA": "Canada" },
-        mx: { "pt-BR": "México", "en-US": "Mexico", "es-MX": "México", "es-CL": "México", "fr-CA": "Mexique" },
-        cl: { "pt-BR": "Chile", "en-US": "Chile", "es-MX": "Chile", "es-CL": "Chile", "fr-CA": "Chili" },
+        br: { "pt-BR": "🇧🇷 Brasil", "en-US": "🇧🇷 Brazil", "es-MX": "🇧🇷 Brasil", "es-CL": "🇧🇷 Brasil", "fr-CA": "🇧🇷 Brésil" },
+        us: { "pt-BR": "🇺🇸 Estados Unidos", "en-US": "🇺🇸 United States", "es-MX": "🇺🇸 Estados Unidos", "es-CL": "🇺🇸 Estados Unidos", "fr-CA": "🇺🇸 États-Unis" },
+        eu: { "pt-BR": "🇪🇺 União Europeia", "en-US": "🇪🇺 European Union", "es-MX": "🇪🇺 Unión Europea", "es-CL": "🇪🇺 Unión Europea", "fr-CA": "🇪🇺 Union européenne" },
+        ca: { "pt-BR": "🇨🇦 Canadá", "en-US": "🇨🇦 Canada", "es-MX": "🇨🇦 Canadá", "es-CL": "🇨🇦 Canadá", "fr-CA": "🇨🇦 Canada" },
+        mx: { "pt-BR": "🇲🇽 México", "en-US": "🇲🇽 Mexico", "es-MX": "🇲🇽 México", "es-CL": "🇲🇽 México", "fr-CA": "🇲🇽 Mexique" },
+        cl: { "pt-BR": "🇨🇱 Chile", "en-US": "🇨🇱 Chile", "es-MX": "🇨🇱 Chile", "es-CL": "🇨🇱 Chile", "fr-CA": "🇨🇱 Chili" },
     };
     return labels[market][language];
 }

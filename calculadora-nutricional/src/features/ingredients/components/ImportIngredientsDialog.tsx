@@ -13,9 +13,57 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importIngredients, IngredientData } from '@/features/ingredients/actions/import-ingredient-actions';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { toast } from "sonner";
 import { Loader2, Upload } from 'lucide-react';
+
+function normalizeCellValue(value: ExcelJS.CellValue): unknown {
+    if (value === null || value === undefined) return "";
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value !== "object") return value;
+
+    if ("result" in value) {
+        return normalizeCellValue(value.result as ExcelJS.CellValue);
+    }
+
+    if ("text" in value && typeof value.text === "string") {
+        return value.text;
+    }
+
+    if ("richText" in value && Array.isArray(value.richText)) {
+        return value.richText.map((item) => item.text).join("");
+    }
+
+    return String(value);
+}
+
+async function readRowsFromExcel(data: ArrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(data);
+
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return [];
+
+    const headers: string[] = [];
+    sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        headers[colNumber] = String(normalizeCellValue(cell.value)).trim();
+    });
+
+    const rows: Record<string, unknown>[] = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
+
+        const item: Record<string, unknown> = {};
+        headers.forEach((header, colNumber) => {
+            if (!header) return;
+            item[header] = normalizeCellValue(row.getCell(colNumber).value);
+        });
+
+        rows.push(item);
+    });
+
+    return rows;
+}
 
 export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?: () => void }) {
     const [open, setOpen] = useState(false);
@@ -42,10 +90,7 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
 
         try {
             const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data);
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+            const jsonData = await readRowsFromExcel(data);
 
             // Validate and map data
             const ingredients: IngredientData[] = jsonData.map((row) => ({
@@ -117,8 +162,7 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
                 onImportSuccess?.();
             }
 
-        } catch (error) {
-            console.error(error);
+        } catch {
             toast.error("Erro ao processar o arquivo. Verifique o formato.");
         } finally {
             setLoading(false);

@@ -17,7 +17,12 @@ import {
   parseApprovalFormData,
   validateApprovalValues,
 } from "@/features/technical-sheets/domain/technical-sheet-validator";
+import {
+  EDITABLE_NUTRIENT_FIELDS,
+  OTHER_NUTRIENT_KEY,
+} from "@/features/technical-sheets/domain/technical-sheet-nutrients";
 import type {
+  EditableTechnicalSheetValues,
   TechnicalSheetAdditionalInfoGroup,
   TechnicalSheetActionState,
   TechnicalSheetReviewData,
@@ -32,21 +37,10 @@ import {
   TechnicalSheetFileError,
   type ValidatedTechnicalSheetFile,
 } from "@/features/technical-sheets/services/technical-sheet-file-service";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6;
-
-const EDITABLE_NUTRIENT_LABELS: Record<string, { label: string; unit: string }> = {
-  energy: { label: "Valor Energético", unit: "kcal" },
-  carbs: { label: "Carboidratos", unit: "g" },
-  sugarTotal: { label: "Açúcares Totais", unit: "g" },
-  sugarAdded: { label: "Açúcares Adicionados", unit: "g" },
-  protein: { label: "Proteínas", unit: "g" },
-  fatTotal: { label: "Gorduras Totais", unit: "g" },
-  fatSat: { label: "Gorduras Saturadas", unit: "g" },
-  fatTrans: { label: "Gorduras Trans", unit: "g" },
-  fiber: { label: "Fibra Alimentar", unit: "g" },
-  sodium: { label: "Sódio", unit: "mg" },
-};
 
 export async function importTechnicalSheet(
   _prevState: TechnicalSheetActionState,
@@ -58,6 +52,14 @@ export async function importTechnicalSheet(
     : null;
 
   if (!user) return { error: "Não autorizado" };
+
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    await requireModuleAccess(SAAS_MODULES.AI_IMPORT);
+  } catch (error) {
+    if (error instanceof ModuleAccessError) return { error: error.message };
+    throw error;
+  }
 
   const rawFiles = formData.getAll("files") as File[];
   if (!rawFiles || rawFiles.length === 0 || (rawFiles.length === 1 && rawFiles[0].size === 0)) {
@@ -230,7 +232,7 @@ export async function listTechnicalSheetDocuments(): Promise<TechnicalSheetDocum
     errorMessage: doc.errorMessage,
     createdAt: doc.createdAt.toISOString(),
     productName: doc.extraction?.productName || null,
-    reviewStatus: (doc.extraction?.reviewStatus as any) || null,
+    reviewStatus: doc.extraction?.reviewStatus ?? null,
   }));
 }
 
@@ -466,6 +468,14 @@ export async function approveTechnicalSheetExtraction(
   const user = await getCurrentUser();
   if (!user) return { error: "Não autorizado" };
 
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
+  } catch (error) {
+    if (error instanceof ModuleAccessError) return { error: error.message };
+    throw error;
+  }
+
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
     include: {
@@ -517,11 +527,11 @@ export async function approveTechnicalSheetExtraction(
         userId: user.id,
         name: values.productName,
         ...customNutrients,
-        manufacturer: extraction.manufacturer,
-        productCode: extraction.productCode,
+        manufacturer: values.manufacturer,
+        productCode: values.productCode,
         ingredientsText: values.ingredientsText,
         containsGluten: values.containsGluten,
-        glutenText: extraction.glutenText,
+        glutenText: values.glutenText,
         allergensText: values.allergensText,
         mayContainText: extraction.mayContainText,
         sourceType: "AI_TECHNICAL_SHEET",
@@ -534,9 +544,18 @@ export async function approveTechnicalSheetExtraction(
       where: { id: extraction.id },
       data: {
         productName: values.productName,
+        productCode: values.productCode,
+        manufacturer: values.manufacturer,
+        brand: values.brand,
+        description: values.description,
+        applicationAndDosage: values.applicationAndDosage,
         ingredientsText: values.ingredientsText,
         containsGluten: values.containsGluten,
+        glutenText: values.glutenText,
+        gmoText: values.gmoText,
         allergensText: values.allergensText,
+        shelfLife: values.shelfLife,
+        storageConditions: values.storageConditions,
         reviewStatus: ReviewStatus.APPROVED,
         approvedTargetType: "CustomIngredient",
         approvedTargetId: ingredient.id,
@@ -590,17 +609,34 @@ async function getCurrentUser() {
 
 function mergeEditedNutrients(
   nutrients: Array<Pick<NormalizedExtractedNutrient, "nutrientKey" | "value" | "unit" | "sourceText">>,
-  values: Record<string, number | string | boolean | null>
+  values: EditableTechnicalSheetValues
 ) {
   const byKey = new Map(nutrients.map((nutrient) => [nutrient.nutrientKey, { ...nutrient }]));
 
-  for (const [key, meta] of Object.entries(EDITABLE_NUTRIENT_LABELS)) {
-    const value = values[key];
+  for (const field of EDITABLE_NUTRIENT_FIELDS) {
+    const key = field.key;
+    const value = getEditedNutrientValue(values, key);
+    const existing = byKey.get(key);
+    const required = "required" in field ? field.required : false;
+
+    if (value === null && !required && !existing) continue;
+
     byKey.set(key, {
       nutrientKey: key,
-      value: typeof value === "number" && Number.isFinite(value) ? value : 0,
-      unit: meta.unit,
-      sourceText: byKey.get(key)?.sourceText ?? null,
+      value: typeof value === "number" && Number.isFinite(value) ? value : required ? 0 : null,
+      unit: field.unit,
+      sourceText: existing?.sourceText ?? null,
+    });
+  }
+
+  const existingOther = byKey.get(OTHER_NUTRIENT_KEY);
+  const other = values.otherNutrient;
+  if (existingOther || other.label || other.value !== null || other.unit) {
+    byKey.set(OTHER_NUTRIENT_KEY, {
+      nutrientKey: OTHER_NUTRIENT_KEY,
+      value: other.value,
+      unit: other.unit,
+      sourceText: existingOther?.sourceText ?? null,
     });
   }
 
@@ -611,11 +647,13 @@ async function syncEditedNutrients(
   tx: Prisma.TransactionClient,
   extractionId: string,
   nutrients: Array<{ id: string; nutrientKey: string; sourceText: string | null }>,
-  values: Record<string, number | string | boolean | null>
+  values: EditableTechnicalSheetValues
 ) {
-  for (const [key, meta] of Object.entries(EDITABLE_NUTRIENT_LABELS)) {
-    const value = values[key];
-    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  for (const field of EDITABLE_NUTRIENT_FIELDS) {
+    const key = field.key;
+    const value = getEditedNutrientValue(values, key);
+    const required = "required" in field ? field.required : false;
+    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : required ? 0 : null;
     const existing = nutrients.find((nutrient) => nutrient.nutrientKey === key);
 
     if (existing) {
@@ -623,22 +661,69 @@ async function syncEditedNutrients(
         where: { id: existing.id },
         data: {
           value: numericValue,
-          unit: meta.unit,
+          unit: field.unit,
         },
       });
-    } else {
+    } else if (numericValue !== null || required) {
       await tx.extractedNutrient.create({
         data: {
           extractionId,
           nutrientKey: key,
-          label: meta.label,
+          label: field.label,
           value: numericValue,
-          unit: meta.unit,
+          unit: field.unit,
           sourceText: null,
         },
       });
     }
   }
+
+  await syncOtherNutrient(tx, extractionId, nutrients, values);
+}
+
+async function syncOtherNutrient(
+  tx: Prisma.TransactionClient,
+  extractionId: string,
+  nutrients: Array<{ id: string; nutrientKey: string; sourceText: string | null }>,
+  values: EditableTechnicalSheetValues
+) {
+  const existing = nutrients.find((nutrient) => nutrient.nutrientKey === OTHER_NUTRIENT_KEY);
+  const { label, value, unit } = values.otherNutrient;
+  const hasAnyOtherValue = Boolean(label || value !== null || unit);
+
+  if (existing) {
+    await tx.extractedNutrient.update({
+      where: { id: existing.id },
+      data: {
+        label: label || "Outros",
+        value,
+        unit,
+      },
+    });
+    return;
+  }
+
+  if (!hasAnyOtherValue) return;
+
+  await tx.extractedNutrient.create({
+    data: {
+      extractionId,
+      nutrientKey: OTHER_NUTRIENT_KEY,
+      label: label || "Outros",
+      value,
+      unit,
+      sourceText: null,
+    },
+  });
+}
+
+function getEditedNutrientValue(values: EditableTechnicalSheetValues, key: string) {
+  if (key in values) {
+    const value = values[key as keyof EditableTechnicalSheetValues];
+    return typeof value === "number" ? value : null;
+  }
+
+  return values.optionalNutrients[key as keyof EditableTechnicalSheetValues["optionalNutrients"]] ?? null;
 }
 
 function getUserFacingError(error: unknown) {

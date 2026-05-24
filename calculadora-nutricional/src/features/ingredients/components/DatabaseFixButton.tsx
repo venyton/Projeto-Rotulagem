@@ -10,6 +10,10 @@ export function DatabaseFixButton() {
     const [message, setMessage] = useState<string | null>(null);
     const router = useRouter();
 
+    if (process.env.NODE_ENV === "production") {
+        return null;
+    }
+
     const handleFix = async () => {
         setLoading(true);
         setMessage(null);
@@ -20,6 +24,7 @@ export function DatabaseFixButton() {
 
         try {
             const res = await fetch('/api/debug/force-migrate', {
+                method: 'POST',
                 signal: controller.signal
             });
 
@@ -47,7 +52,6 @@ export function DatabaseFixButton() {
             if (error instanceof DOMException && error.name === 'AbortError') {
                 setMessage("Tempo limite esgotado. O servidor demorou muito.");
             } else {
-                console.error(error);
                 const message = error instanceof Error ? error.message : String(error);
                 setMessage("Erro: " + message);
             }

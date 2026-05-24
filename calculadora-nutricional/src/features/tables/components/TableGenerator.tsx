@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { IngredientSelector } from "@/features/ingredients/components/IngredientSelector";
 import { OpenFoodFactsImporter } from "@/features/open-food-facts/components/OpenFoodFactsImporter";
 import {
@@ -219,8 +220,10 @@ interface TableGeneratorProps {
 }
 
 export function TableGenerator({ initialData }: TableGeneratorProps) {
+    const router = useRouter();
     const initialMeasure = initialData?.householdMeasure || "";
     const savedUiState: TableUiState = toTableUiState(initialData?.uiState);
+    const [tableId, setTableId] = useState(initialData?.id || "");
     const [title, setTitle] = useState(initialData?.title || "");
     const [ingredients, setIngredients] = useState<SelectedIngredient[]>(initialData?.ingredients || []);
     const [portionSize, setPortionSize] = useState<number>(initialData?.portionSize || 0);
@@ -297,8 +300,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         perPortion: CalculatedNutrients;
     } | null>(null);
     const tableUiStorageKey = React.useMemo(
-        () => (initialData?.id ? `table-generator-ui:${initialData.id}` : ""),
-        [initialData?.id]
+        () => (tableId ? `table-generator-ui:${tableId}` : ""),
+        [tableId]
     );
 
     const suggestedPortionByMeasure = React.useMemo(() => {
@@ -399,6 +402,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const fopStatus = fopReference ? checkFOP(fopReference, fopFoodType) : null;
     const hasFopSeal = !!(fopStatus && (fopStatus.highSugar || fopStatus.highFat || fopStatus.highSodium));
     const effectiveHasFopSeal = !isExcludedFromRdc429 && !isFopForbiddenByCategory && hasFopSeal;
+    const activeFopSealCount = effectiveHasFopSeal && fopStatus
+        ? [fopStatus.highSugar, fopStatus.highFat, fopStatus.highSodium].filter(Boolean).length
+        : 0;
+    const previewFopLayout: "horizontal" | "rectangular" = activeFopSealCount > 1 ? "rectangular" : "horizontal";
     const mandatoryStatements = React.useMemo(() => {
         if (isExcludedFromRdc429) return [] as string[];
         const statements: string[] = [];
@@ -489,8 +496,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const previewViewportRef = React.useRef<HTMLDivElement>(null);
     const previewContentRef = React.useRef<HTMLDivElement>(null);
     const [previewScale, setPreviewScale] = useState(1);
-    const [previewHeight, setPreviewHeight] = useState<number | null>(null);
-    const previewMaxHeight = 520;
     const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
     const availableTableOptionValues = React.useMemo(
         () =>
@@ -543,23 +548,19 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(() => {
                 const availableWidth = viewport.clientWidth;
-                const contentWidth = content.scrollWidth;
-                const contentHeight = content.scrollHeight;
-                if (availableWidth <= 0 || contentWidth <= 0 || contentHeight <= 0) return;
+                const contentWidth = Math.max(content.scrollWidth, content.offsetWidth);
+                if (availableWidth <= 0 || contentWidth <= 0) return;
 
-                const nextScale = Math.min(1, availableWidth / contentWidth, previewMaxHeight / contentHeight);
+                const nextScale = Math.min(1, availableWidth / contentWidth);
                 const roundedScale = Math.floor(nextScale * 10000) / 10000;
-                const nextHeight = Math.ceil(contentHeight * roundedScale);
 
                 setPreviewScale((current) => (Math.abs(current - roundedScale) > 0.0001 ? roundedScale : current));
-                setPreviewHeight((current) => (current !== nextHeight ? nextHeight : current));
             });
         };
 
         updatePreviewSize();
         const resizeObserver = new ResizeObserver(updatePreviewSize);
         resizeObserver.observe(viewport);
-        resizeObserver.observe(content);
         window.addEventListener("resize", updatePreviewSize);
 
         return () => {
@@ -568,8 +569,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             window.removeEventListener("resize", updatePreviewSize);
         };
     }, [
-        effectiveHasFopSeal,
-        fopStatus,
         householdMeasure,
         popGroup,
         portionSize,
@@ -921,8 +920,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await saveTable({
-                id: initialData?.id,
+            const response = await saveTable({
+                id: tableId || undefined,
                 title,
                 portion: portionSize,
                 uom: "g",
@@ -959,7 +958,22 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     flourStatement,
                 },
             });
-            if (tableUiStorageKey) {
+            if (response?.error) {
+                toast.error(response.error);
+                return;
+            }
+
+            const savedId = response?.id;
+            if (savedId) {
+                const wasNewTable = !tableId;
+                setTableId(savedId);
+                if (wasNewTable) {
+                    window.history.replaceState(null, "", `/dashboard/edit/${savedId}`);
+                }
+            }
+
+            const storageKey = savedId ? `table-generator-ui:${savedId}` : tableUiStorageKey;
+            if (storageKey) {
                 const persisted: TableUiState = {
                     selectedGroup,
                     selectedProduct,
@@ -985,7 +999,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     iodizedSaltStatement,
                     flourStatement,
                 };
-                window.localStorage.setItem(tableUiStorageKey, JSON.stringify(persisted));
+                window.localStorage.setItem(storageKey, JSON.stringify(persisted));
             }
             toast.success("Tabela salva com sucesso!");
         } catch (error) {
@@ -1188,6 +1202,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     isSupplement,
                     servingsPerPackage,
                     selectedNutrients,
+                    extraConstituents,
                     showDailyValue,
                     selectedTableTypes,
                 }),
@@ -1836,6 +1851,15 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Creatina", unit: "g" })}>
                                 Creatina
                             </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Polióis", unit: "g" })}>
+                                Polióis
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Maltitol", unit: "g" })}>
+                                Maltitol
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Cafeína", unit: "mg" })}>
+                                Cafeína
+                            </Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => addExtraConstituent({ name: "Probióticos", unit: "UFC" })}>
                                 Probióticos
                             </Button>
@@ -1877,7 +1901,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 <div ref={previewViewportRef} className="w-full min-w-0 overflow-visible">
                                     <div
                                         className="flex w-full justify-center"
-                                        style={{ height: previewHeight ? `${previewHeight}px` : undefined }}
                                     >
                                         <div
                                             ref={previewContentRef}
@@ -1894,7 +1917,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 selectedNutrients={selectedNutrients}
                                                 extraConstituents={extraConstituents}
                                                 showDailyValue={showDailyValue}
-                                                fop={effectiveHasFopSeal ? (fopStatus || undefined) : undefined}
+                                                fop={undefined}
                                                 previewType={previewTableType}
                                             />
                                         </div>
@@ -1914,6 +1937,23 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </div>
                         )}
                     </CardContent>
+
+                    {result && effectiveHasFopSeal && fopStatus && (
+                        <div className="flex w-full justify-center bg-muted/[0.25] px-1 py-1 dark:bg-muted/[0.18]">
+                            <div
+                                className="inline-flex max-w-full justify-center rounded-[10px] border-[4px] p-[2px] leading-none"
+                                style={{ borderColor: "#000000", backgroundColor: "#ffffff" }}
+                            >
+                                <MagnifyingGlassLabel
+                                    id="nutrition-fop-seal-preview"
+                                    highSugar={!!fopStatus.highSugar}
+                                    highFat={!!fopStatus.highFat}
+                                    highSodium={!!fopStatus.highSodium}
+                                    layout={previewFopLayout}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {result && (
                         <div className="space-y-4 border-t border-border/60 p-6">

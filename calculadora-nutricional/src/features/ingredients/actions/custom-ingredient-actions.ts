@@ -4,6 +4,31 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+
+async function requireCustomIngredientsModule() {
+    try {
+        await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
+        return null;
+    } catch (error) {
+        if (error instanceof ModuleAccessError) return error.message;
+        throw error;
+    }
+}
+
+function optionalNumber(formData: FormData, key: string) {
+    const value = formData.get(key);
+    if (typeof value !== "string" || value.trim() === "") return null;
+    const normalized = value.replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function optionalMicronutrientPayload(formData: FormData) {
+    return Object.fromEntries(MICRO_KEYS.map((key) => [key, optionalNumber(formData, key)]));
+}
 
 export async function createCustomIngredient(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
     const session = await getServerSession(authOptions);
@@ -11,6 +36,8 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
     const energy = parseFloat(formData.get("energy") as string) || 0;
@@ -23,43 +50,52 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     const sodium = parseFloat(formData.get("sodium") as string) || 0;
     const sugarTotal = parseFloat(formData.get("sugarTotal") as string) || 0;
     const sugarAdded = parseFloat(formData.get("sugarAdded") as string) || 0;
+    const ingredientsText = formData.get("ingredientsText") as string || null;
+    const allergensText = formData.get("allergensText") as string || null;
+    const glutenText = formData.get("glutenText") as string || null;
+    const containsGlutenRaw = formData.get("containsGluten") as string;
+    const containsGluten = containsGlutenRaw === "true" ? true : containsGlutenRaw === "false" ? false : null;
+    const customNutrientsRaw = formData.get("customNutrients") as string;
+    const customNutrients = customNutrientsRaw ? JSON.parse(customNutrientsRaw) : undefined;
+
 
     // Micronutrients
-    const fatMono = parseFloat(formData.get("fatMono") as string) || 0;
-    const fatPoly = parseFloat(formData.get("fatPoly") as string) || 0;
-    const omega6 = parseFloat(formData.get("omega6") as string) || 0;
-    const omega3 = parseFloat(formData.get("omega3") as string) || 0;
-    const cholesterol = parseFloat(formData.get("cholesterol") as string) || 0;
+    const fatMono = optionalNumber(formData, "fatMono");
+    const fatPoly = optionalNumber(formData, "fatPoly");
+    const omega6 = optionalNumber(formData, "omega6");
+    const omega3 = optionalNumber(formData, "omega3");
+    const cholesterol = optionalNumber(formData, "cholesterol");
 
-    const vitaminA = parseFloat(formData.get("vitaminA") as string) || 0;
-    const vitaminD = parseFloat(formData.get("vitaminD") as string) || 0;
-    const vitaminE = parseFloat(formData.get("vitaminE") as string) || 0;
-    const vitaminK = parseFloat(formData.get("vitaminK") as string) || 0;
-    const vitaminC = parseFloat(formData.get("vitaminC") as string) || 0;
-    const thiamin = parseFloat(formData.get("thiamin") as string) || 0;
-    const riboflavin = parseFloat(formData.get("riboflavin") as string) || 0;
-    const niacin = parseFloat(formData.get("niacin") as string) || 0;
-    const vitaminB6 = parseFloat(formData.get("vitaminB6") as string) || 0;
-    const biotin = parseFloat(formData.get("biotin") as string) || 0;
-    const folicAcid = parseFloat(formData.get("folicAcid") as string) || 0;
-    const pantothenicAcid = parseFloat(formData.get("pantothenicAcid") as string) || 0;
-    const vitaminB12 = parseFloat(formData.get("vitaminB12") as string) || 0;
+    const vitaminA = optionalNumber(formData, "vitaminA");
+    const vitaminD = optionalNumber(formData, "vitaminD");
+    const vitaminE = optionalNumber(formData, "vitaminE");
+    const vitaminK = optionalNumber(formData, "vitaminK");
+    const vitaminC = optionalNumber(formData, "vitaminC");
+    const thiamin = optionalNumber(formData, "thiamin");
+    const riboflavin = optionalNumber(formData, "riboflavin");
+    const niacin = optionalNumber(formData, "niacin");
+    const vitaminB6 = optionalNumber(formData, "vitaminB6");
+    const biotin = optionalNumber(formData, "biotin");
+    const folicAcid = optionalNumber(formData, "folicAcid");
+    const pantothenicAcid = optionalNumber(formData, "pantothenicAcid");
+    const vitaminB12 = optionalNumber(formData, "vitaminB12");
 
-    const calcium = parseFloat(formData.get("calcium") as string) || 0;
-    const chloride = parseFloat(formData.get("chloride") as string) || 0;
-    const copper = parseFloat(formData.get("copper") as string) || 0;
-    const chromium = parseFloat(formData.get("chromium") as string) || 0;
-    const iron = parseFloat(formData.get("iron") as string) || 0;
-    const fluoride = parseFloat(formData.get("fluoride") as string) || 0;
-    const phosphorus = parseFloat(formData.get("phosphorus") as string) || 0;
-    const iodine = parseFloat(formData.get("iodine") as string) || 0;
-    const magnesium = parseFloat(formData.get("magnesium") as string) || 0;
-    const manganese = parseFloat(formData.get("manganese") as string) || 0;
-    const molybdenum = parseFloat(formData.get("molybdenum") as string) || 0;
-    const potassium = parseFloat(formData.get("potassium") as string) || 0;
-    const selenium = parseFloat(formData.get("selenium") as string) || 0;
-    const zinc = parseFloat(formData.get("zinc") as string) || 0;
-    const choline = parseFloat(formData.get("choline") as string) || 0;
+    const calcium = optionalNumber(formData, "calcium");
+    const chloride = optionalNumber(formData, "chloride");
+    const copper = optionalNumber(formData, "copper");
+    const chromium = optionalNumber(formData, "chromium");
+    const iron = optionalNumber(formData, "iron");
+    const fluoride = optionalNumber(formData, "fluoride");
+    const phosphorus = optionalNumber(formData, "phosphorus");
+    const iodine = optionalNumber(formData, "iodine");
+    const magnesium = optionalNumber(formData, "magnesium");
+    const manganese = optionalNumber(formData, "manganese");
+    const molybdenum = optionalNumber(formData, "molybdenum");
+    const potassium = optionalNumber(formData, "potassium");
+    const selenium = optionalNumber(formData, "selenium");
+    const zinc = optionalNumber(formData, "zinc");
+    const choline = optionalNumber(formData, "choline");
+    const micronutrients = optionalMicronutrientPayload(formData);
 
     if (!name) return { error: "Nome é obrigatório" };
 
@@ -71,7 +107,9 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
                 energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline
+                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
+                ...micronutrients,
+                ingredientsText, allergensText, glutenText, containsGluten, customNutrients,
             }
         });
 
@@ -88,6 +126,8 @@ export async function deleteCustomIngredient(id: string) {
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     try {
         // Ensure ownership
@@ -108,6 +148,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { error: "Usuário não encontrado" };
+    const moduleError = await requireCustomIngredientsModule();
+    if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
     const energy = parseFloat(formData.get("energy") as string) || 0;
@@ -120,43 +162,52 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     const sodium = parseFloat(formData.get("sodium") as string) || 0;
     const sugarTotal = parseFloat(formData.get("sugarTotal") as string) || 0;
     const sugarAdded = parseFloat(formData.get("sugarAdded") as string) || 0;
+    const ingredientsText = formData.get("ingredientsText") as string || null;
+    const allergensText = formData.get("allergensText") as string || null;
+    const glutenText = formData.get("glutenText") as string || null;
+    const containsGlutenRaw = formData.get("containsGluten") as string;
+    const containsGluten = containsGlutenRaw === "true" ? true : containsGlutenRaw === "false" ? false : null;
+    const customNutrientsRaw = formData.get("customNutrients") as string;
+    const customNutrients = customNutrientsRaw ? JSON.parse(customNutrientsRaw) : undefined;
+
 
     // Micronutrients
-    const fatMono = parseFloat(formData.get("fatMono") as string) || 0;
-    const fatPoly = parseFloat(formData.get("fatPoly") as string) || 0;
-    const omega6 = parseFloat(formData.get("omega6") as string) || 0;
-    const omega3 = parseFloat(formData.get("omega3") as string) || 0;
-    const cholesterol = parseFloat(formData.get("cholesterol") as string) || 0;
+    const fatMono = optionalNumber(formData, "fatMono");
+    const fatPoly = optionalNumber(formData, "fatPoly");
+    const omega6 = optionalNumber(formData, "omega6");
+    const omega3 = optionalNumber(formData, "omega3");
+    const cholesterol = optionalNumber(formData, "cholesterol");
 
-    const vitaminA = parseFloat(formData.get("vitaminA") as string) || 0;
-    const vitaminD = parseFloat(formData.get("vitaminD") as string) || 0;
-    const vitaminE = parseFloat(formData.get("vitaminE") as string) || 0;
-    const vitaminK = parseFloat(formData.get("vitaminK") as string) || 0;
-    const vitaminC = parseFloat(formData.get("vitaminC") as string) || 0;
-    const thiamin = parseFloat(formData.get("thiamin") as string) || 0;
-    const riboflavin = parseFloat(formData.get("riboflavin") as string) || 0;
-    const niacin = parseFloat(formData.get("niacin") as string) || 0;
-    const vitaminB6 = parseFloat(formData.get("vitaminB6") as string) || 0;
-    const biotin = parseFloat(formData.get("biotin") as string) || 0;
-    const folicAcid = parseFloat(formData.get("folicAcid") as string) || 0;
-    const pantothenicAcid = parseFloat(formData.get("pantothenicAcid") as string) || 0;
-    const vitaminB12 = parseFloat(formData.get("vitaminB12") as string) || 0;
+    const vitaminA = optionalNumber(formData, "vitaminA");
+    const vitaminD = optionalNumber(formData, "vitaminD");
+    const vitaminE = optionalNumber(formData, "vitaminE");
+    const vitaminK = optionalNumber(formData, "vitaminK");
+    const vitaminC = optionalNumber(formData, "vitaminC");
+    const thiamin = optionalNumber(formData, "thiamin");
+    const riboflavin = optionalNumber(formData, "riboflavin");
+    const niacin = optionalNumber(formData, "niacin");
+    const vitaminB6 = optionalNumber(formData, "vitaminB6");
+    const biotin = optionalNumber(formData, "biotin");
+    const folicAcid = optionalNumber(formData, "folicAcid");
+    const pantothenicAcid = optionalNumber(formData, "pantothenicAcid");
+    const vitaminB12 = optionalNumber(formData, "vitaminB12");
 
-    const calcium = parseFloat(formData.get("calcium") as string) || 0;
-    const chloride = parseFloat(formData.get("chloride") as string) || 0;
-    const copper = parseFloat(formData.get("copper") as string) || 0;
-    const chromium = parseFloat(formData.get("chromium") as string) || 0;
-    const iron = parseFloat(formData.get("iron") as string) || 0;
-    const fluoride = parseFloat(formData.get("fluoride") as string) || 0;
-    const phosphorus = parseFloat(formData.get("phosphorus") as string) || 0;
-    const iodine = parseFloat(formData.get("iodine") as string) || 0;
-    const magnesium = parseFloat(formData.get("magnesium") as string) || 0;
-    const manganese = parseFloat(formData.get("manganese") as string) || 0;
-    const molybdenum = parseFloat(formData.get("molybdenum") as string) || 0;
-    const potassium = parseFloat(formData.get("potassium") as string) || 0;
-    const selenium = parseFloat(formData.get("selenium") as string) || 0;
-    const zinc = parseFloat(formData.get("zinc") as string) || 0;
-    const choline = parseFloat(formData.get("choline") as string) || 0;
+    const calcium = optionalNumber(formData, "calcium");
+    const chloride = optionalNumber(formData, "chloride");
+    const copper = optionalNumber(formData, "copper");
+    const chromium = optionalNumber(formData, "chromium");
+    const iron = optionalNumber(formData, "iron");
+    const fluoride = optionalNumber(formData, "fluoride");
+    const phosphorus = optionalNumber(formData, "phosphorus");
+    const iodine = optionalNumber(formData, "iodine");
+    const magnesium = optionalNumber(formData, "magnesium");
+    const manganese = optionalNumber(formData, "manganese");
+    const molybdenum = optionalNumber(formData, "molybdenum");
+    const potassium = optionalNumber(formData, "potassium");
+    const selenium = optionalNumber(formData, "selenium");
+    const zinc = optionalNumber(formData, "zinc");
+    const choline = optionalNumber(formData, "choline");
+    const micronutrients = optionalMicronutrientPayload(formData);
 
     if (!name) return { error: "Nome é obrigatório" };
 
@@ -170,7 +221,9 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
                 name, energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline
+                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
+                ...micronutrients,
+                ingredientsText, allergensText, glutenText, containsGluten, customNutrients,
             }
         });
 

@@ -15,19 +15,36 @@ export default function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
 
     return (
-        <div className="flex h-screen w-full items-center justify-center px-4">
-            <Card className="mx-auto max-w-sm">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Cadastro</CardTitle>
-                    <CardDescription>
-                        Crie sua conta para começar a gerar tabelas.
-                    </CardDescription>
+        <div className="flex min-h-[calc(100svh-4rem)] w-full items-center justify-center px-4 py-10">
+            <Card className="mx-auto grid w-full max-w-5xl overflow-hidden border-border/70 bg-card/95 p-0 shadow-[0_28px_80px_-54px_rgba(15,23,42,0.85)] md:grid-cols-[0.95fr_1fr]">
+                <CardHeader className="relative min-h-[360px] overflow-hidden border-b border-border/70 bg-primary px-7 py-8 text-primary-foreground md:border-b-0 md:border-r">
+                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0)_42%)]" />
+                    <div className="relative flex h-full flex-col justify-end">
+                        <CardTitle className="text-3xl text-white">Cadastro</CardTitle>
+                        <CardDescription className="mt-2 max-w-sm text-primary-foreground/78">
+                            Complete os dados para acessar a plataforma.
+                        </CardDescription>
+                    </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-6 py-7 sm:px-8">
                     <form action={formAction} className="grid gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="name">Nome</Label>
                             <Input id="name" name="name" placeholder="Seu nome" required />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="companyName">Empresa</Label>
+                            <Input id="companyName" name="companyName" placeholder="Nome da empresa" required />
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="document">CPF/CNPJ</Label>
+                                <Input id="document" name="document" placeholder="Documento" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="phone">Telefone</Label>
+                                <Input id="phone" name="phone" placeholder="(00) 00000-0000" required />
+                            </div>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="email">Email</Label>
@@ -56,6 +73,7 @@ export default function RegisterPage() {
                                     {showPassword ? "Ocultar" : "Exibir"}
                                 </button>
                             </div>
+                            <p className="text-xs text-muted-foreground">Use pelo menos 10 caracteres.</p>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="confirmPassword">Confirmar Senha</Label>

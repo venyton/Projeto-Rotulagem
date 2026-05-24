@@ -72,6 +72,9 @@ tables                    Gerador, calculo, persistencia e exportacao de tabelas
 technical-sheets          Importador de fichas tecnicas por IA
 enterprise                Projetos enterprise e rotulo internacional
 i18n                      Idioma global da interface
+saas                      Organizacao, planos, modulos e permissoes por participante
+billing                   Checkout, portal e webhook de assinatura
+marketing                 Eventos de funil, KPIs e palavras-chave
 ```
 
 Convencao interna:
