@@ -5,11 +5,11 @@ const prisma = new PrismaClient();
 
 async function main() {
     const email = 'teste@teste.com';
-    const password = 'teste';
+    const password = process.env.SEED_TEST_PASSWORD || 'TesteSeguro2026';
 
     console.log(`Creating test user ${email}...`);
 
-    const hashedPassword = await hash(password, 10);
+    const hashedPassword = await hash(password, 12);
 
     try {
         const user = await prisma.user.upsert({
@@ -24,7 +24,6 @@ async function main() {
             },
         });
         console.log('Success! Created/Updated user:', user.email);
-        console.log('Password:', password);
     } catch (e) {
         console.error('Error creating user:', e);
     } finally {

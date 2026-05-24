@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 
 console.log('PrismaClient type:', typeof PrismaClient);
-console.log('Env DATABASE_URL:', process.env.DATABASE_URL);
+console.log('Env DATABASE_URL exists:', process.env.DATABASE_URL ? 'YES' : 'NO');
 
 // Workaround attempts
 process.env.DATABASE_URL = "file:./dev.db";

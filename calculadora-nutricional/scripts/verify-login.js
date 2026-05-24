@@ -4,10 +4,14 @@ const { compare } = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function verify() {
-    const email = 'izidoro.venyton@gmail.com';
-    const password = '123456';
+    const email = process.env.VERIFY_EMAIL;
+    const password = process.env.VERIFY_PASSWORD;
 
-    console.log(`Verifying login for ${email}...`);
+    if (!email || !password) {
+        throw new Error('Defina VERIFY_EMAIL e VERIFY_PASSWORD para validar login.');
+    }
+
+    console.log('Verifying login...');
 
     const user = await prisma.user.findUnique({
         where: { email },
@@ -18,8 +22,7 @@ async function verify() {
         return;
     }
 
-    console.log('User found:', user.email);
-    console.log('Stored hash:', user.password);
+    console.log('User found.');
 
     const isValid = await compare(password, user.password);
     console.log('Password valid:', isValid);

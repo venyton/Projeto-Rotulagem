@@ -1,16 +1,19 @@
-const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+const { readWorkbook, worksheetToObjects } = require('./excel-helpers');
 
 const filePath = path.join(__dirname, '../Dataset/runtime/examples/grupos.xlsx');
 console.log('Reading file from:', filePath);
 
-try {
-    const workbook = xlsx.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    // Use raw:true to avoid parsing issues, but we might need parsed numbers
-    const data = xlsx.utils.sheet_to_json(sheet, { defval: "" }); // Use defval to get empty strings for empty cells
+main().catch((e) => {
+    console.error('Error processing file:', e);
+});
+
+async function main() {
+    const workbook = await readWorkbook(filePath);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) throw new Error("Planilha sem abas.");
+    const data = worksheetToObjects(sheet);
 
     const groups = [];
     let currentGroup = null;
@@ -87,6 +90,4 @@ export const FOOD_GROUPS: FoodGroup[] = ${JSON.stringify(groups, null, 4)};
     fs.writeFileSync(outputPath, tsContent);
     console.log(`Successfully generated ${outputPath} with ${groups.length} groups.`);
 
-} catch (e) {
-    console.error('Error processing file:', e);
 }

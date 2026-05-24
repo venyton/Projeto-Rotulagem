@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -7,19 +7,47 @@ const prisma = new PrismaClient();
 
 const filePath = path.join(process.cwd(), 'Dataset/runtime/tabela-taco.xlsx');
 
+function normalizeCellValue(value: ExcelJS.CellValue): any {
+    if (value === null || value === undefined) return "";
+    if (value instanceof Date) return value;
+    if (typeof value !== "object") return value;
+    if ("result" in value) return normalizeCellValue(value.result as ExcelJS.CellValue);
+    if ("text" in value && typeof value.text === "string") return value.text;
+    if ("richText" in value && Array.isArray(value.richText)) {
+        return value.richText.map((item) => item.text).join("");
+    }
+    return String(value);
+}
+
+function worksheetToRows(worksheet: ExcelJS.Worksheet) {
+    const rows: any[][] = [];
+    const columnCount = worksheet.columnCount;
+
+    worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+        const values: any[] = [];
+        for (let col = 1; col <= columnCount; col += 1) {
+            values.push(normalizeCellValue(row.getCell(col).value));
+        }
+        rows[rowNumber - 1] = values;
+    });
+
+    return rows;
+}
+
 async function main() {
     console.log("Starting seed (TS)...");
     if (!fs.existsSync(filePath)) {
         throw new Error(`File not found: ${filePath}`);
     }
 
-    const workbook = XLSX.readFile(filePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
 
     // -- Process Tabela1 (Main Macros) --
-    const s1 = workbook.Sheets['Tabela1'];
+    const s1 = workbook.getWorksheet('Tabela1');
     if (!s1) throw new Error("Tabela1 not found");
 
-    const data1 = XLSX.utils.sheet_to_json(s1, { header: 1 }) as any[][];
+    const data1 = worksheetToRows(s1);
 
     let h1RowIndex = -1;
     for (let i = 0; i < Math.min(data1.length, 20); i++) {
@@ -50,13 +78,13 @@ async function main() {
     if (idxEnergy === -1) throw new Error("Energia column not found");
 
     // -- Process Tabela2 (Fatty Acids) --
-    const s2 = workbook.Sheets['Tabela2'];
+    const s2 = workbook.getWorksheet('Tabela2');
     const fatMap = new Map();
     let h2RowIndex = -1;
     let data2: any[][] = [];
 
     if (s2) {
-        data2 = XLSX.utils.sheet_to_json(s2, { header: 1 }) as any[][];
+        data2 = worksheetToRows(s2);
         for (let i = 0; i < Math.min(data2.length, 20); i++) {
             const rowStr = JSON.stringify(data2[i]);
             if (rowStr && rowStr.includes("Saturados")) {
