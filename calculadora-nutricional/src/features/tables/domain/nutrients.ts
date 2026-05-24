@@ -58,6 +58,7 @@ export interface CalculatedNutrients {
     selenium: number;
     zinc: number;
     choline: number;
+    customNutrients: Record<string, { value: number; unit: string }>;
 }
 
 const MICRO_KEYS = [
@@ -110,7 +111,8 @@ export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: 
         vitaminA: 0, vitaminD: 0, vitaminE: 0, vitaminK: 0, vitaminC: 0,
         thiamin: 0, riboflavin: 0, niacin: 0, vitaminB6: 0, biotin: 0, folicAcid: 0, pantothenicAcid: 0, vitaminB12: 0,
         calcium: 0, chloride: 0, copper: 0, chromium: 0, iron: 0, fluoride: 0, phosphorus: 0, iodine: 0, magnesium: 0,
-        manganese: 0, molybdenum: 0, potassium: 0, selenium: 0, zinc: 0, choline: 0
+        manganese: 0, molybdenum: 0, potassium: 0, selenium: 0, zinc: 0, choline: 0,
+        customNutrients: {}
     };
 
     let totalWeight = 0;
@@ -148,6 +150,17 @@ export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: 
 
         totals.sugarTotal += Math.max(totalSugar, addedSugar);
         totals.sugarAdded += addedSugar;
+        // Custom nutrients
+        const customObj = item.ingredient.customNutrients as Record<string, { value: number; unit: string }> | null;
+        if (customObj && typeof customObj === "object" && !Array.isArray(customObj)) {
+            for (const [cKey, cData] of Object.entries(customObj)) {
+                if (!totals.customNutrients[cKey]) {
+                    totals.customNutrients[cKey] = { value: 0, unit: cData.unit };
+                }
+                totals.customNutrients[cKey].value += (cData.value || 0) * scale;
+            }
+        }
+
     }
 
     const f100 = totalWeight > 0 ? 100 / totalWeight : 0;
@@ -162,7 +175,17 @@ export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: 
 function scaleNutrients(n: CalculatedNutrients, factor: number): CalculatedNutrients {
     const scaled = { ...n };
     for (const key of Object.keys(scaled) as Array<keyof CalculatedNutrients>) {
-        scaled[key] *= factor;
+        if (key === "customNutrients") continue;
+        (scaled[key] as number) *= factor;
     }
+    
+    scaled.customNutrients = {};
+    for (const [cKey, cData] of Object.entries(n.customNutrients)) {
+        scaled.customNutrients[cKey] = {
+            value: cData.value * factor,
+            unit: cData.unit
+        };
+    }
+    
     return scaled;
 }

@@ -103,8 +103,8 @@ async function cacheProductByCode(code: string) {
 
     const ingredient = await prisma.ingredient.upsert({
         where: { id: product.ingredient.id },
-        create: product.ingredient,
-        update: ingredientToCacheData(product.ingredient),
+        create: product.ingredient as any,
+        update: ingredientToCacheData(product.ingredient) as any,
     });
 
     return {
