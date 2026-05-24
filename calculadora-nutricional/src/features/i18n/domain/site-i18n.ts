@@ -14,6 +14,7 @@ export const SITE_LANGUAGES: Array<{ value: SiteLanguage; label: string; shortLa
 
 export const SITE_COPY = {
     "pt-BR": {
+        home: "Início",
         tables: "Tabelas",
         ingredients: "Ingredientes",
         enterprise: "Enterprise",
@@ -25,6 +26,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "en-US": {
+        home: "Home",
         tables: "Labels",
         ingredients: "Ingredients",
         enterprise: "Enterprise",
@@ -36,6 +38,7 @@ export const SITE_COPY = {
         language: "Language",
     },
     "es-MX": {
+        home: "Inicio",
         tables: "Etiquetas",
         ingredients: "Ingredientes",
         enterprise: "Empresarial",
@@ -47,6 +50,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "es-CL": {
+        home: "Inicio",
         tables: "Etiquetas",
         ingredients: "Ingredientes",
         enterprise: "Empresarial",
@@ -58,6 +62,7 @@ export const SITE_COPY = {
         language: "Idioma",
     },
     "fr-CA": {
+        home: "Accueil",
         tables: "Étiquettes",
         ingredients: "Ingrédients",
         enterprise: "Entreprise",

@@ -4,7 +4,7 @@ export default function MyIngredientsPage() {
   return (
     <IngredientsPageContent
       title="Meus Ingredientes"
-      description="Gerencie seus ingredientes personalizados. Voce pode cadastrar novos importando uma planilha Excel."
+      description="Gerencie seus ingredientes personalizados. Você pode cadastrar novos importando uma planilha Excel."
     />
   );
 }
