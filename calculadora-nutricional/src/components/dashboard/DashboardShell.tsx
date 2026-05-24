@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch } from "lucide-react";
+import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -17,8 +17,9 @@ import {
 import { ModeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher, useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
 
-const PRODUCT_NAV_ITEMS: Array<{ href: string; label: string; copyKey?: "tables" | "ingredients" | "enterprise"; icon: typeof LayoutGrid }> = [
-    { href: "/dashboard", label: "Tabelas", copyKey: "tables", icon: LayoutGrid },
+const PRODUCT_NAV_ITEMS: Array<{ href: string; label: string; copyKey?: "home" | "tables" | "ingredients" | "enterprise"; icon: typeof LayoutGrid }> = [
+    { href: "/dashboard", label: "Inicio", copyKey: "home", icon: Home },
+    { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid },
     { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch },
     { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2 },
 ];
@@ -96,7 +97,7 @@ export function DashboardShell({
                                     <Link href="/dashboard/profile">{copy.profileSecurity}</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
-                                    <Link href="/dashboard">{copy.myTables}</Link>
+                                    <Link href="/dashboard/tables">{copy.myTables}</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem

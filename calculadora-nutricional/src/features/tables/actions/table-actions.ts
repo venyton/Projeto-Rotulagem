@@ -123,6 +123,7 @@ export async function saveTable(data: {
         }
 
         revalidatePath("/dashboard");
+        revalidatePath("/dashboard/tables");
         if (savedTableId) {
             revalidatePath(`/dashboard/edit/${savedTableId}`);
         }
