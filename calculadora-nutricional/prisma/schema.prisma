@@ -431,6 +431,7 @@ model Ingredient {
   omega6      Float? @default(0)
   omega3      Float? @default(0)
   cholesterol Float? @default(0)
+  customNutrients Json?
 
   vitaminA        Float? @default(0)
   vitaminD        Float? @default(0)
@@ -495,6 +496,7 @@ model CustomIngredient {
   omega6      Float? @default(0)
   omega3      Float? @default(0)
   cholesterol Float? @default(0)
+  customNutrients Json?
 
   vitaminA        Float? @default(0)
   vitaminD        Float? @default(0)
@@ -577,6 +579,7 @@ model TableItem {
   omega6      Float?
   omega3      Float?
   cholesterol Float?
+  customNutrients Json?
 
   vitaminA        Float?
   vitaminD        Float?
