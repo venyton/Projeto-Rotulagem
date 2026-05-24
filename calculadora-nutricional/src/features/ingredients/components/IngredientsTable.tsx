@@ -33,7 +33,7 @@ type Ingredient = {
     sodium: number;
     sugarTotal: number;
     sugarAdded: number;
-    createdAt: Date;
+    createdAt: string;
     userId: string;
 }
 

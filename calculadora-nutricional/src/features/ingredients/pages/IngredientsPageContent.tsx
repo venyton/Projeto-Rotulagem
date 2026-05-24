@@ -19,11 +19,16 @@ export async function IngredientsPageContent({
   description,
   showAddButton = false,
 }: IngredientsPageContentProps) {
-  let ingredients: Awaited<ReturnType<typeof getUserIngredients>> = [];
+  let ingredients: any[] = [];
   let error: string | null = null;
 
   try {
-    ingredients = await getUserIngredients();
+    const rawIngredients = await getUserIngredients();
+
+    ingredients = rawIngredients.map(ing => ({
+        ...ing,
+        createdAt: ing.createdAt.toISOString()
+    }));
   } catch (err) {
     error = err instanceof Error ? err.message : 'Erro desconhecido ao carregar ingredientes.';
   }
