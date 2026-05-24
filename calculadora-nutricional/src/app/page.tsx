@@ -71,7 +71,7 @@ const DAYANE_NAME = "Dayane Rosalyn Izidoro Plocharski";
 const DAYANE_HEADLINE =
   "Dra. | Food Engineering | Especialista em Rotulagem | R&D | RT | PCQI | Regulatory Affairs | Food Safety | Consultora | Professora";
 const DAYANE_LINKEDIN_COVER_FALLBACK =
-  "https://media.licdn.com/dms/image/v2/D4D16AQGc1L37LmxXeg/profile-displaybackgroundimage-shrink_200_800/B4DZ3By9WWGQAY-/0/1777072855587?e=1778716800&v=beta&t=D4C3-62Y4T2Ct5mVklY41ZUZhRZ8JUgdeGyjQL1PLPs";
+  "https://images.unsplash.com/photo-1574169208507-84376144848b?auto=format&fit=crop&w=1400&q=80"; // Imagem temporária de laboratório/alimentos
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

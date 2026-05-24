@@ -127,6 +127,8 @@ model User {
   twoFactorPendingSecret    String?                    @db.Text
   twoFactorConfirmedAt      DateTime?
   twoFactorLastUsedAt       DateTime?
+  resetPasswordToken        String?                    @unique @db.Text
+  resetPasswordExpiresAt    DateTime?
   ownedOrganizations        Organization[]             @relation("OrganizationOwner")
   organizationMemberships   OrganizationMember[]
   billingCustomers          BillingCustomer[]
@@ -423,6 +425,7 @@ model Ingredient {
   fiber      Float // g
   sodium     Float // mg
   sugarTotal Float? // g
+  sugarAdded Float? @default(0) // g
   origin     String? // "TACO", etc.
 
   // Micronutrients
