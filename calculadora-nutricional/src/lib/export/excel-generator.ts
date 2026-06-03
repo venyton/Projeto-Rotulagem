@@ -3,12 +3,9 @@ import { access } from "node:fs/promises";
 import path from "path";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
+  AnnexIvNutrientKey,
   calculateVD,
-  roundEnergy,
-  roundMacro,
-  roundSaturatedTrans,
-  roundSodium,
-  roundSugars,
+  formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
@@ -43,6 +40,18 @@ export const ALL_SHEET_TYPES: SheetType[] = [
 ];
 
 export const SUPPLEMENT_SHEET_TYPES: SheetType[] = ["SUPLEM", "SUPLEM-POP"];
+const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
+  "energy",
+  "carbs",
+  "sugarTotal",
+  "sugarAdded",
+  "protein",
+  "fatTotal",
+  "fatSat",
+  "fatTrans",
+  "fiber",
+  "sodium",
+];
 
 export type ExportBody = {
   title?: string;
@@ -97,36 +106,49 @@ function getPortionLine(size: number, measure: string) {
   return `Porção: ${s} g (${m})`;
 }
 
+function getAnnexIvValues(source: Record<string, number>) {
+  return Object.fromEntries(
+    ANNEX_IV_KEYS.map((key) => {
+      const num = Number(source[key]);
+      return [key, Number.isFinite(num) && num > 0 ? num : 0];
+    })
+  ) as Record<AnnexIvNutrientKey, number>;
+}
+
 function buildNutrientMap(body: ExportBody, vdr: Record<string, number | null | undefined>): NutrientMap {
   const p100 = body.per100g as unknown as Record<string, number>;
   const pPortion = body.perPortion as unknown as Record<string, number>;
+  const annexIvValues = {
+    per100g: getAnnexIvValues(p100),
+    perPortion: getAnnexIvValues(pPortion),
+  };
 
   const keys = [
-    { key: "energy", name: "Valor energético (kcal)", round: roundEnergy },
-    { key: "carbs", name: "Carboidratos totais (g)", round: roundMacro },
-    { key: "sugarTotal", name: "Açúcares totais (g)", round: roundSugars },
-    { key: "sugarAdded", name: "Açúcares adicionados (g)", round: roundSugars },
-    { key: "protein", name: "Proteínas (g)", round: roundMacro },
-    { key: "fatTotal", name: "Gorduras totais (g)", round: roundMacro },
-    { key: "fatSat", name: "Gorduras saturadas (g)", round: roundSaturatedTrans },
-    { key: "fatTrans", name: "Gorduras trans (g)", round: roundSaturatedTrans },
-    { key: "fiber", name: "Fibras alimentares (g)", round: roundMacro },
-    { key: "sodium", name: "Sódio (mg)", round: roundSodium },
+    { key: "energy", name: "Valor energético (kcal)" },
+    { key: "carbs", name: "Carboidratos totais (g)" },
+    { key: "sugarTotal", name: "Açúcares totais (g)" },
+    { key: "sugarAdded", name: "Açúcares adicionados (g)" },
+    { key: "protein", name: "Proteínas (g)" },
+    { key: "fatTotal", name: "Gorduras totais (g)" },
+    { key: "fatSat", name: "Gorduras saturadas (g)" },
+    { key: "fatTrans", name: "Gorduras trans (g)" },
+    { key: "fiber", name: "Fibras alimentares (g)" },
+    { key: "sodium", name: "Sódio (mg)" },
   ];
 
   const map: Record<string, Metric> = {};
 
-  keys.forEach(({ key, name, round }) => {
-    const raw100 = p100[key] ?? 0;
-    const rawPortion = pPortion[key] ?? 0;
+  keys.forEach(({ key, name }) => {
+    const nutrientKey = key as AnnexIvNutrientKey;
+    const display = formatAnnexIvNutrientPair(nutrientKey, annexIvValues, { isSupplement: body.isSupplement });
     const ref = vdr[key];
 
     map[key] = {
       name,
-      per100: round(raw100).replace(".", ","),
-      portion: round(rawPortion).replace(".", ","),
-      vd100: body.showDailyValue === false ? "" : calculateVD(raw100, ref ?? null),
-      vdPortion: body.showDailyValue === false ? "" : calculateVD(rawPortion, ref ?? null),
+      per100: display.per100,
+      portion: display.portion,
+      vd100: body.showDailyValue === false ? "" : calculateVD(display.per100Value, ref ?? null),
+      vdPortion: body.showDailyValue === false ? "" : calculateVD(display.portionValue, ref ?? null),
     };
   });
 

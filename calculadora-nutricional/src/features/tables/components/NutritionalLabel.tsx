@@ -5,12 +5,9 @@ import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import { MagnifyingGlassLabel } from "./MagnifyingGlassLabel";
 import { 
-    roundEnergy, 
-    roundMacro, 
-    roundSaturatedTrans, 
-    roundSodium, 
-    roundSugars,
-    calculateVD
+    AnnexIvNutrientKey,
+    calculateVD,
+    formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 
 export interface NutritionalLabelProps {
@@ -27,6 +24,7 @@ export interface NutritionalLabelProps {
         unit: string;
     }>;
     showDailyValue?: boolean;
+    isSupplement?: boolean;
     fop?: {
         highSugar: boolean;
         highFat: boolean;
@@ -51,6 +49,18 @@ type VdrKey = keyof VdrValues;
 type IndentLevel = 0 | 1 | 2;
 const DEFAULT_VD_SUGAR_ADDED = 50;
 const DEFAULT_VD_FAT_TRANS = 2;
+const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
+    "energy",
+    "carbs",
+    "sugarTotal",
+    "sugarAdded",
+    "protein",
+    "fatTotal",
+    "fatSat",
+    "fatTrans",
+    "fiber",
+    "sodium",
+];
 
 const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => (nutrients[key] as number) || 0;
 
@@ -72,6 +82,12 @@ const getVdReference = (vdr: VdrValues, key: NutrientKey) => {
     }
     return getVdrValue(vdr, key) ?? null;
 };
+
+const getAnnexIvValues = (nutrients: CalculatedNutrients) => (
+    Object.fromEntries(
+        ANNEX_IV_KEYS.map((key) => [key, getNutrientValue(nutrients, key)])
+    ) as Record<AnnexIvNutrientKey, number>
+);
 
 const getIndentClass = (indentLevel: IndentLevel = 0) => {
     if (indentLevel === 2) return "pl-6";
@@ -148,6 +164,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     selectedNutrients,
     extraConstituents = [],
     showDailyValue = true,
+    isSupplement = false,
     fop,
     previewType = "VERT",
     id = "nutrition-label-container",
@@ -156,6 +173,22 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const adultsVdr = VDR[POPULATION_GROUPS.ADULTS];
     const firstGroupLabel = POPULATION_LABELS[popGroup] || POPULATION_LABELS[POPULATION_GROUPS.ADULTS];
     const secondGroupLabel = POPULATION_LABELS[POPULATION_GROUPS.ADULTS];
+    const annexIvValues = {
+        per100g: getAnnexIvValues(per100g),
+        perPortion: getAnnexIvValues(perPortion),
+    };
+    const formatCore = (key: AnnexIvNutrientKey) =>
+        formatAnnexIvNutrientPair(key, annexIvValues, { isSupplement });
+    const energyDisplay = formatCore("energy");
+    const carbsDisplay = formatCore("carbs");
+    const sugarTotalDisplay = formatCore("sugarTotal");
+    const sugarAddedDisplay = formatCore("sugarAdded");
+    const proteinDisplay = formatCore("protein");
+    const fatTotalDisplay = formatCore("fatTotal");
+    const fatSatDisplay = formatCore("fatSat");
+    const fatTransDisplay = formatCore("fatTrans");
+    const fiberDisplay = formatCore("fiber");
+    const sodiumDisplay = formatCore("sodium");
 
     type BaseRow = {
         label: string;
@@ -171,24 +204,24 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         { 
             label: "Valor energético (kcal)", 
             nutrientKey: "energy" as NutrientKey,
-            per100: roundEnergy(per100g.energy || 0).replace(".", ","), 
-            portion: roundEnergy(perPortion.energy || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.energy || 0, vdr.energy), 
-            vd100: getSafeVD(per100g.energy || 0, vdr.energy)
+            per100: energyDisplay.per100,
+            portion: energyDisplay.portion,
+            vdPortion: getSafeVD(energyDisplay.portionValue, vdr.energy),
+            vd100: getSafeVD(energyDisplay.per100Value, vdr.energy)
         },
         { 
             label: "Carboidratos (g)", 
             nutrientKey: "carbs" as NutrientKey,
-            per100: roundMacro(per100g.carbs || 0).replace(".", ","), 
-            portion: roundMacro(perPortion.carbs || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.carbs || 0, vdr.carbs), 
-            vd100: getSafeVD(per100g.carbs || 0, vdr.carbs)
+            per100: carbsDisplay.per100,
+            portion: carbsDisplay.portion,
+            vdPortion: getSafeVD(carbsDisplay.portionValue, vdr.carbs),
+            vd100: getSafeVD(carbsDisplay.per100Value, vdr.carbs)
         },
         { 
             label: "Açúcares totais (g)", 
             nutrientKey: "sugarTotal" as NutrientKey,
-            per100: roundSugars(per100g.sugarTotal || 0).replace(".", ","), 
-            portion: roundSugars(perPortion.sugarTotal || 0).replace(".", ","), 
+            per100: sugarTotalDisplay.per100,
+            portion: sugarTotalDisplay.portion,
             vdPortion: "", 
             vd100: "", 
             indentLevel: 1
@@ -196,61 +229,61 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         { 
             label: "Açúcares adicionados (g)", 
             nutrientKey: "sugarAdded" as NutrientKey,
-            per100: roundSugars(per100g.sugarAdded || 0).replace(".", ","), 
-            portion: roundSugars(perPortion.sugarAdded || 0).replace(".", ","), 
-            vdPortion: getZeroWhenNoVd(perPortion.sugarAdded || 0, getVdReference(vdr, "sugarAdded")), 
-            vd100: getZeroWhenNoVd(per100g.sugarAdded || 0, getVdReference(vdr, "sugarAdded")), 
+            per100: sugarAddedDisplay.per100,
+            portion: sugarAddedDisplay.portion,
+            vdPortion: getZeroWhenNoVd(sugarAddedDisplay.portionValue, getVdReference(vdr, "sugarAdded")),
+            vd100: getZeroWhenNoVd(sugarAddedDisplay.per100Value, getVdReference(vdr, "sugarAdded")),
             indentLevel: 2
         },
         { 
             label: "Proteínas (g)", 
             nutrientKey: "protein" as NutrientKey,
-            per100: roundMacro(per100g.protein || 0).replace(".", ","), 
-            portion: roundMacro(perPortion.protein || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.protein || 0, vdr.protein), 
-            vd100: getSafeVD(per100g.protein || 0, vdr.protein)
+            per100: proteinDisplay.per100,
+            portion: proteinDisplay.portion,
+            vdPortion: getSafeVD(proteinDisplay.portionValue, vdr.protein),
+            vd100: getSafeVD(proteinDisplay.per100Value, vdr.protein)
         },
         { 
             label: "Gorduras totais (g)", 
             nutrientKey: "fatTotal" as NutrientKey,
-            per100: roundMacro(per100g.fatTotal || 0).replace(".", ","), 
-            portion: roundMacro(perPortion.fatTotal || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.fatTotal || 0, vdr.fatTotal), 
-            vd100: getSafeVD(per100g.fatTotal || 0, vdr.fatTotal)
+            per100: fatTotalDisplay.per100,
+            portion: fatTotalDisplay.portion,
+            vdPortion: getSafeVD(fatTotalDisplay.portionValue, vdr.fatTotal),
+            vd100: getSafeVD(fatTotalDisplay.per100Value, vdr.fatTotal)
         },
         { 
             label: "Gorduras saturadas (g)", 
             nutrientKey: "fatSat" as NutrientKey,
-            per100: roundSaturatedTrans(per100g.fatSat || 0).replace(".", ","), 
-            portion: roundSaturatedTrans(perPortion.fatSat || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.fatSat || 0, vdr.fatSat), 
-            vd100: getSafeVD(per100g.fatSat || 0, vdr.fatSat), 
+            per100: fatSatDisplay.per100,
+            portion: fatSatDisplay.portion,
+            vdPortion: getSafeVD(fatSatDisplay.portionValue, vdr.fatSat),
+            vd100: getSafeVD(fatSatDisplay.per100Value, vdr.fatSat),
             indentLevel: 1
         },
         { 
             label: "Gorduras trans (g)", 
             nutrientKey: "fatTrans" as NutrientKey,
-            per100: roundSaturatedTrans(per100g.fatTrans || 0).replace(".", ","), 
-            portion: roundSaturatedTrans(perPortion.fatTrans || 0).replace(".", ","), 
-            vdPortion: getZeroWhenNoVd(perPortion.fatTrans || 0, getVdReference(vdr, "fatTrans")), 
-            vd100: getZeroWhenNoVd(per100g.fatTrans || 0, getVdReference(vdr, "fatTrans")), 
+            per100: fatTransDisplay.per100,
+            portion: fatTransDisplay.portion,
+            vdPortion: getZeroWhenNoVd(fatTransDisplay.portionValue, getVdReference(vdr, "fatTrans")),
+            vd100: getZeroWhenNoVd(fatTransDisplay.per100Value, getVdReference(vdr, "fatTrans")),
             indentLevel: 1
         },
         { 
             label: "Fibras alimentares (g)", 
             nutrientKey: "fiber" as NutrientKey,
-            per100: roundMacro(per100g.fiber || 0).replace(".", ","), 
-            portion: roundMacro(perPortion.fiber || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.fiber || 0, vdr.fiber), 
-            vd100: getSafeVD(per100g.fiber || 0, vdr.fiber)
+            per100: fiberDisplay.per100,
+            portion: fiberDisplay.portion,
+            vdPortion: getSafeVD(fiberDisplay.portionValue, vdr.fiber),
+            vd100: getSafeVD(fiberDisplay.per100Value, vdr.fiber)
         },
         { 
             label: "Sódio (mg)", 
             nutrientKey: "sodium" as NutrientKey,
-            per100: roundSodium(per100g.sodium || 0).replace(".", ","), 
-            portion: roundSodium(perPortion.sodium || 0).replace(".", ","), 
-            vdPortion: getSafeVD(perPortion.sodium || 0, vdr.sodium), 
-            vd100: getSafeVD(per100g.sodium || 0, vdr.sodium)
+            per100: sodiumDisplay.per100,
+            portion: sodiumDisplay.portion,
+            vdPortion: getSafeVD(sodiumDisplay.portionValue, vdr.sodium),
+            vd100: getSafeVD(sodiumDisplay.per100Value, vdr.sodium)
         },
     ];
 

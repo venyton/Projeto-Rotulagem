@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { IngredientSelector } from "@/features/ingredients/components/IngredientSelector";
 import { OpenFoodFactsImporter } from "@/features/open-food-facts/components/OpenFoodFactsImporter";
 import {
@@ -57,6 +56,16 @@ import {
     parseHouseholdMeasureValue,
     toHouseholdMeasureLabel,
 } from "@/features/tables/domain/household-measures";
+import {
+    AMINO_ACID_REFERENCE_PROFILE,
+    AminoAcidKey,
+    AminoAcidProfileInput,
+    calculateAminoAcidProfile,
+    hasAminoAcidProfileInput,
+    parsePositiveNumber,
+    toAminoAcidProfileInput,
+} from "@/features/tables/domain/amino-acids";
+import { checkAnnexXxNutritionClaims, NutritionClaimStatus } from "@/features/tables/domain/annex-xx-claims";
 
 type ExcelTableType =
     | "VERT"
@@ -115,6 +124,8 @@ type TableUiState = {
     preparedSodium?: number;
     iodizedSaltStatement?: string;
     flourStatement?: string;
+    aminoAcidProfile?: AminoAcidProfileInput;
+    aminoAcidProteinOverride?: string;
 };
 
 const EXCEL_TABLE_OPTIONS: Array<{ value: ExcelTableType; label: string }> = [
@@ -151,6 +162,20 @@ const REGULATORY_CATEGORY_OPTIONS: Array<{ value: RegulatoryCategory; label: str
     { value: "lactose-restriction", label: "Dieta com restrição de lactose" },
     { value: "hyposodium-salt", label: "Sal hipossódico" },
 ];
+const CLAIM_STATUS_STYLES: Record<NutritionClaimStatus, { label: string; className: string }> = {
+    allowed: {
+        label: "Pode",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300",
+    },
+    attention: {
+        label: "Atenção",
+        className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300",
+    },
+    blocked: {
+        label: "Não pode",
+        className: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300",
+    },
+};
 
 const NO_DAILY_VALUE_CATEGORIES: RegulatoryCategory[] = [
     "infant-formula",
@@ -220,7 +245,6 @@ interface TableGeneratorProps {
 }
 
 export function TableGenerator({ initialData }: TableGeneratorProps) {
-    const router = useRouter();
     const initialMeasure = initialData?.householdMeasure || "";
     const savedUiState: TableUiState = toTableUiState(initialData?.uiState);
     const [tableId, setTableId] = useState(initialData?.id || "");
@@ -286,6 +310,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     );
     const [flourStatement, setFlourStatement] = useState(
         savedUiState.flourStatement || "Este produto é enriquecido com ferro e ácido fólico."
+    );
+    const [aminoAcidProfile, setAminoAcidProfile] = useState<AminoAcidProfileInput>(() =>
+        toAminoAcidProfileInput(savedUiState.aminoAcidProfile)
+    );
+    const [aminoAcidProteinOverride, setAminoAcidProteinOverride] = useState(
+        savedUiState.aminoAcidProteinOverride || ""
     );
     const [previewTableType, setPreviewTableType] = useState<ExcelTableType>(savedUiState.previewTableType || "VERT");
     const [saving, setSaving] = useState(false);
@@ -417,6 +447,36 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         }
         return statements;
     }, [flourStatement, iodizedSaltStatement, isExcludedFromRdc429, requiresFlourStatement, requiresIodizedSaltStatement]);
+    const aminoAcidProteinPer100g = React.useMemo(() => {
+        const override = parsePositiveNumber(aminoAcidProteinOverride);
+        if (override !== null && override > 0) return override;
+        return result?.per100g.protein || 0;
+    }, [aminoAcidProteinOverride, result]);
+    const aminoAcidResults = React.useMemo(
+        () => calculateAminoAcidProfile(aminoAcidProfile, aminoAcidProteinPer100g),
+        [aminoAcidProfile, aminoAcidProteinPer100g]
+    );
+    const hasAminoAcidInput = hasAminoAcidProfileInput(aminoAcidProfile);
+    const filledAminoAcidResults = aminoAcidResults.filter((item) => item.compliant !== null);
+    const aminoAcidMissingCount = aminoAcidResults.length - filledAminoAcidResults.length;
+    const aminoAcidFailCount = filledAminoAcidResults.filter((item) => item.compliant === false).length;
+    const aminoAcidPassCount = filledAminoAcidResults.filter((item) => item.compliant === true).length;
+    const aminoAcidProfileStatus =
+        filledAminoAcidResults.length === 0 || aminoAcidProteinPer100g <= 0
+            ? "Preencha o perfil para calcular."
+            : aminoAcidFailCount === 0 && aminoAcidMissingCount === 0
+                ? "Perfil atende ao Anexo XXI."
+                : `${aminoAcidPassCount} dentro, ${aminoAcidFailCount} fora, ${aminoAcidMissingCount} sem dado.`;
+    const nutritionClaims = React.useMemo(() => {
+        if (!result) return [];
+        return checkAnnexXxNutritionClaims({
+            per100g: result.per100g,
+            perPortion: result.perPortion,
+            portionSize,
+            aminoAcids: aminoAcidResults,
+            highSodiumFop: !!fopStatus?.highSodium,
+        });
+    }, [aminoAcidResults, fopStatus, portionSize, result]);
 
     const complianceWarnings = React.useMemo(() => {
         if (!enableStrictCompliance) return [] as string[];
@@ -772,6 +832,17 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         toast.success("Micronutrientes desmarcados.");
     };
 
+    const updateAminoAcidProfile = (key: AminoAcidKey, value: string) => {
+        setAminoAcidProfile((prev) => ({ ...prev, [key]: value }));
+    };
+
+    const clearAminoAcidProfile = () => {
+        if (!hasAminoAcidInput && aminoAcidProteinOverride.trim().length === 0) return;
+        setAminoAcidProfile(toAminoAcidProfileInput(null));
+        setAminoAcidProteinOverride("");
+        toast.success("Perfil de aminoácidos limpo.");
+    };
+
     useEffect(() => {
         if (isSupplement) {
             setRegulatoryCategory("supplement");
@@ -850,6 +921,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
             if (typeof persisted.iodizedSaltStatement === "string") setIodizedSaltStatement(persisted.iodizedSaltStatement);
             if (typeof persisted.flourStatement === "string") setFlourStatement(persisted.flourStatement);
+            if (persisted.aminoAcidProfile) setAminoAcidProfile(toAminoAcidProfileInput(persisted.aminoAcidProfile));
+            if (typeof persisted.aminoAcidProteinOverride === "string") setAminoAcidProteinOverride(persisted.aminoAcidProteinOverride);
         } catch {
             // ignore invalid local state
         }
@@ -956,6 +1029,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     preparedSodium,
                     iodizedSaltStatement,
                     flourStatement,
+                    aminoAcidProfile,
+                    aminoAcidProteinOverride,
                 },
             });
             if (response?.error) {
@@ -998,6 +1073,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     preparedSodium,
                     iodizedSaltStatement,
                     flourStatement,
+                    aminoAcidProfile,
+                    aminoAcidProteinOverride,
                 };
                 window.localStorage.setItem(storageKey, JSON.stringify(persisted));
             }
@@ -1603,6 +1680,157 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             )}
                         </div>
 
+                        <div className="rounded-lg border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/20">
+                            <div className="border-b border-border/60 px-4 py-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                                        Perfil de Aminoácidos - Anexo XXI
+                                        <HelpTip>Informe o perfil teórico em mg de aminoácido por 100 g de produto. O sistema divide pela proteína em g/100 g e compara com a referência em mg/g de proteína.</HelpTip>
+                                    </h3>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={clearAminoAcidProfile}
+                                        disabled={!hasAminoAcidInput && aminoAcidProteinOverride.trim().length === 0}
+                                    >
+                                        Limpar
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="space-y-4 p-4">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr]">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="amino-acid-protein" className="inline-flex items-center gap-1.5">
+                                            Proteína usada no cálculo (g/100 g)
+                                            <HelpTip>Se vazio, usa a proteína calculada pela receita. Preencha quando o laudo do perfil usar outro valor de proteína.</HelpTip>
+                                        </Label>
+                                        <Input
+                                            id="amino-acid-protein"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={aminoAcidProteinOverride}
+                                            onChange={(event) => setAminoAcidProteinOverride(event.target.value)}
+                                            placeholder={result ? result.per100g.protein.toFixed(2) : "ex: 18,5"}
+                                        />
+                                    </div>
+                                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950/20">
+                                        <div className="font-semibold text-foreground">{aminoAcidProfileStatus}</div>
+                                        <div className="mt-1 text-muted-foreground">
+                                            Base: {aminoAcidProteinPer100g > 0 ? `${aminoAcidProteinPer100g.toFixed(2)} g de proteína/100 g` : "sem proteína calculada"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950/20">
+                                    <table className="w-full min-w-[42rem] text-sm">
+                                        <thead className="bg-slate-50 text-xs text-muted-foreground dark:bg-slate-900/50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-semibold">Aminoácido</th>
+                                                <th className="px-3 py-2 text-right font-semibold">Perfil (mg/100 g)</th>
+                                                <th className="px-3 py-2 text-right font-semibold">Anexo XXI (mg/g prot.)</th>
+                                                <th className="px-3 py-2 text-right font-semibold">Calculado</th>
+                                                <th className="px-3 py-2 text-left font-semibold">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {AMINO_ACID_REFERENCE_PROFILE.map((reference) => {
+                                                const row = aminoAcidResults.find((item) => item.key === reference.key);
+                                                const calculated = row?.calculatedMgPerGProtein;
+                                                return (
+                                                    <tr key={reference.key} className="border-t border-slate-200 dark:border-slate-700">
+                                                        <td className="px-3 py-2 font-medium">{reference.label}</td>
+                                                        <td className="px-3 py-2">
+                                                            <Input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={aminoAcidProfile[reference.key]}
+                                                                onChange={(event) => updateAminoAcidProfile(reference.key, event.target.value)}
+                                                                placeholder="0"
+                                                                className="h-8 text-right"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right">{reference.referenceMgPerGProtein}</td>
+                                                        <td className="px-3 py-2 text-right">
+                                                            {calculated === null || calculated === undefined ? "-" : calculated.toFixed(1)}
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            {row?.compliant === null ? (
+                                                                <span className="text-xs text-muted-foreground">Sem dado</span>
+                                                            ) : row?.compliant ? (
+                                                                <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                                                    Dentro
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                                                                    Fora
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-900/20">
+                            <div className="border-b border-border/60 px-4 py-3">
+                                <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                                    Alegações Nutricionais - Anexo XX
+                                    <HelpTip>Confere alegações de conteúdo absoluto mais comuns. Alegações comparativas e de sem adição exigem dados de referência ou formulação que não estão só na tabela nutricional.</HelpTip>
+                                </h3>
+                            </div>
+                            <div className="space-y-3 p-4">
+                                {nutritionClaims.length > 0 ? (
+                                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950/20">
+                                        <table className="w-full min-w-[46rem] text-sm">
+                                            <thead className="bg-slate-50 text-xs text-muted-foreground dark:bg-slate-900/50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-semibold">Alegação</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Critério</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Resultado</th>
+                                                    <th className="px-3 py-2 text-left font-semibold">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {nutritionClaims.map((claim) => {
+                                                    const style = CLAIM_STATUS_STYLES[claim.status];
+                                                    return (
+                                                        <tr key={claim.key} className="border-t border-slate-200 dark:border-slate-700">
+                                                            <td className="px-3 py-2">
+                                                                <div className="font-medium">{claim.label}</div>
+                                                                <div className="text-xs text-muted-foreground">{claim.group}</div>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-xs leading-relaxed">{claim.criterion}</td>
+                                                            <td className="px-3 py-2 text-xs leading-relaxed">
+                                                                <div>{claim.evidence}</div>
+                                                                {claim.note && <div className="mt-1 text-muted-foreground">{claim.note}</div>}
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${style.className}`}>
+                                                                    {style.label}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-dashed border-slate-300 bg-white py-4 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950/20">
+                                        Adicione ingredientes para avaliar alegações.
+                                    </div>
+                                )}
+                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                    Para embalagem individual, alegações também precisam atender o conteúdo total da embalagem quando aplicável.
+                                </p>
+                            </div>
+                        </div>
+
                         <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3">
                                 <Label className="inline-flex items-center gap-1.5">
@@ -1917,6 +2145,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 selectedNutrients={selectedNutrients}
                                                 extraConstituents={extraConstituents}
                                                 showDailyValue={showDailyValue}
+                                                isSupplement={isSupplement}
                                                 fop={undefined}
                                                 previewType={previewTableType}
                                             />
@@ -2127,6 +2356,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     selectedNutrients={selectedNutrients}
                                     extraConstituents={extraConstituents}
                                     showDailyValue={showDailyValue}
+                                    isSupplement={isSupplement}
                                     fop={undefined}
                                     previewType={tableType}
                                     id={`nutrition-label-container-export-${tableType}`}
