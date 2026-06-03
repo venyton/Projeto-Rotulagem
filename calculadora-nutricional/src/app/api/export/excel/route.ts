@@ -8,12 +8,9 @@ import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
+  AnnexIvNutrientKey,
   calculateVD,
-  roundEnergy,
-  roundMacro,
-  roundSaturatedTrans,
-  roundSodium,
-  roundSugars,
+  formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
@@ -52,6 +49,18 @@ const ALL_SHEET_TYPES: SheetType[] = [
 const SUPPLEMENT_SHEET_TYPES: SheetType[] = ["SUPLEM", "SUPLEM-POP"];
 const DEFAULT_VD_SUGAR_ADDED = 50;
 const DEFAULT_VD_FAT_TRANS = 2;
+const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
+  "energy",
+  "carbs",
+  "sugarTotal",
+  "sugarAdded",
+  "protein",
+  "fatTotal",
+  "fatSat",
+  "fatTrans",
+  "fiber",
+  "sodium",
+];
 
 type ExportBody = {
   title?: string;
@@ -141,64 +150,49 @@ function formatMicro(val: number): string {
   return Math.round(val).toString();
 }
 
+function getAnnexIvValues(source: Partial<Record<keyof CalculatedNutrients, unknown>>) {
+  return Object.fromEntries(
+    ANNEX_IV_KEYS.map((key) => {
+      const num = Number(source[key]);
+      return [key, Number.isFinite(num) && num > 0 ? num : 0];
+    })
+  ) as Record<AnnexIvNutrientKey, number>;
+}
+
 function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackVdr>): NutrientMap {
   const per100 = (body.per100g ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
   const perPortion = (body.perPortion ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
-  const safeNumber = (value: unknown) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : 0;
+  const annexIvValues = {
+    per100g: getAnnexIvValues(per100),
+    perPortion: getAnnexIvValues(perPortion),
   };
-  const valueByKey = (key: keyof CalculatedNutrients) => ({
-    per100: safeNumber(per100[key]),
-    perPortion: safeNumber(perPortion[key]),
-  });
   const getVD = (val: number, ref: number | null | undefined) => calculateVD(val, ref ?? null);
 
   const metric = (
-    per100Raw: number,
-    portionRaw: number,
-    format: (val: number) => string,
+    key: AnnexIvNutrientKey,
     ref: number | null | undefined,
     hasVD = true
-  ): Metric => ({
-    per100: format(per100Raw),
-    portion: format(portionRaw),
-    vd100: hasVD && body.showDailyValue !== false ? getVD(per100Raw, ref) : "",
-    vdPortion: hasVD && body.showDailyValue !== false ? getVD(portionRaw, ref) : "",
-  });
+  ): Metric => {
+    const display = formatAnnexIvNutrientPair(key, annexIvValues, { isSupplement: body.isSupplement });
+    return {
+      per100: display.per100,
+      portion: display.portion,
+      vd100: hasVD && body.showDailyValue !== false ? getVD(display.per100Value, ref) : "",
+      vdPortion: hasVD && body.showDailyValue !== false ? getVD(display.portionValue, ref) : "",
+    };
+  };
 
   return {
-    energy: metric(valueByKey("energy").per100, valueByKey("energy").perPortion, roundEnergy, vdr.energy),
-    carbs: metric(valueByKey("carbs").per100, valueByKey("carbs").perPortion, roundMacro, vdr.carbs),
-    sugarTotal: metric(
-      valueByKey("sugarTotal").per100,
-      valueByKey("sugarTotal").perPortion,
-      roundSugars,
-      null,
-      false
-    ),
-    sugarAdded: metric(
-      valueByKey("sugarAdded").per100,
-      valueByKey("sugarAdded").perPortion,
-      roundSugars,
-      getVdReference(vdr, "sugarAdded")
-    ),
-    protein: metric(valueByKey("protein").per100, valueByKey("protein").perPortion, roundMacro, vdr.protein),
-    fatTotal: metric(valueByKey("fatTotal").per100, valueByKey("fatTotal").perPortion, roundMacro, vdr.fatTotal),
-    fatSat: metric(
-      valueByKey("fatSat").per100,
-      valueByKey("fatSat").perPortion,
-      roundSaturatedTrans,
-      vdr.fatSat
-    ),
-    fatTrans: metric(
-      valueByKey("fatTrans").per100,
-      valueByKey("fatTrans").perPortion,
-      roundSaturatedTrans,
-      getVdReference(vdr, "fatTrans")
-    ),
-    fiber: metric(valueByKey("fiber").per100, valueByKey("fiber").perPortion, roundMacro, vdr.fiber),
-    sodium: metric(valueByKey("sodium").per100, valueByKey("sodium").perPortion, roundSodium, vdr.sodium),
+    energy: metric("energy", vdr.energy),
+    carbs: metric("carbs", vdr.carbs),
+    sugarTotal: metric("sugarTotal", null, false),
+    sugarAdded: metric("sugarAdded", getVdReference(vdr, "sugarAdded")),
+    protein: metric("protein", vdr.protein),
+    fatTotal: metric("fatTotal", vdr.fatTotal),
+    fatSat: metric("fatSat", vdr.fatSat),
+    fatTrans: metric("fatTrans", getVdReference(vdr, "fatTrans")),
+    fiber: metric("fiber", vdr.fiber),
+    sodium: metric("sodium", vdr.sodium),
   };
 }
 

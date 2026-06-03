@@ -1,9 +1,8 @@
 'use client'
 
 import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { ChevronsUpDown } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
     Command,
@@ -23,7 +22,6 @@ import { searchIngredients } from "@/features/ingredients/actions/custom-ingredi
 
 export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) => void }) {
     const [open, setOpen] = React.useState(false)
-    const [selected, setSelected] = React.useState<Ingredient | null>(null)
     const [query, setQuery] = React.useState("")
     const [results, setResults] = React.useState<Ingredient[]>([])
     const [loading, setLoading] = React.useState(false)
@@ -70,6 +68,13 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
         setQuery("")
     }, [open])
 
+    const handleSelect = (item: Ingredient) => {
+        onSelect(item)
+        setQuery("")
+        setResults([])
+        setOpen(false)
+    }
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -80,7 +85,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
                     className="h-12 w-full justify-between gap-2 rounded-xl border-border/70 bg-background/95 px-3 text-sm shadow-sm hover:bg-accent/40"
                 >
                     <span className="truncate text-left">
-                        {selected?.name || "Buscar ingrediente..."}
+                        Buscar ingrediente...
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -116,18 +121,8 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
                                         key={item.id}
                                         value={item.id}
                                         className="py-2"
-                                        onSelect={() => {
-                                            setSelected(item)
-                                            onSelect(item)
-                                            setOpen(false)
-                                        }}
+                                        onSelect={() => handleSelect(item)}
                                     >
-                                        <Check
-                                            className={cn(
-                                                "mr-2 h-4 w-4",
-                                                selected?.id === item.id ? "opacity-100" : "opacity-0"
-                                            )}
-                                        />
                                         <span className="truncate text-sm">{item.name}</span>
                                     </CommandItem>
                                 ))}
@@ -141,18 +136,8 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
                                         key={item.id}
                                         value={item.id}
                                         className="py-2"
-                                        onSelect={() => {
-                                            setSelected(item)
-                                            onSelect(item)
-                                            setOpen(false)
-                                        }}
+                                        onSelect={() => handleSelect(item)}
                                     >
-                                        <Check
-                                            className={cn(
-                                                "mr-2 h-4 w-4",
-                                                selected?.id === item.id ? "opacity-100" : "opacity-0"
-                                            )}
-                                        />
                                         <span className="truncate text-sm">{item.name}</span>
                                     </CommandItem>
                                 ))}
