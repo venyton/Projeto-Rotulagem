@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { InterfaceScaleControl } from "@/components/interface-scale-control";
 
 type ProfileData = {
     name: string;
@@ -158,6 +159,24 @@ export default function ProfilePage() {
                     Atualize seus dados de acesso e mantenha sua conta protegida.
                 </p>
             </div>
+
+            <Card className="mb-6 border-border/70">
+                <CardHeader>
+                    <CardTitle className="text-lg">Preferências de visualização</CardTitle>
+                    <CardDescription>Ajuste o tamanho global da fonte e das janelas do sistema.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold">Tamanho da interface</div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Use as setas para reduzir ou ampliar a visualização.
+                            </p>
+                        </div>
+                        <InterfaceScaleControl />
+                    </div>
+                </CardContent>
+            </Card>
 
             <div className="grid gap-6 lg:grid-cols-2">
                 <Card className="border-border/70">
