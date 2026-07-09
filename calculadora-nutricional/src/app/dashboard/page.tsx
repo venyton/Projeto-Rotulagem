@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { FileText, Globe2, PackageSearch, Plus, ShieldCheck, ArrowRight, Sparkles, CheckCircle2 } from "lucide-react";
+import { FileText, Globe2, PackageSearch, Plus, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -12,8 +12,8 @@ const workspaceGuide = [
         href: "/dashboard/tables",
         action: "Abrir Tabelas",
         icon: FileText,
-        color: "text-emerald-600",
-        bg: "bg-emerald-50 dark:bg-emerald-950/40",
+        color: "text-primary",
+        bg: "bg-secondary",
     },
     {
         title: "Ingredientes e fichas técnicas",
@@ -21,8 +21,8 @@ const workspaceGuide = [
         href: "/dashboard/ingredients",
         action: "Abrir Ingredientes",
         icon: PackageSearch,
-        color: "text-blue-600",
-        bg: "bg-blue-50 dark:bg-blue-950/40",
+        color: "text-primary",
+        bg: "bg-secondary",
     },
     {
         title: "Enterprise",
@@ -30,8 +30,8 @@ const workspaceGuide = [
         href: "/dashboard/enterprise",
         action: "Abrir Enterprise",
         icon: Globe2,
-        color: "text-violet-600",
-        bg: "bg-violet-50 dark:bg-violet-950/40",
+        color: "text-primary",
+        bg: "bg-secondary",
     },
     {
         title: "Conta e segurança",
@@ -39,8 +39,8 @@ const workspaceGuide = [
         href: "/dashboard/profile",
         action: "Ver conta",
         icon: ShieldCheck,
-        color: "text-amber-600",
-        bg: "bg-amber-50 dark:bg-amber-950/40",
+        color: "text-primary",
+        bg: "bg-secondary",
     },
 ];
 
@@ -61,12 +61,9 @@ export default async function DashboardHomePage() {
     const firstName = session.user?.name?.split(" ")[0] ?? "por aqui";
 
     return (
-        <div className="mx-auto max-w-[88rem] space-y-10 px-4 py-10 md:px-6">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-background to-emerald-50/40 p-8 dark:from-primary/10 dark:to-emerald-950/20 md:p-12">
-                <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/5 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-emerald-400/10 blur-2xl" />
-
-                <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <div className="app-page-loose space-y-10">
+            <div className="app-feature-panel">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <div className="max-w-xl space-y-3">
                         <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
                             Olá, {firstName}!
@@ -78,7 +75,7 @@ export default async function DashboardHomePage() {
                         <ul className="mt-2 space-y-1.5">
                             {highlights.map((h) => (
                                 <li key={h} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
                                     {h}
                                 </li>
                             ))}
@@ -109,7 +106,7 @@ export default async function DashboardHomePage() {
                             <Link
                                 key={item.title}
                                 href={item.href}
-                                className="group min-w-0 rounded-xl border border-border/70 bg-card/70 p-5 transition-all hover:border-primary/40 hover:bg-card hover:shadow-sm"
+                                className="app-panel group min-w-0 p-5 transition-all hover:border-primary/40 hover:bg-card"
                             >
                                 <div className="flex min-w-0 items-start gap-4">
                                     <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.bg} ${item.color}`}>
@@ -132,7 +129,7 @@ export default async function DashboardHomePage() {
                 </div>
             </div>
 
-            <div className="rounded-xl border border-dashed border-border/80 bg-card/40 px-6 py-8 text-center">
+            <div className="app-empty-state px-6 py-8">
                 <p className="text-sm font-medium text-muted-foreground">Pronto para começar?</p>
                 <h3 className="mt-1 text-xl font-semibold tracking-tight">Crie sua tabela agora</h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
