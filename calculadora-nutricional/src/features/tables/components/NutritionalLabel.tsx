@@ -47,6 +47,15 @@ type NutrientKey = keyof Omit<CalculatedNutrients, "customNutrients">;
 type VdrValues = (typeof VDR)[PopGroup];
 type VdrKey = keyof VdrValues;
 type IndentLevel = 0 | 1 | 2;
+type NutritionalRow = {
+    label: string;
+    nutrientKey: NutrientKey;
+    per100: string;
+    portion: string;
+    vdPortion: string;
+    vd100: string;
+    indentLevel?: IndentLevel;
+};
 const DEFAULT_VD_SUGAR_ADDED = 50;
 const DEFAULT_VD_FAT_TRANS = 2;
 const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
@@ -61,6 +70,49 @@ const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
     "fiber",
     "sodium",
 ];
+const ANNEX_XI_OPTIONAL_ORDER = [
+    "fatMono",
+    "fatPoly",
+    "omega6",
+    "omega3",
+    "cholesterol",
+    "vitaminA",
+    "vitaminD",
+    "vitaminE",
+    "vitaminK",
+    "vitaminC",
+    "thiamin",
+    "riboflavin",
+    "niacin",
+    "vitaminB6",
+    "biotin",
+    "folicAcid",
+    "pantothenicAcid",
+    "vitaminB12",
+    "calcium",
+    "chloride",
+    "copper",
+    "chromium",
+    "iron",
+    "fluoride",
+    "phosphorus",
+    "iodine",
+    "magnesium",
+    "manganese",
+    "molybdenum",
+    "potassium",
+    "selenium",
+    "zinc",
+    "choline",
+] as const;
+const FAT_DETAIL_KEYS = new Set(["fatMono", "fatPoly", "omega6", "omega3", "cholesterol"]);
+const OPTIONAL_INDENT_LEVELS: Partial<Record<(typeof ANNEX_XI_OPTIONAL_ORDER)[number], IndentLevel>> = {
+    fatMono: 1,
+    fatPoly: 1,
+    omega6: 2,
+    omega3: 2,
+};
+const MICRONUTRIENT_BY_NAME = new Map(MICRONUTRIENTS.map((item) => [item.name, item]));
 
 const getNutrientValue = (nutrients: CalculatedNutrients, key: NutrientKey) => (nutrients[key] as number) || 0;
 
@@ -190,17 +242,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const fiberDisplay = formatCore("fiber");
     const sodiumDisplay = formatCore("sodium");
 
-    type BaseRow = {
-        label: string;
-        nutrientKey: NutrientKey;
-        per100: string;
-        portion: string;
-        vdPortion: string;
-        vd100: string;
-        indentLevel?: IndentLevel;
-    };
-
-    const baseRows: BaseRow[] = [
+    const baseRows: NutritionalRow[] = [
         { 
             label: "Valor energético (kcal)", 
             nutrientKey: "energy" as NutrientKey,
@@ -287,29 +329,36 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         },
     ];
 
-    MICRONUTRIENTS.forEach((m) => {
-        if (selectedNutrients.includes(m.name)) {
-            const nutrientKey = m.name as NutrientKey;
-            const val100 = getNutrientValue(per100g, nutrientKey);
-            const valPortion = getNutrientValue(perPortion, nutrientKey);
-            const ref = getVdrValue(vdr, nutrientKey);
-            
-            const format = (v: number) => {
-                if (v === 0) return "0";
-                if (v < 1) return v.toFixed(1).replace(".", ",");
-                return Math.round(v).toString();
-            };
+    const optionalRows = ANNEX_XI_OPTIONAL_ORDER.flatMap((key) => {
+        const m = MICRONUTRIENT_BY_NAME.get(key);
+        if (!m || !selectedNutrients.includes(m.name)) return [];
 
-            baseRows.push({
-                label: `${m.label} (${m.unit})`,
-                nutrientKey,
-                per100: format(val100),
-                portion: format(valPortion),
-                vdPortion: getSafeVD(valPortion, ref),
-                vd100: getSafeVD(val100, ref)
-            });
-        }
+        const nutrientKey = m.name as NutrientKey;
+        const val100 = getNutrientValue(per100g, nutrientKey);
+        const valPortion = getNutrientValue(perPortion, nutrientKey);
+        const ref = getVdrValue(vdr, nutrientKey);
+        const format = (v: number) => {
+            if (v === 0) return "0";
+            if (v < 1) return v.toFixed(1).replace(".", ",");
+            return Math.round(v).toString();
+        };
+
+        return [{
+            label: `${m.label} (${m.unit})`,
+            nutrientKey,
+            per100: format(val100),
+            portion: format(valPortion),
+            vdPortion: getSafeVD(valPortion, ref),
+            vd100: getSafeVD(val100, ref),
+            indentLevel: OPTIONAL_INDENT_LEVELS[key],
+        }];
     });
+
+    const lastFatRowIndex = baseRows.findLastIndex((row) => row.nutrientKey === "fatTrans");
+    const fatDetailRows = optionalRows.filter((row) => FAT_DETAIL_KEYS.has(row.nutrientKey));
+    const remainingOptionalRows = optionalRows.filter((row) => !FAT_DETAIL_KEYS.has(row.nutrientKey));
+    baseRows.splice(lastFatRowIndex + 1, 0, ...fatDetailRows);
+    baseRows.push(...remainingOptionalRows);
 
     if (perPortion.customNutrients) {
         Object.keys(perPortion.customNutrients).sort().forEach((key) => {

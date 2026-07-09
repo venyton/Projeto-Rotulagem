@@ -19,6 +19,16 @@ const nutrientLabelClass = "flex min-h-8 items-end text-xs leading-tight text-mu
 const nutrientGridClass = "grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4";
 type MicroViewMode = "grouped" | "az";
 type NutrientField = { name: string; label: string; unit: string; required?: boolean };
+type CustomNutrientsInput = Record<string, { value: number; unit: string }>;
+type IngredientFormData = Record<string, unknown> & {
+    id?: string;
+    name?: string;
+    customNutrients?: CustomNutrientsInput;
+    ingredientsText?: string;
+    allergensText?: string;
+    containsGluten?: boolean | null;
+    glutenText?: string;
+};
 
 const MAIN_NUTRIENTS: NutrientField[] = [
     { name: "energy", label: "Valor energético", unit: "kcal", required: true },
@@ -57,31 +67,31 @@ const MICRONUTRIENT_GROUPS = [
             { name: "phosphorus", label: "Fósforo", unit: "mg" },
             { name: "iron", label: "Ferro", unit: "mg" },
             { name: "potassium", label: "Potássio", unit: "mg" },
-            { name: "copper", label: "Cobre", unit: "mcg" },
+            { name: "copper", label: "Cobre", unit: "µg" },
             { name: "zinc", label: "Zinco", unit: "mg" },
-            { name: "selenium", label: "Selênio", unit: "mcg" },
-            { name: "chromium", label: "Cromo", unit: "mcg" },
-            { name: "molybdenum", label: "Molibdênio", unit: "mcg" },
-            { name: "iodine", label: "Iodo", unit: "mcg" },
+            { name: "selenium", label: "Selênio", unit: "µg" },
+            { name: "chromium", label: "Cromo", unit: "µg" },
+            { name: "molybdenum", label: "Molibdênio", unit: "µg" },
+            { name: "iodine", label: "Iodo", unit: "µg" },
             { name: "fluoride", label: "Flúor", unit: "mg" },
         ],
     },
     {
         title: "Vitaminas",
         items: [
-            { name: "vitaminA", label: "Vit. A", unit: "mcg" },
-            { name: "vitaminD", label: "Vit. D", unit: "mcg" },
+            { name: "vitaminA", label: "Vit. A", unit: "µg" },
+            { name: "vitaminD", label: "Vit. D", unit: "µg" },
             { name: "vitaminE", label: "Vit. E", unit: "mg" },
-            { name: "vitaminK", label: "Vit. K", unit: "mcg" },
+            { name: "vitaminK", label: "Vit. K", unit: "µg" },
             { name: "vitaminC", label: "Vit. C", unit: "mg" },
             { name: "thiamin", label: "Tiamina B1", unit: "mg" },
             { name: "riboflavin", label: "Riboflavina B2", unit: "mg" },
             { name: "niacin", label: "Niacina B3", unit: "mg" },
             { name: "vitaminB6", label: "Vit. B6", unit: "mg" },
-            { name: "biotin", label: "Biotina", unit: "mcg" },
-            { name: "folicAcid", label: "Ác. Fólico", unit: "mcg" },
+            { name: "biotin", label: "Biotina", unit: "µg" },
+            { name: "folicAcid", label: "Ác. Fólico", unit: "µg" },
             { name: "pantothenicAcid", label: "Ác. Pantot. B5", unit: "mg" },
-            { name: "vitaminB12", label: "Vit. B12", unit: "mcg" },
+            { name: "vitaminB12", label: "Vit. B12", unit: "µg" },
             { name: "choline", label: "Colina", unit: "mg" },
         ],
     },
@@ -91,8 +101,13 @@ const MICRONUTRIENTS_A_TO_Z = MICRONUTRIENT_GROUPS.flatMap((group) => group.item
     a.label.localeCompare(b.label, "pt-BR")
 );
 
+function parseDecimalInput(value: string) {
+    const parsed = Number(value.trim().replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export type IngredientFormProps = {
-    initialData?: any;
+    initialData?: IngredientFormData;
     trigger?: React.ReactNode;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -122,7 +137,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
         if (!newCustomName.trim() || !newCustomValue) return;
         setCustomNutrients(prev => ({
             ...prev,
-            [newCustomName.trim()]: { value: parseFloat(newCustomValue), unit: newCustomUnit.trim() }
+            [newCustomName.trim()]: { value: parseDecimalInput(newCustomValue), unit: newCustomUnit.trim() }
         }));
         setNewCustomName("");
         setNewCustomValue("");
@@ -238,7 +253,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                                                     <div key={key} className="flex items-center gap-2 bg-background p-2 rounded-md border">
                                                         <span className="flex-1 text-sm font-medium">{key}</span>
                                                         <span className="text-sm text-muted-foreground">{data.value} {data.unit}</span>
-                                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeCustomNutrient(key)}><X className="h-4 w-4" /></Button>
+                                                        <Button type="button" variant="destructive" size="icon" className="h-6 w-6" onClick={() => removeCustomNutrient(key)}><X className="h-4 w-4" /></Button>
                                                     </div>
                                                 ))}
                                             </div>

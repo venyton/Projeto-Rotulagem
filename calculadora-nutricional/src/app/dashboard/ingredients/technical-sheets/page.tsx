@@ -24,14 +24,14 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
   }
 
   const params = await searchParams;
-  const documents = await listTechnicalSheetDocuments();
   const selectedDocumentId = params.documentId;
-  const selectedExtraction = selectedDocumentId
-    ? await getTechnicalSheetExtraction(selectedDocumentId)
-    : null;
+  const [documents, selectedExtraction] = await Promise.all([
+    listTechnicalSheetDocuments(context.user.id),
+    selectedDocumentId ? getTechnicalSheetExtraction(selectedDocumentId, context.user.id) : Promise.resolve(null),
+  ]);
 
   return (
-    <div className="container mx-auto space-y-6 px-4 py-8 md:px-6">
+    <div className="app-page space-y-6">
       <div className="flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
         <div>
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
@@ -60,13 +60,13 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
         )}
 
         {selectedDocumentId && !selectedExtraction && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+          <div className="app-panel p-6 text-sm text-amber-800">
             Nenhuma extração encontrada para este documento. Ele pode ainda estar sendo processado ou ter falhado.
           </div>
         )}
 
         {!selectedDocumentId && (
-          <div className="rounded-lg border border-border/70 bg-card p-6 text-sm text-muted-foreground">
+          <div className="app-empty-state p-6 text-sm">
             Selecione uma ficha técnica para revisar.
           </div>
         )}

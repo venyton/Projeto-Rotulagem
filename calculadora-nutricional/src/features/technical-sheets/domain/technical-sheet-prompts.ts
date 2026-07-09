@@ -38,6 +38,11 @@ Tarefas:
 7. Extraia lactose como declaração própria quando houver texto de "contém lactose", "baixo teor de lactose", "zero lactose" ou valor em tabela.
 8. Extraia a informação nutricional e preserve sourceText de cada nutriente.
 9. Identifique a base nutricional: 100 g, 100 ml, porção ou outra.
+   a. Quando a tabela tiver coluna "100 g", "100g", "100 ml" ou "100ml" e também coluna "porção", use SEMPRE a coluna de 100 g/100 ml para nutrition.nutrients.
+   b. Nessa situação, defina nutrition.baseQuantity = 100, nutrition.baseUnit = "g" ou "ml", e também baseQuantity/baseUnit de cada nutriente como 100 g/100 ml.
+   c. Use a coluna de porção apenas para servingQuantity, servingUnit, householdMeasure, servingsPerPackage e dailyValuePercent.
+   d. Se existir somente coluna por porção, extraia os valores por porção e informe a porção em baseQuantity/baseUnit ou servingQuantity/servingUnit.
+   e. Em sourceText de cada nutriente, preserve o cabeçalho da coluna usada, especialmente "100 g"/"100 ml", para auditoria.
 10. Use as chaves padronizadas de nutrientes. Campos editáveis da IN 75/2020 Anexo II e da tabela básica: ${ANNEX_II_NUTRIENT_PROMPT_LIST}.
    a. As obrigatórias para aprovação são energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber e sodium.
    b. sugarTotal e sugarAdded podem ficar null quando não declarados.

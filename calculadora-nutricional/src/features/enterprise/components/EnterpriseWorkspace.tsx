@@ -63,15 +63,15 @@ interface EnterpriseWorkspaceProps {
 }
 
 const STATUS_STYLES = {
-    ok: "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white text-emerald-950 dark:border-emerald-900/60 dark:from-emerald-950/35 dark:to-background dark:text-emerald-100",
-    warning: "border-amber-200 bg-gradient-to-br from-amber-50 to-white text-amber-950 dark:border-amber-900/60 dark:from-amber-950/35 dark:to-background dark:text-amber-100",
-    blocker: "border-red-200 bg-gradient-to-br from-red-50 to-white text-red-950 dark:border-red-900/60 dark:from-red-950/35 dark:to-background dark:text-red-100",
+    ok: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-card dark:text-emerald-100",
+    warning: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-card dark:text-amber-100",
+    blocker: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/50 dark:bg-card dark:text-red-100",
 };
 
 const CLAIM_STYLES = {
-    eligible: "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white text-emerald-950 dark:border-emerald-900/60 dark:from-emerald-950/35 dark:to-background dark:text-emerald-100",
-    attention: "border-amber-200 bg-gradient-to-br from-amber-50 to-white text-amber-950 dark:border-amber-900/60 dark:from-amber-950/35 dark:to-background dark:text-amber-100",
-    "not-eligible": "border-slate-200 bg-gradient-to-br from-slate-50 to-white text-slate-700 dark:border-slate-800 dark:from-slate-900/70 dark:to-background dark:text-slate-300",
+    eligible: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-card dark:text-emerald-100",
+    attention: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-card dark:text-amber-100",
+    "not-eligible": "border-slate-200 bg-slate-50 text-slate-700 dark:border-border dark:bg-card dark:text-muted-foreground",
 };
 const SAFE_TEXT_CLASS = "min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere]";
 const ENTERPRISE_SELECT_TRIGGER_CLASS = "min-h-10 w-full min-w-0 *:data-[slot=select-value]:truncate";
@@ -633,8 +633,8 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
 
     if (!workingTable || !selectedTable || !analysis) {
         return (
-            <div className="container mx-auto max-w-5xl px-4 py-10">
-                <section className="rounded-lg border border-dashed border-border bg-background p-10 text-center">
+            <div className="mx-auto max-w-5xl px-4 py-10">
+                <section className="app-empty-state p-10">
                     <h1 className="text-2xl font-semibold">{copy.firstTableTitle}</h1>
                     <p className="mt-2 text-sm text-muted-foreground">
                         {copy.subheading}
@@ -651,15 +651,12 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     const legalFields = getLegalFieldsForMarket(market, language);
 
     return (
-        <div className="mx-auto max-w-[88rem] px-4 py-6 md:px-6">
-            <header className="relative mb-8 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-violet-50/40 via-background to-primary/5 p-6 dark:from-violet-950/20 dark:to-primary/10 md:p-8">
-                <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-violet-400/10 blur-3xl dark:bg-violet-600/10" />
-                <div className="pointer-events-none absolute -bottom-10 left-10 h-48 w-48 rounded-full bg-primary/10 blur-2xl dark:bg-primary/10" />
-                
-                <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="app-page">
+            <header className="app-header-panel mb-8 md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-3">
                         <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
-                            <ShieldCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                            <ShieldCheck className="h-4 w-4 text-primary" />
                             {copy.firstTableTitle}
                         </div>
                         <div>
@@ -671,13 +668,13 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:flex-nowrap">
-                        <Button asChild variant="secondary" className="gap-2 bg-background/50 backdrop-blur-sm hover:bg-background/80">
+                        <Button asChild variant="secondary" className="gap-2">
                             <a href="/dashboard/new">
                                 {copy.newProduct}
                                 <ArrowUpRight className="h-4 w-4" />
                             </a>
                         </Button>
-                        <Button onClick={downloadLabelImage} variant="secondary" className="gap-2 bg-background/50 backdrop-blur-sm hover:bg-background/80">
+                        <Button onClick={downloadLabelImage} variant="secondary" className="gap-2">
                             <Download className="h-4 w-4" />
                             PNG
                         </Button>
@@ -685,7 +682,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <FileJson className="h-4 w-4" />
                             JSON
                         </Button>
-                        <Button onClick={saveCurrentVersion} variant="default" className="gap-2 bg-violet-600 hover:bg-violet-700 text-white" disabled={isSaving}>
+                        <Button onClick={saveCurrentVersion} variant="default" className="gap-2" disabled={isSaving}>
                             <Save className="h-4 w-4" />
                             {isSaving ? copy.saving : copy.saveVersion}
                         </Button>
@@ -693,7 +690,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                 </div>
             </header>
 
-            <section className="mb-8 rounded-xl border border-border/80 bg-card/80 p-5 shadow-sm backdrop-blur-sm transition-all hover:shadow-md">
+            <section className="app-panel mb-8 p-5 transition-all">
                 <div className="grid gap-5 md:grid-cols-4">
                     <ControlSelect label={copy.productBase} help="Escolha a tabela brasileira salva que servirá como origem. Ela não será alterada por este módulo.">
                         <Select value={selectedTable.id} onValueChange={setSelectedTableId}>
@@ -757,15 +754,14 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
             <div className="grid gap-6 xl:grid-cols-[minmax(28rem,0.95fr)_minmax(28rem,1.05fr)]">
                 <section className="space-y-4 xl:sticky xl:top-24 xl:self-start">
                     <Panel>
-                        <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="app-panel-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <PanelTitle title={copy.countryLabel} detail={`${marketConfig.authority} · ${marketConfig.tableName}`} />
                             <div className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
                                 {getMarketLabel(market, language)}
                             </div>
                         </div>
-                        <div className="relative overflow-x-auto bg-neutral-50/80 p-8 shadow-inner dark:bg-neutral-950/50">
-                            <div className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '16px 16px' }}></div>
-                            <div className="relative flex min-w-max justify-center rounded-xl ring-1 ring-border/40 p-4 bg-white/50 dark:bg-black/20 backdrop-blur-sm shadow-sm">
+                        <div className="overflow-x-auto bg-background p-8 shadow-inner">
+                            <div className="app-subpanel flex min-w-max justify-center p-4">
                                 <InternationalNutritionLabel
                                     id="international-label-preview"
                                     table={workingTable}
@@ -1102,7 +1098,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <PanelHeader title={copy.reformulation} detail={copy.reformulationDetail} />
                             <StackList>
                                 {analysis.suggestions.map((item) => (
-                                    <StatusRow key={item.title} tone="border-blue-200 bg-gradient-to-br from-blue-50 to-white text-blue-950 dark:border-blue-900/60 dark:from-blue-950/35 dark:to-background dark:text-blue-100" title={item.title} detail={`${item.detail} ${item.impact}`} />
+                                    <StatusRow key={item.title} tone="border-border bg-card text-card-foreground" title={item.title} detail={`${item.detail} ${item.impact}`} />
                                 ))}
                             </StackList>
                         </Panel>
@@ -1117,13 +1113,12 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <Field label={copy.lot}>
                                 <Input className={ENTERPRISE_INPUT_CLASS} value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
                             </Field>
-                            <Button variant="outline" className="gap-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary" onClick={copyGs1Link}>
+                            <Button variant="outline" className="gap-2" onClick={copyGs1Link}>
                                 <Link2 className="h-4 w-4" />
                                 {copy.copy}
                             </Button>
-                            <div className="relative mt-2 md:col-span-3">
-                                <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary/10 to-violet-500/10 blur-sm opacity-50"></div>
-                                <div className="relative break-all rounded-lg border border-border/50 bg-black/5 p-4 font-mono text-xs text-foreground shadow-inner dark:bg-black/40">
+                            <div className="mt-2 md:col-span-3">
+                                <div className="break-all rounded-lg border border-border/50 bg-background p-4 font-mono text-xs text-foreground shadow-inner">
                                     {analysis.gs1Link}
                                 </div>
                             </div>

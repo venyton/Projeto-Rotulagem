@@ -21,6 +21,12 @@ function readOptionalNutrientSnapshot(ingredient: SelectedIngredient["ingredient
     );
 }
 
+function readCustomNutrientsSnapshot(ingredient: SelectedIngredient["ingredient"]) {
+    const value = (ingredient as unknown as { customNutrients?: unknown }).customNutrients;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    return value as Prisma.InputJsonValue;
+}
+
 export async function saveTable(data: {
     id?: string;
     title: string;
@@ -41,11 +47,9 @@ export async function saveTable(data: {
         return { error: "Não autorizado" };
     }
 
-    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-    if (!user) return { error: "Usuário não encontrado" };
-
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.TABLES);
+        context = await requireModuleAccess(SAAS_MODULES.TABLES);
     } catch (error) {
         if (error instanceof ModuleAccessError) return { error: error.message };
         throw error;
@@ -54,7 +58,7 @@ export async function saveTable(data: {
     try {
         const uiStateValue = data.uiState ? (data.uiState as Prisma.InputJsonValue) : undefined;
         const payload = {
-            userId: user.id,
+            userId: context.user.id,
             title: data.title,
             portion: data.portion,
             uom: data.uom,
@@ -69,6 +73,7 @@ export async function saveTable(data: {
 
         const itemsPayload = data.ingredients.map(i => {
             const ingredient = i.ingredient as typeof i.ingredient & { sugarAdded?: number | null };
+            const customNutrients = readCustomNutrientsSnapshot(i.ingredient);
             return {
                 name: i.ingredient.name,
                 quantity: i.quantity,
@@ -83,6 +88,7 @@ export async function saveTable(data: {
                 sodium: i.ingredient.sodium || 0,
                 sugarTotal: i.ingredient.sugarTotal || 0,
                 sugarAdded: ingredient.sugarAdded || 0,
+                customNutrients,
                 ...readOptionalNutrientSnapshot(i.ingredient),
             };
         });
@@ -92,7 +98,7 @@ export async function saveTable(data: {
         if (data.id) {
             // Check ownership
             const existing = await prisma.generatedTable.findFirst({
-                where: { id: data.id, userId: user.id }
+                where: { id: data.id, userId: context.user.id }
             });
 
             if (!existing) return { error: "Tabela não encontrada ou permissão negada" };

@@ -135,10 +135,17 @@ export function normalizeTechnicalSheetExtraction(
   const fieldsForReview = new Set(aiJson.fieldsForReview);
   const baseQuantity = toFiniteNumber(aiJson.nutrition.baseQuantity) || 100;
   const baseUnit = normalizeUnit(aiJson.nutrition.baseUnit) ?? "g";
+  const servingQuantity = toFiniteNumber(aiJson.nutrition.servingQuantity);
+  const servingUnit = normalizeUnit(aiJson.nutrition.servingUnit);
 
   const nutrients = aiJson.nutrition.nutrients.map((nutrient) =>
-    normalizeAiNutrient(nutrient, baseQuantity, baseUnit)
+    normalizeAiNutrient(nutrient, baseQuantity, baseUnit, servingQuantity, servingUnit)
   );
+  const displayBase = getDisplayNutritionBase(nutrients, baseQuantity, baseUnit, servingQuantity, servingUnit);
+
+  if (nutrients.some((nutrient) => nutrient.value !== null && !isStandardIngredientBase(nutrient.baseQuantity, nutrient.baseUnit))) {
+    fieldsForReview.add("Base nutricional diferente de 100 g/100 ml; revise os valores antes de aprovar.");
+  }
 
   for (const key of REQUIRED_NUTRIENT_KEYS) {
     if (!nutrients.some((nutrient) => nutrient.nutrientKey === key)) {
@@ -149,8 +156,8 @@ export function normalizeTechnicalSheetExtraction(
           label: key === "sugarTotal" ? "Açúcares totais" : "Açúcares adicionados",
           value: 0,
           unit: "g",
-          baseQuantity,
-          baseUnit,
+          baseQuantity: displayBase.quantity,
+          baseUnit: displayBase.unit,
           dailyValuePercent: null,
           sourceText: null,
           confidence: null,
@@ -185,12 +192,12 @@ export function normalizeTechnicalSheetExtraction(
       shelfLife: cleanString(aiJson.shelfLife),
       storageConditions: cleanString(aiJson.storageConditions),
       packagingText: cleanString(aiJson.packagingText),
-      servingQuantity: toFiniteNumber(aiJson.nutrition.servingQuantity),
-      servingUnit: normalizeUnit(aiJson.nutrition.servingUnit),
+      servingQuantity,
+      servingUnit,
       householdMeasure: cleanString(aiJson.nutrition.householdMeasure),
       servingsPerPackage: cleanString(aiJson.nutrition.servingsPerPackage),
-      baseQuantity,
-      baseUnit,
+      baseQuantity: displayBase.quantity,
+      baseUnit: displayBase.unit,
       confidence: aiJson.confidence,
     },
     nutrients,
@@ -343,10 +350,10 @@ export function normalizeUnit(unit: string | null | undefined) {
     mg: "mg",
     miligrama: "mg",
     miligramas: "mg",
-    mcg: "mcg",
-    ug: "mcg",
-    micrograma: "mcg",
-    microgramas: "mcg",
+    µg: "µg",
+    ug: "µg",
+    micrograma: "µg",
+    microgramas: "µg",
     kcal: "kcal",
     cal: "kcal",
     kj: "kj",
@@ -414,7 +421,9 @@ export function buildAiJsonForStorage(
 function normalizeAiNutrient(
   nutrient: TechnicalSheetAiNutrient,
   fallbackBaseQuantity: number,
-  fallbackBaseUnit: string
+  fallbackBaseUnit: string,
+  servingQuantity: number | null,
+  servingUnit: string | null
 ): NormalizedExtractedNutrient {
   const key = normalizeNutrientKey(nutrient.key) ?? nutrient.key;
   let unit = normalizeUnit(nutrient.unit);
@@ -440,17 +449,135 @@ function normalizeAiNutrient(
     unit = "kcal";
   }
 
+  const nutrientBaseQuantity = toFiniteNumber(nutrient.baseQuantity);
+  const nutrientBaseUnit = normalizeUnit(nutrient.baseUnit) ?? fallbackBaseUnit;
+  const useFallbackBase =
+    !inferStandardBaseFromSourceText(sourceText) &&
+    nutrientBaseQuantity === 100 &&
+    nutrientBaseUnit === "g" &&
+    !isStandardIngredientBase(fallbackBaseQuantity, fallbackBaseUnit);
+
+  const base = resolveNutrientBase(
+    useFallbackBase ? fallbackBaseQuantity : nutrientBaseQuantity || fallbackBaseQuantity,
+    useFallbackBase ? fallbackBaseUnit : nutrientBaseUnit,
+    servingQuantity,
+    servingUnit,
+    sourceText
+  );
+  const normalized = normalizeNutrientValueToIngredientBase(value, base);
+
   return {
     nutrientKey: key,
     label: nutrient.label,
-    value: value === null ? null : roundNumber(value),
+    value: normalized.value === null ? null : roundNumber(normalized.value),
     unit,
-    baseQuantity: toFiniteNumber(nutrient.baseQuantity) || fallbackBaseQuantity,
-    baseUnit: normalizeUnit(nutrient.baseUnit) ?? fallbackBaseUnit,
-    dailyValuePercent: toFiniteNumber(nutrient.dailyValuePercent),
+    baseQuantity: normalized.base.quantity,
+    baseUnit: normalized.base.unit,
+    dailyValuePercent: normalized.converted ? null : toFiniteNumber(nutrient.dailyValuePercent),
     sourceText,
     confidence: toFiniteNumber(nutrient.confidence),
   };
+}
+
+type NutritionBase = {
+  quantity: number;
+  unit: string;
+};
+
+function resolveNutrientBase(
+  baseQuantity: number,
+  baseUnit: string,
+  servingQuantity: number | null,
+  servingUnit: string | null,
+  sourceText: string | null
+): NutritionBase {
+  const sourceBase = inferStandardBaseFromSourceText(sourceText);
+  if (sourceBase) return sourceBase;
+
+  if (sourceTextMentionsServingBase(sourceText) && servingQuantity && servingQuantity > 0 && servingUnit) {
+    return { quantity: servingQuantity, unit: servingUnit };
+  }
+
+  if (isServingBaseUnit(baseUnit) && servingQuantity && servingQuantity > 0 && servingUnit) {
+    return { quantity: servingQuantity, unit: servingUnit };
+  }
+
+  return { quantity: baseQuantity, unit: baseUnit };
+}
+
+function normalizeNutrientValueToIngredientBase(value: number | null, base: NutritionBase) {
+  const standardUnit = getStandardBaseUnit(base.unit);
+  if (!standardUnit || !Number.isFinite(base.quantity) || base.quantity <= 0) {
+    return { value, base, converted: false };
+  }
+
+  const standardBase = { quantity: 100, unit: standardUnit };
+  if (Math.abs(base.quantity - 100) < 0.000001 && base.unit === standardUnit) {
+    return { value, base: standardBase, converted: false };
+  }
+
+  return {
+    value: value === null ? null : value * (100 / base.quantity),
+    base: standardBase,
+    converted: true,
+  };
+}
+
+function getDisplayNutritionBase(
+  nutrients: NormalizedExtractedNutrient[],
+  fallbackBaseQuantity: number,
+  fallbackBaseUnit: string,
+  servingQuantity: number | null,
+  servingUnit: string | null
+): NutritionBase {
+  const commonBase = getCommonNutrientBase(nutrients);
+  if (commonBase) return commonBase;
+
+  const base = resolveNutrientBase(fallbackBaseQuantity, fallbackBaseUnit, servingQuantity, servingUnit, null);
+  return normalizeNutrientValueToIngredientBase(null, base).base;
+}
+
+function getCommonNutrientBase(nutrients: NormalizedExtractedNutrient[]): NutritionBase | null {
+  const valuedNutrients = nutrients.filter((nutrient) => nutrient.value !== null);
+  const [first] = valuedNutrients;
+  if (!first) return null;
+
+  const hasSameBase = valuedNutrients.every(
+    (nutrient) =>
+      Math.abs(nutrient.baseQuantity - first.baseQuantity) < 0.000001 &&
+      nutrient.baseUnit === first.baseUnit
+  );
+
+  return hasSameBase ? { quantity: first.baseQuantity, unit: first.baseUnit } : null;
+}
+
+function isStandardIngredientBase(baseQuantity: number, baseUnit: string) {
+  return Math.abs(baseQuantity - 100) < 0.000001 && Boolean(getStandardBaseUnit(baseUnit));
+}
+
+function getStandardBaseUnit(unit: string | null | undefined) {
+  const normalized = normalizeUnit(unit);
+  if (normalized === "g" || normalized === "ml") return normalized;
+  return null;
+}
+
+function isServingBaseUnit(unit: string) {
+  return ["porcao", "porcoes", "serving", "servings", "unidade", "unidades", "un", "und"].includes(
+    normalizeText(unit)
+  );
+}
+
+function inferStandardBaseFromSourceText(sourceText: string | null) {
+  if (!sourceText) return null;
+  if (/\b100\s*g\b/i.test(sourceText)) return { quantity: 100, unit: "g" };
+  if (/\b100\s*m[lL]\b/i.test(sourceText)) return { quantity: 100, unit: "ml" };
+  return null;
+}
+
+function sourceTextMentionsServingBase(sourceText: string | null) {
+  if (!sourceText) return false;
+  const normalized = normalizeText(sourceText);
+  return normalized.includes("porcao") || normalized.includes("porcoes") || normalized.includes("serving");
 }
 
 function normalizeAiAllergen(allergen: TechnicalSheetAiAllergen): NormalizedExtractedAllergen {

@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "postinstall": "npx prisma generate",
     "build": "npx prisma generate --schema=./prisma/schema.prisma && next build",
     "db:push": "npx prisma db push --schema=./prisma/schema.prisma",
@@ -38,7 +38,6 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "sonner": "^2.0.7",
-    "stripe": "^22.1.1",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.4.3",
     "zod-to-json-schema": "^3.25.2"

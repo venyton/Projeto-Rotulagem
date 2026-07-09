@@ -40,16 +40,16 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
-    const energy = parseFloat(formData.get("energy") as string) || 0;
-    const carbs = parseFloat(formData.get("carbs") as string) || 0;
-    const protein = parseFloat(formData.get("protein") as string) || 0;
-    const fatTotal = parseFloat(formData.get("fatTotal") as string) || 0;
-    const fatSat = parseFloat(formData.get("fatSat") as string) || 0;
-    const fatTrans = parseFloat(formData.get("fatTrans") as string) || 0;
-    const fiber = parseFloat(formData.get("fiber") as string) || 0;
-    const sodium = parseFloat(formData.get("sodium") as string) || 0;
-    const sugarTotal = parseFloat(formData.get("sugarTotal") as string) || 0;
-    const sugarAdded = parseFloat(formData.get("sugarAdded") as string) || 0;
+    const energy = optionalNumber(formData, "energy") || 0;
+    const carbs = optionalNumber(formData, "carbs") || 0;
+    const protein = optionalNumber(formData, "protein") || 0;
+    const fatTotal = optionalNumber(formData, "fatTotal") || 0;
+    const fatSat = optionalNumber(formData, "fatSat") || 0;
+    const fatTrans = optionalNumber(formData, "fatTrans") || 0;
+    const fiber = optionalNumber(formData, "fiber") || 0;
+    const sodium = optionalNumber(formData, "sodium") || 0;
+    const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
+    const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
     const ingredientsText = formData.get("ingredientsText") as string || null;
     const allergensText = formData.get("allergensText") as string || null;
     const glutenText = formData.get("glutenText") as string || null;
@@ -152,16 +152,16 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     if (moduleError) return { error: moduleError };
 
     const name = formData.get("name") as string;
-    const energy = parseFloat(formData.get("energy") as string) || 0;
-    const carbs = parseFloat(formData.get("carbs") as string) || 0;
-    const protein = parseFloat(formData.get("protein") as string) || 0;
-    const fatTotal = parseFloat(formData.get("fatTotal") as string) || 0;
-    const fatSat = parseFloat(formData.get("fatSat") as string) || 0;
-    const fatTrans = parseFloat(formData.get("fatTrans") as string) || 0;
-    const fiber = parseFloat(formData.get("fiber") as string) || 0;
-    const sodium = parseFloat(formData.get("sodium") as string) || 0;
-    const sugarTotal = parseFloat(formData.get("sugarTotal") as string) || 0;
-    const sugarAdded = parseFloat(formData.get("sugarAdded") as string) || 0;
+    const energy = optionalNumber(formData, "energy") || 0;
+    const carbs = optionalNumber(formData, "carbs") || 0;
+    const protein = optionalNumber(formData, "protein") || 0;
+    const fatTotal = optionalNumber(formData, "fatTotal") || 0;
+    const fatSat = optionalNumber(formData, "fatSat") || 0;
+    const fatTrans = optionalNumber(formData, "fatTrans") || 0;
+    const fiber = optionalNumber(formData, "fiber") || 0;
+    const sodium = optionalNumber(formData, "sodium") || 0;
+    const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
+    const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
     const ingredientsText = formData.get("ingredientsText") as string || null;
     const allergensText = formData.get("allergensText") as string || null;
     const glutenText = formData.get("glutenText") as string || null;
@@ -241,7 +241,10 @@ export async function searchIngredients(query: string) {
 
     const session = await getServerSession(authOptions);
     const user = session?.user?.email
-        ? await prisma.user.findUnique({ where: { email: session.user.email } })
+        ? await prisma.user.findUnique({
+            where: { email: session.user.email },
+            select: { id: true },
+        })
         : null;
 
     if (!normalizedQuery) {

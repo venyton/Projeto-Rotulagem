@@ -1,6 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { TableGenerator } from "@/features/tables/components/TableGenerator";
 import { SelectedIngredient } from "@/features/tables/domain/nutrients";
@@ -20,23 +18,83 @@ function readItemMicronutrients(item: Record<string, unknown>) {
 
 export default async function EditTablePage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user?.email) redirect("/login");
-
-    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-    if (!user) redirect("/login");
-
     const context = await getCurrentSaaSContext();
+    if (!context) redirect("/login");
+
     if (!context || !contextHasModuleAccess(context, SAAS_MODULES.TABLES)) {
         return <ModuleGateMessage moduleKey={SAAS_MODULES.TABLES} />;
     }
 
-    const table = await prisma.generatedTable.findUnique({
-        where: { id: params.id },
-        include: { items: { orderBy: { id: "asc" } } }
+    const table = await prisma.generatedTable.findFirst({
+        where: { id: params.id, userId: context.user.id },
+        select: {
+            id: true,
+            title: true,
+            portion: true,
+            householdMeasure: true,
+            popGroup: true,
+            packageContent: true,
+            servingsPerPackage: true,
+            suggestedFoodGroup: true,
+            suggestedProduct: true,
+            uiState: true,
+            items: {
+                orderBy: { id: "asc" },
+                select: {
+                    id: true,
+                    name: true,
+                    quantity: true,
+                    isAddedSugar: true,
+                    energy: true,
+                    carbs: true,
+                    protein: true,
+                    fatTotal: true,
+                    fatSat: true,
+                    fatTrans: true,
+                    fiber: true,
+                    sodium: true,
+                    sugarTotal: true,
+                    sugarAdded: true,
+                    customNutrients: true,
+                    fatMono: true,
+                    fatPoly: true,
+                    omega6: true,
+                    omega3: true,
+                    cholesterol: true,
+                    vitaminA: true,
+                    vitaminD: true,
+                    vitaminE: true,
+                    vitaminK: true,
+                    vitaminC: true,
+                    thiamin: true,
+                    riboflavin: true,
+                    niacin: true,
+                    vitaminB6: true,
+                    biotin: true,
+                    folicAcid: true,
+                    pantothenicAcid: true,
+                    vitaminB12: true,
+                    calcium: true,
+                    chloride: true,
+                    copper: true,
+                    chromium: true,
+                    iron: true,
+                    fluoride: true,
+                    phosphorus: true,
+                    iodine: true,
+                    magnesium: true,
+                    manganese: true,
+                    molybdenum: true,
+                    potassium: true,
+                    selenium: true,
+                    zinc: true,
+                    choline: true,
+                },
+            },
+        },
     });
 
-    if (!table || table.userId !== user.id) {
+    if (!table) {
         redirect("/dashboard");
     }
 
@@ -63,6 +121,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
             sodium: item.sodium,
             sugarTotal: item.sugarTotal,
             sugarAdded: item.sugarAdded,
+            customNutrients: item.customNutrients,
             ...readItemMicronutrients(item as unknown as Record<string, unknown>),
         } as SelectedIngredient["ingredient"] & { sugarAdded?: number | null }
     }));

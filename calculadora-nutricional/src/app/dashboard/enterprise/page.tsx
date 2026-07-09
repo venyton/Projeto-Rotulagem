@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
 import type { EnterpriseApprovalStatus } from "@prisma/client";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
@@ -17,37 +15,78 @@ import type {
 } from "@/features/enterprise/domain/enterprise";
 
 export default async function EnterprisePage() {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.email) {
-        redirect("/login");
-    }
-
-    const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-    });
-
-    if (!user) {
-        redirect("/login");
-    }
-
     const context = await getCurrentSaaSContext();
+    if (!context) {
+        redirect("/login");
+    }
+
     if (!context || !contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)) {
         return <ModuleGateMessage moduleKey={SAAS_MODULES.ENTERPRISE_LABELS} />;
     }
 
-    const tables = await prisma.generatedTable.findMany({
-        where: {
-            userId: user.id,
-        },
-        include: {
-            items: true,
-        },
-        orderBy: {
-            updatedAt: "desc",
-        },
-    });
+    const [tables, projects] = await Promise.all([
+        prisma.generatedTable.findMany({
+            where: { userId: context.user.id },
+            select: {
+                id: true,
+                title: true,
+                portion: true,
+                uom: true,
+                householdMeasure: true,
+                popGroup: true,
+                packageContent: true,
+                servingsPerPackage: true,
+                updatedAt: true,
+                items: {
+                    select: {
+                        name: true,
+                        quantity: true,
+                        isAddedSugar: true,
+                        sugarAdded: true,
+                        energy: true,
+                        carbs: true,
+                        protein: true,
+                        fatTotal: true,
+                        fatSat: true,
+                        fatTrans: true,
+                        fiber: true,
+                        sodium: true,
+                        sugarTotal: true,
+                    },
+                },
+            },
+            orderBy: { updatedAt: "desc" },
+        }),
+        prisma.enterpriseLabelProject.findMany({
+            where: { userId: context.user.id },
+            orderBy: { updatedAt: "desc" },
+            select: {
+                id: true,
+                baseTableId: true,
+                title: true,
+                market: true,
+                status: true,
+                currentVersionId: true,
+                updatedAt: true,
+                versions: {
+                    orderBy: { version: "desc" },
+                    take: 1,
+                    select: {
+                        id: true,
+                        version: true,
+                        title: true,
+                        market: true,
+                        foodState: true,
+                        approvalStatus: true,
+                        tableSnapshot: true,
+                        legalData: true,
+                        notes: true,
+                        updatedAt: true,
+                    },
+                },
+            },
+        }),
+    ]);
 
     const payload: EnterpriseTable[] = tables.map((table) => ({
         id: table.id,
@@ -75,17 +114,6 @@ export default async function EnterprisePage() {
             sugarTotal: item.sugarTotal,
         })),
     }));
-
-    const projects = await prisma.enterpriseLabelProject.findMany({
-        where: { userId: user.id },
-        orderBy: { updatedAt: "desc" },
-        include: {
-            versions: {
-                orderBy: { version: "desc" },
-                take: 1,
-            },
-        },
-    });
 
     return <EnterpriseWorkspace tables={payload} projects={projects.map(mapEnterpriseProject)} />;
 }

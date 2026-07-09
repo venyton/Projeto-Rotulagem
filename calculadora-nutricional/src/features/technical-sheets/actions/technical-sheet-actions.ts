@@ -47,14 +47,11 @@ export async function importTechnicalSheet(
   formData: FormData
 ): Promise<TechnicalSheetActionState> {
   const session = await getServerSession(authOptions);
-  const user = session?.user?.email
-    ? await prisma.user.findUnique({ where: { email: session.user.email } })
-    : null;
+  if (!session?.user?.email) return { error: "Não autorizado" };
 
-  if (!user) return { error: "Não autorizado" };
-
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
     await requireModuleAccess(SAAS_MODULES.AI_IMPORT);
   } catch (error) {
     if (error instanceof ModuleAccessError) return { error: error.message };
@@ -77,7 +74,7 @@ export async function importTechnicalSheet(
     }
     try {
       const file = await validateTechnicalSheetFile(rawFile);
-      const result = await processTechnicalSheetFile(user.id, file);
+      const result = await processTechnicalSheetFile(context.user.id, file);
       documentIds.push(result.documentId);
       if (result.extractionId) {
         successfulDocumentIds.push(result.documentId);
@@ -205,14 +202,22 @@ async function processTechnicalSheetFile(
 /**
  * Lists all technical sheet documents for the user
  */
-export async function listTechnicalSheetDocuments(): Promise<TechnicalSheetDocumentListItem[]> {
-  const user = await getCurrentUser();
-  if (!user) return [];
+export async function listTechnicalSheetDocuments(userId?: string): Promise<TechnicalSheetDocumentListItem[]> {
+  const resolvedUserId = userId ?? (await getCurrentUser())?.id;
+  if (!resolvedUserId) return [];
 
   const docs = await prisma.technicalDocument.findMany({
-    where: { userId: user.id },
+    where: { userId: resolvedUserId },
     orderBy: { createdAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      documentType: true,
+      status: true,
+      confidence: true,
+      errorMessage: true,
+      createdAt: true,
       extraction: {
         select: {
           productName: true,
@@ -239,21 +244,62 @@ export async function listTechnicalSheetDocuments(): Promise<TechnicalSheetDocum
 /**
  * Gets a specific extraction with full details for review using documentId
  */
-export async function getTechnicalSheetExtraction(documentId: string): Promise<TechnicalSheetReviewData | null> {
-  const user = await getCurrentUser();
-  if (!user) return null;
+export async function getTechnicalSheetExtraction(documentId: string, userId?: string): Promise<TechnicalSheetReviewData | null> {
+  const resolvedUserId = userId ?? (await getCurrentUser())?.id;
+  if (!resolvedUserId) return null;
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { 
       documentId,
-      userId: user.id 
+      userId: resolvedUserId
     },
     include: {
-      document: true,
-      nutrients: true,
-      allergens: true,
+      document: {
+        select: {
+          id: true,
+          fileName: true,
+          mimeType: true,
+          documentType: true,
+          status: true,
+          confidence: true,
+          errorMessage: true,
+          createdAt: true,
+          extractedJson: true,
+        },
+      },
+      nutrients: {
+        select: {
+          id: true,
+          nutrientKey: true,
+          label: true,
+          value: true,
+          unit: true,
+          baseQuantity: true,
+          baseUnit: true,
+          dailyValuePercent: true,
+          sourceText: true,
+          confidence: true,
+        },
+      },
+      allergens: {
+        select: {
+          id: true,
+          allergenKey: true,
+          label: true,
+          declarationType: true,
+          present: true,
+          controlled: true,
+          sourceText: true,
+          confidence: true,
+        },
+      },
       technicalFields: {
         orderBy: [{ category: "asc" }, { label: "asc" }],
+        select: {
+          category: true,
+          label: true,
+          value: true,
+        },
       },
     },
   });
@@ -351,11 +397,52 @@ export async function getTechnicalSheetReviewData(
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
     include: {
-      document: true,
-      nutrients: true,
-      allergens: true,
+      document: {
+        select: {
+          id: true,
+          fileName: true,
+          mimeType: true,
+          documentType: true,
+          status: true,
+          confidence: true,
+          errorMessage: true,
+          createdAt: true,
+          extractedJson: true,
+        },
+      },
+      nutrients: {
+        select: {
+          id: true,
+          nutrientKey: true,
+          label: true,
+          value: true,
+          unit: true,
+          baseQuantity: true,
+          baseUnit: true,
+          dailyValuePercent: true,
+          sourceText: true,
+          confidence: true,
+        },
+      },
+      allergens: {
+        select: {
+          id: true,
+          allergenKey: true,
+          label: true,
+          declarationType: true,
+          present: true,
+          controlled: true,
+          sourceText: true,
+          confidence: true,
+        },
+      },
       technicalFields: {
         orderBy: [{ category: "asc" }, { label: "asc" }],
+        select: {
+          category: true,
+          label: true,
+          value: true,
+        },
       },
     },
   });
@@ -479,8 +566,20 @@ export async function approveTechnicalSheetExtraction(
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
     include: {
-      document: true,
-      nutrients: true,
+      document: {
+        select: {
+          status: true,
+        },
+      },
+      nutrients: {
+        select: {
+          id: true,
+          nutrientKey: true,
+          value: true,
+          unit: true,
+          sourceText: true,
+        },
+      },
     },
   });
 
@@ -603,6 +702,7 @@ async function getCurrentUser() {
 
   return prisma.user.findUnique({
     where: { email: session.user.email },
+    select: { id: true },
   });
 }
 
