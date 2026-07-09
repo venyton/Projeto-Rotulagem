@@ -8,3 +8,5 @@ npm-debug.log
 dist/
 .vercel
 .env*.local
+calculadora-nutricional/docs/banco-de-fichas/
+calculadora-nutricional/docs/Banco de Fichas/
