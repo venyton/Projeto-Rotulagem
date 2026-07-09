@@ -81,7 +81,15 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
                             fill
                             sizes="128px"
                             priority
-                            className="object-contain"
+                            className="object-contain dark:hidden"
+                        />
+                        <Image
+                            src="/logo-branco.png"
+                            alt="SoIZI"
+                            fill
+                            sizes="128px"
+                            priority
+                            className="hidden object-contain dark:block"
                         />
                     </div>
                 </Link>
