@@ -169,9 +169,8 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                                                 <Edit2 className="h-4 w-4" />
                                             </Button>
                                             <Button
-                                                variant="ghost"
+                                                variant="destructive"
                                                 size="icon"
-                                                className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
                                                 onClick={() => handleDelete(ingredient.id, ingredient.name)}
                                             >
                                                 <Trash2 className="h-4 w-4" />

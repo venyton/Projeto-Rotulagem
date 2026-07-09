@@ -46,7 +46,7 @@ export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], has
 
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {filteredTables.length === 0 ? (
-                    <Card className="col-span-full flex flex-col items-center justify-center border-dashed p-12 text-center bg-card/40">
+                    <Card className="app-empty-state col-span-full flex flex-col items-center justify-center p-12">
                         <div className="text-muted-foreground mb-4">
                             {searchQuery ? "Nenhuma tabela encontrada." : "Você ainda não tem tabelas salvas."}
                         </div>
@@ -58,8 +58,8 @@ export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], has
                     </Card>
                 ) : (
                     filteredTables.map(table => (
-                        <Card key={table.id} className="group overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
-                            <CardHeader className="bg-muted/10 border-b border-border/60 p-4">
+                        <Card key={table.id} className="app-panel group overflow-hidden transition-all hover:border-primary/30">
+                            <CardHeader className="app-panel-header p-4">
                                 <CardTitle className="flex min-w-0 items-start gap-2">
                                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/40">
                                         <FileText className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -77,7 +77,7 @@ export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], has
                                 <div className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-border"></div><span>Grupo: {table.popGroup}</span></div>
                                 <div className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-border"></div><span>Criado: {formatDateBR(table.createdAt)}</span></div>
                             </CardContent>
-                            <CardFooter className="bg-muted/5 grid grid-cols-2 gap-2 border-t border-border/40 p-3">
+                            <CardFooter className="app-panel-header grid grid-cols-2 gap-2 p-3">
                                 <Button variant="secondary" size="sm" className="w-full bg-background hover:bg-muted shadow-sm" asChild>
                                     <Link href={`/dashboard/edit/${table.id}`}>Editar</Link>
                                 </Button>

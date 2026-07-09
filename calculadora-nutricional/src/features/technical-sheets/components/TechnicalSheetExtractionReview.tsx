@@ -526,8 +526,8 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
       <form action={rejectTechnicalSheetExtraction.bind(null, data.extraction.id)}>
         <Button
           type="submit"
-          variant="outline"
-          className="w-full border-red-300 text-red-700 hover:bg-red-50 transition-colors"
+          variant="destructive"
+          className="w-full"
           disabled={isApproved || isRejected}
         >
           <X className="mr-2 h-4 w-4" />
