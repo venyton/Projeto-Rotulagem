@@ -4,7 +4,6 @@ import GoogleProvider from "next-auth/providers/google";
 import FacebookProvider from "next-auth/providers/facebook";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import { compare } from "bcryptjs";
-import { MarketingEventType } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { clearLoginFailures, getLoginRateLimitKey, isLoginRateLimited, recordLoginFailure } from "@/lib/security/rate-limit";
@@ -50,30 +49,6 @@ function configuredOAuthProviders() {
     }
 
     return providers;
-}
-
-async function recordAuthMarketingEvent(input: {
-    organizationId: string;
-    userId: string;
-    eventType: MarketingEventType;
-    provider: string;
-}) {
-    try {
-        await prisma.marketingEvent.create({
-            data: {
-                organizationId: input.organizationId,
-                userId: input.userId,
-                eventType: input.eventType,
-                metadata: {
-                    provider: input.provider,
-                },
-            },
-        });
-    } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-            console.error("Falha ao registrar evento de autenticação.", error);
-        }
-    }
 }
 
 export const authOptions: NextAuthOptions = {
@@ -182,13 +157,7 @@ export const authOptions: NextAuthOptions = {
                         return null;
                     }
 
-                    const organization = await ensureDefaultWorkspaceForUser(user);
-                    await recordAuthMarketingEvent({
-                        organizationId: organization.id,
-                        userId: user.id,
-                        eventType: MarketingEventType.LOGIN,
-                        provider: "credentials",
-                    });
+                    await ensureDefaultWorkspaceForUser(user);
 
                     return {
                         id: user.id + "",
@@ -234,13 +203,7 @@ export const authOptions: NextAuthOptions = {
                 select: { id: true, email: true, name: true },
             });
 
-            const organization = await ensureDefaultWorkspaceForUser(dbUser);
-            await recordAuthMarketingEvent({
-                organizationId: organization.id,
-                userId: dbUser.id,
-                eventType: existingUser ? MarketingEventType.LOGIN : MarketingEventType.SIGNUP_COMPLETED,
-                provider: account.provider,
-            });
+            await ensureDefaultWorkspaceForUser(dbUser);
 
             user.id = dbUser.id;
             user.email = dbUser.email;

@@ -3,14 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { redirect } from "next/navigation";
-import { MarketingEventType } from "@prisma/client";
 import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
 import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 
 export async function registerUser(prevState: unknown, formData: FormData): Promise<{ error?: string }> {
     const name = ((formData.get("name") as string | null) ?? "").trim();
     const companyName = ((formData.get("companyName") as string | null) ?? "").trim();
-    const document = ((formData.get("document") as string | null) ?? "").trim();
     const phone = ((formData.get("phone") as string | null) ?? "").trim();
     const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
     const password = formData.get("password") as string;
@@ -60,23 +58,10 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
         },
     });
 
-    const organization = await ensureDefaultWorkspaceForUser(user, {
+    await ensureDefaultWorkspaceForUser(user, {
         organizationName: companyName,
         entitlementSource: "DEFAULT",
     });
-
-    await prisma.marketingEvent.create({
-        data: {
-            organizationId: organization.id,
-            userId: user.id,
-            eventType: MarketingEventType.SIGNUP_COMPLETED,
-            metadata: {
-                companyName,
-                document: document || null,
-                phone,
-            },
-        },
-    }).catch(() => null);
 
     redirect("/login");
 }

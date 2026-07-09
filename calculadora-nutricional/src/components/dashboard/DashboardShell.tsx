@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch, Home } from "lucide-react";
+import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch, Home, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -16,22 +16,40 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher, useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
+import { SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 
-const PRODUCT_NAV_ITEMS: Array<{ href: string; label: string; copyKey?: "home" | "tables" | "ingredients" | "enterprise"; icon: typeof LayoutGrid }> = [
+const PRODUCT_NAV_ITEMS: Array<{
+    href: string;
+    label: string;
+    copyKey?: "home" | "tables" | "ingredients" | "enterprise";
+    icon: typeof LayoutGrid;
+    moduleKey?: SaaSModuleKey;
+    settingsOnly?: boolean;
+}> = [
     { href: "/dashboard", label: "Inicio", copyKey: "home", icon: Home },
-    { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid },
-    { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch },
-    { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2 },
+    { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid, moduleKey: SAAS_MODULES.TABLES },
+    { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch, moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
+    { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2, moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
+    { href: "/dashboard/settings", label: "Configurações", icon: Settings2, settingsOnly: true },
 ];
 
 export function DashboardShell({
     children,
+    accessibleModules = [],
+    canManageSettings = false,
 }: {
     children: React.ReactNode;
+    accessibleModules?: SaaSModuleKey[];
+    canManageSettings?: boolean;
 }) {
     const pathname = usePathname();
     const { copy } = useSiteLanguage();
-    const navItems = PRODUCT_NAV_ITEMS;
+    const accessibleModuleSet = new Set(accessibleModules);
+    const navItems = PRODUCT_NAV_ITEMS.filter((item) => {
+        if (item.settingsOnly) return canManageSettings;
+        if (item.moduleKey) return accessibleModuleSet.has(item.moduleKey);
+        return true;
+    });
     const isNavActive = (href: string) => {
         if (href === "/dashboard") {
             return pathname === "/dashboard";
@@ -41,7 +59,7 @@ export function DashboardShell({
 
     return (
         <div className="flex min-h-screen flex-col bg-background">
-            <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
+            <header className="dashboard-header sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
                 <div className="container mx-auto flex h-16 items-center gap-3 px-4 md:px-6">
                     <Link
                         href="/dashboard"
@@ -53,22 +71,31 @@ export function DashboardShell({
                                 alt="SoIZI"
                                 fill
                                 sizes="160px"
-                                className="object-contain"
+                                className="object-contain dark:hidden"
+                                priority
+                            />
+                            <Image
+                                src="/logo-branco.png"
+                                alt="SoIZI"
+                                fill
+                                sizes="160px"
+                                className="hidden object-contain dark:block"
                                 priority
                             />
                         </div>
                     </Link>
 
-                    <nav className="ml-1 hidden items-center gap-1 bg-card/70 p-1 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.6)] md:flex">
+                    <nav className="items-center gap-2 md:flex">
                         {navItems.map((item) => {
                             const Icon = item.icon;
                             const active = isNavActive(item.href);
                             return (
                                 <Button
                                     key={item.href}
-                                    variant={active ? "secondary" : "ghost"}
+                                    variant="ghost"
                                     asChild
-                                    className="h-8 rounded-md px-2.5 text-[13px] xl:px-3"
+                                    data-nav-active={active ? "true" : undefined}
+                                    className="dashboard-nav-button h-8 px-2.5 text-[13px] xl:px-3"
                                 >
                                     <Link href={item.href} className="inline-flex items-center gap-1.5">
                                         <Icon className="h-4 w-4" />
@@ -105,7 +132,7 @@ export function DashboardShell({
                                         event.preventDefault();
                                         signOut({ callbackUrl: "/" });
                                     }}
-                                    className="text-red-600 focus:text-red-700"
+                                    className="text-red-600 focus:text-red-700 dark:text-red-300 dark:focus:text-red-200"
                                 >
                                     <LogOut className="mr-2 h-4 w-4" />
                                     {copy.logout}
@@ -123,9 +150,10 @@ export function DashboardShell({
                             return (
                                 <Button
                                     key={item.href}
-                                    variant={active ? "secondary" : "ghost"}
+                                    variant="ghost"
                                     asChild
-                                    className="h-8 rounded-md px-2.5 text-[12px]"
+                                    data-nav-active={active ? "true" : undefined}
+                                    className="dashboard-nav-button h-8 px-2.5 text-[12px]"
                                 >
                                     <Link href={item.href} className="inline-flex items-center gap-1.5">
                                         <Icon className="h-3.5 w-3.5" />
@@ -138,7 +166,7 @@ export function DashboardShell({
                 </div>
             </header>
 
-            <main className="flex-1 bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,255,255,0)_22rem)] dark:bg-[linear-gradient(180deg,rgba(22,33,29,0.72),rgba(22,33,29,0)_22rem)]">
+            <main className="flex-1 bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,255,255,0)_22rem)] dark:bg-[linear-gradient(180deg,rgba(20,28,45,0.72),rgba(20,28,45,0)_22rem)]">
                 {children}
             </main>
         </div>

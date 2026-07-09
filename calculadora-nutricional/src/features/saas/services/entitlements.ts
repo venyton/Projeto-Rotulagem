@@ -1,11 +1,13 @@
 import { getServerSession } from "next-auth";
-import { MarketingEventType, OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
+import { cache } from "react";
+import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
 import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 import { getCurrentInternalMaster } from "@/features/master/services/master-access";
+import { isProfilePermissionModule } from "@/features/settings/domain/profile-permissions";
 
 export class ModuleAccessError extends Error {
   status = 403;
@@ -15,44 +17,62 @@ export class ModuleAccessError extends Error {
   }
 }
 
-export type SaaSContext = Awaited<ReturnType<typeof getCurrentSaaSContext>>;
-
 function isActiveWindow(expiresAt?: Date | null) {
   return !expiresAt || expiresAt.getTime() > Date.now();
 }
 
 function canRoleUseOrganizationModule(role: OrganizationRole) {
-  return role === OrganizationRole.OWNER || role === OrganizationRole.ADMIN || role === OrganizationRole.BILLING;
+  return role === OrganizationRole.OWNER || role === OrganizationRole.ADMIN;
 }
 
-export async function getCurrentSaaSContext() {
+async function loadCurrentSaaSContext() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true, email: true, name: true },
-  });
-
-  if (!user) return null;
-
-  await ensureDefaultWorkspaceForUser(user);
-
   const member = await prisma.organizationMember.findFirst({
     where: {
-      userId: user.id,
+      user: { email: session.user.email },
       active: true,
       organization: { status: "ACTIVE" },
     },
-    include: {
-      moduleGrants: true,
+    select: {
+      id: true,
+      organizationId: true,
+      userId: true,
+      profileId: true,
+      role: true,
+      active: true,
+      user: {
+        select: { id: true, email: true, name: true },
+      },
+      moduleGrants: {
+        select: {
+          moduleKey: true,
+          enabled: true,
+          expiresAt: true,
+        },
+      },
+      profile: {
+        select: {
+          id: true,
+          systemKey: true,
+          permissions: {
+            select: {
+              moduleKey: true,
+              enabled: true,
+            },
+          },
+        },
+      },
       organization: {
-        include: {
-          entitlements: true,
-          subscriptions: {
-            include: { plan: true },
-            orderBy: { updatedAt: "desc" },
-            take: 1,
+        select: {
+          id: true,
+          entitlements: {
+            select: {
+              moduleKey: true,
+              enabled: true,
+              expiresAt: true,
+            },
           },
         },
       },
@@ -60,14 +80,29 @@ export async function getCurrentSaaSContext() {
     orderBy: { createdAt: "asc" },
   });
 
-  if (!member) return null;
+  if (!member) {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (!user) return null;
+
+    await ensureDefaultWorkspaceForUser(user);
+
+    return loadCurrentSaaSContext();
+  }
 
   return {
-    user,
+    user: member.user,
     member,
     organization: member.organization,
   };
 }
+
+export const getCurrentSaaSContext = cache(loadCurrentSaaSContext);
+
+export type SaaSContext = Awaited<ReturnType<typeof loadCurrentSaaSContext>>;
 
 export function contextHasModuleAccess(context: NonNullable<SaaSContext>, moduleKey: AppModuleKey) {
   const entitlement = context.organization.entitlements.find(
@@ -75,6 +110,13 @@ export function contextHasModuleAccess(context: NonNullable<SaaSContext>, module
   );
 
   if (!entitlement) return false;
+
+  const profilePermission = context.member.profile?.permissions.find(
+    (permission) => permission.moduleKey === moduleKey,
+  );
+
+  if (profilePermission) return profilePermission.enabled;
+  if (context.member.profileId && isProfilePermissionModule(moduleKey)) return false;
   if (canRoleUseOrganizationModule(context.member.role)) return true;
 
   const memberGrant = context.member.moduleGrants.find(
@@ -89,16 +131,6 @@ export async function requireModuleAccess(moduleKey: AppModuleKey) {
   if (!context || !contextHasModuleAccess(context, moduleKey)) {
     throw new ModuleAccessError(moduleKey);
   }
-
-  await prisma.marketingEvent.create({
-    data: {
-      organizationId: context.organization.id,
-      organizationMemberId: context.member.id,
-      userId: context.user.id,
-      eventType: MarketingEventType.MODULE_USED,
-      moduleKey: moduleKey as SaaSModuleKey,
-    },
-  });
 
   return context;
 }

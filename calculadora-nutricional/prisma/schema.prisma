@@ -67,7 +67,6 @@ enum OrganizationStatus {
 enum OrganizationRole {
   OWNER
   ADMIN
-  BILLING
   MEMBER
 }
 
@@ -79,42 +78,7 @@ enum SaaSModuleKey {
   ENTERPRISE_LABELS
   EXPORTS
   AI_IMPORT
-  MARKETING_ANALYTICS
   API_ACCESS
-  BILLING
-}
-
-enum SubscriptionStatus {
-  TRIALING
-  ACTIVE
-  PAST_DUE
-  CANCELED
-  INCOMPLETE
-  INCOMPLETE_EXPIRED
-  UNPAID
-  PAUSED
-}
-
-enum PaymentProvider {
-  STRIPE
-  MANUAL
-}
-
-enum BillingWebhookStatus {
-  RECEIVED
-  PROCESSED
-  FAILED
-}
-
-enum MarketingEventType {
-  SIGNUP_STARTED
-  SIGNUP_COMPLETED
-  CHECKOUT_STARTED
-  CHECKOUT_COMPLETED
-  CHECKOUT_ABANDONED
-  LOGIN
-  MODULE_USED
-  LEAD_CAPTURED
 }
 
 model User {
@@ -131,8 +95,6 @@ model User {
   resetPasswordExpiresAt    DateTime?
   ownedOrganizations        Organization[]             @relation("OrganizationOwner")
   organizationMemberships   OrganizationMember[]
-  billingCustomers          BillingCustomer[]
-  marketingEvents           MarketingEvent[]
   securityAuditLogs         SecurityAuditLog[]
   tables                    GeneratedTable[]
   customIngredients         CustomIngredient[]
@@ -155,11 +117,8 @@ model Organization {
   status  OrganizationStatus @default(ACTIVE)
 
   members           OrganizationMember[]
+  profiles          OrganizationProfile[]
   entitlements      OrganizationEntitlement[]
-  billingCustomers  BillingCustomer[]
-  subscriptions     Subscription[]
-  marketingKeywords MarketingKeyword[]
-  marketingEvents   MarketingEvent[]
   securityAuditLogs SecurityAuditLog[]
 
   createdAt DateTime @default(now())
@@ -170,61 +129,64 @@ model Organization {
 }
 
 model OrganizationMember {
-  id             String           @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           OrganizationRole @default(MEMBER)
-  active         Boolean          @default(true)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId      String?
+  profile        OrganizationProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  role           OrganizationRole     @default(MEMBER)
+  active         Boolean              @default(true)
 
-  moduleGrants    ParticipantModuleGrant[]
-  marketingEvents MarketingEvent[]
+  moduleGrants ParticipantModuleGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, userId])
   @@index([organizationId])
+  @@index([organizationId, role, createdAt])
+  @@index([organizationId, profileId])
   @@index([userId])
+  @@index([userId, active, createdAt])
+  @@index([profileId])
   @@index([role])
 }
 
-model Plan {
-  id                   String         @id @default(cuid())
-  code                 String         @unique
-  name                 String
-  description          String?        @db.Text
-  monthlyPriceCents    Int            @default(0)
-  quarterlyPriceCents  Int            @default(0)
-  semiannualPriceCents Int            @default(0)
-  yearlyPriceCents     Int            @default(0)
-  stripeMonthlyPriceId String?
-  stripeQuarterlyPriceId String?
-  stripeSemiannualPriceId String?
-  stripeYearlyPriceId  String?
-  active               Boolean        @default(true)
-  modules              PlanModule[]
-  subscriptions        Subscription[]
+model OrganizationProfile {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?      @db.Text
+  systemKey      String
+
+  members     OrganizationMember[]
+  permissions OrganizationProfilePermission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([active])
+  @@unique([organizationId, name])
+  @@unique([organizationId, systemKey])
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
 }
 
-model PlanModule {
-  id         String        @id @default(cuid())
-  planId     String
-  plan       Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
-  moduleKey  SaaSModuleKey
-  usageLimit Int?
-  enabled    Boolean       @default(true)
+model OrganizationProfilePermission {
+  id                    String              @id @default(cuid())
+  organizationProfileId String
+  profile               OrganizationProfile @relation(fields: [organizationProfileId], references: [id], onDelete: Cascade)
+  moduleKey             SaaSModuleKey
+  enabled               Boolean             @default(true)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([planId, moduleKey])
+  @@unique([organizationProfileId, moduleKey])
   @@index([moduleKey])
+  @@index([enabled])
 }
 
 model OrganizationEntitlement {
@@ -260,123 +222,6 @@ model ParticipantModuleGrant {
   @@unique([organizationMemberId, moduleKey])
   @@index([moduleKey])
   @@index([enabled])
-}
-
-model BillingCustomer {
-  id                 String          @id @default(cuid())
-  organizationId     String
-  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId             String?
-  user               User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  provider           PaymentProvider @default(STRIPE)
-  providerCustomerId String          @unique
-  email              String?
-  metadata           Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([organizationId, provider])
-  @@index([userId])
-  @@index([provider])
-}
-
-model Subscription {
-  id                     String             @id @default(cuid())
-  organizationId         String
-  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  planId                 String?
-  plan                   Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
-  provider               PaymentProvider    @default(STRIPE)
-  providerSubscriptionId String?            @unique
-  providerPriceId        String?
-  status                 SubscriptionStatus @default(INCOMPLETE)
-  currentPeriodStart     DateTime?
-  currentPeriodEnd       DateTime?
-  cancelAtPeriodEnd      Boolean            @default(false)
-  trialEndsAt            DateTime?
-  metadata               Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([organizationId])
-  @@index([planId])
-  @@index([status])
-}
-
-model BillingWebhookEvent {
-  id              String               @id @default(cuid())
-  provider        PaymentProvider      @default(STRIPE)
-  providerEventId String               @unique
-  type            String
-  status          BillingWebhookStatus @default(RECEIVED)
-  payload         Json
-  processedAt     DateTime?
-  errorMessage    String?              @db.Text
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([provider])
-  @@index([type])
-  @@index([status])
-}
-
-model MarketingKeyword {
-  id             String        @id @default(cuid())
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  keyword        String
-  source         String?
-  medium         String?
-  campaign       String?
-  costCents      Int?
-  active         Boolean       @default(true)
-
-  events MarketingEvent[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([organizationId, keyword, source, medium, campaign])
-  @@index([organizationId])
-  @@index([keyword])
-  @@index([active])
-}
-
-model MarketingEvent {
-  id                   String              @id @default(cuid())
-  organizationId       String?
-  organization         Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  organizationMemberId String?
-  organizationMember   OrganizationMember? @relation(fields: [organizationMemberId], references: [id], onDelete: SetNull)
-  userId               String?
-  user                 User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  keywordId            String?
-  keyword              MarketingKeyword?   @relation(fields: [keywordId], references: [id], onDelete: SetNull)
-
-  eventType          MarketingEventType
-  moduleKey          SaaSModuleKey?
-  anonymousId        String?
-  route              String?
-  source             String?
-  medium             String?
-  campaign           String?
-  checkoutSessionId  String?
-  providerCustomerId String?
-  metadata           Json?
-  occurredAt         DateTime           @default(now())
-
-  createdAt DateTime @default(now())
-
-  @@index([organizationId])
-  @@index([organizationMemberId])
-  @@index([userId])
-  @@index([keywordId])
-  @@index([eventType])
-  @@index([moduleKey])
-  @@index([occurredAt])
 }
 
 model SecurityAuditLog {
@@ -425,15 +270,15 @@ model Ingredient {
   fiber      Float // g
   sodium     Float // mg
   sugarTotal Float? // g
-  sugarAdded Float? @default(0) // g
+  sugarAdded Float?  @default(0) // g
   origin     String? // "TACO", etc.
 
   // Micronutrients
-  fatMono     Float? @default(0)
-  fatPoly     Float? @default(0)
-  omega6      Float? @default(0)
-  omega3      Float? @default(0)
-  cholesterol Float? @default(0)
+  fatMono         Float? @default(0)
+  fatPoly         Float? @default(0)
+  omega6          Float? @default(0)
+  omega3          Float? @default(0)
+  cholesterol     Float? @default(0)
   customNutrients Json?
 
   vitaminA        Float? @default(0)
@@ -465,6 +310,8 @@ model Ingredient {
   selenium   Float? @default(0)
   zinc       Float? @default(0)
   choline    Float? @default(0)
+
+  @@index([name])
 }
 
 model CustomIngredient {
@@ -494,11 +341,11 @@ model CustomIngredient {
   sourceExtractionId String?
 
   // Micronutrients
-  fatMono     Float? @default(0)
-  fatPoly     Float? @default(0)
-  omega6      Float? @default(0)
-  omega3      Float? @default(0)
-  cholesterol Float? @default(0)
+  fatMono         Float? @default(0)
+  fatPoly         Float? @default(0)
+  omega6          Float? @default(0)
+  omega3          Float? @default(0)
+  cholesterol     Float? @default(0)
   customNutrients Json?
 
   vitaminA        Float? @default(0)
@@ -532,6 +379,10 @@ model CustomIngredient {
   choline    Float? @default(0)
 
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([name])
 }
 
 model GeneratedTable {
@@ -553,6 +404,10 @@ model GeneratedTable {
   enterpriseVersions EnterpriseLabelVersion[]
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, updatedAt(sort: Desc)])
 }
 
 model TableItem {
@@ -577,11 +432,11 @@ model TableItem {
   sugarAdded Float? @default(0)
 
   // Optional IN 75 Annex II components snapshotted per 100g.
-  fatMono     Float?
-  fatPoly     Float?
-  omega6      Float?
-  omega3      Float?
-  cholesterol Float?
+  fatMono         Float?
+  fatPoly         Float?
+  omega6          Float?
+  omega3          Float?
+  cholesterol     Float?
   customNutrients Json?
 
   vitaminA        Float?
@@ -613,6 +468,8 @@ model TableItem {
   selenium   Float?
   zinc       Float?
   choline    Float?
+
+  @@index([tableId])
 }
 
 model TechnicalDocument {
@@ -638,6 +495,9 @@ model TechnicalDocument {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model TechnicalSheetExtraction {
@@ -697,6 +557,9 @@ model TechnicalSheetExtraction {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, documentId])
 }
 
 model ExtractedNutrient {
@@ -794,6 +657,7 @@ model EnterpriseLabelProject {
 
   @@unique([userId, baseTableId, market])
   @@index([userId])
+  @@index([userId, updatedAt(sort: Desc)])
   @@index([baseTableId])
   @@index([market])
   @@index([status])

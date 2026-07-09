@@ -6,9 +6,7 @@ export const SAAS_MODULES = {
   ENTERPRISE_LABELS: "ENTERPRISE_LABELS",
   EXPORTS: "EXPORTS",
   AI_IMPORT: "AI_IMPORT",
-  MARKETING_ANALYTICS: "MARKETING_ANALYTICS",
   API_ACCESS: "API_ACCESS",
-  BILLING: "BILLING",
 } as const;
 
 export type SaaSModuleKey = (typeof SAAS_MODULES)[keyof typeof SAAS_MODULES];
@@ -61,12 +59,6 @@ export const MODULE_CATALOG: SaaSModuleDefinition[] = [
     key: SAAS_MODULES.AI_IMPORT,
     name: "IA de importação",
     description: "Uso de IA para interpretar documentos técnicos.",
-    category: "growth",
-  },
-  {
-    key: SAAS_MODULES.MARKETING_ANALYTICS,
-    name: "KPIs e marketing",
-    description: "Funil, palavras-chave, origem de tráfego e conversão.",
     category: "growth",
   },
   {
