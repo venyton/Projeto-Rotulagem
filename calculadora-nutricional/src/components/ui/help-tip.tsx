@@ -4,6 +4,7 @@ import * as React from "react"
 import { HelpCircle } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 type HelpTipProps = {
   children: React.ReactNode
@@ -36,8 +37,10 @@ export function HelpTip({ children, className }: HelpTipProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           aria-label="Ajuda"
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
@@ -45,12 +48,12 @@ export function HelpTip({ children, className }: HelpTipProps) {
           onBlur={scheduleClose}
           onClick={() => setOpen((current) => !current)}
           className={cn(
-            "inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition hover:text-emerald-700 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+            "size-5 rounded-full text-muted-foreground hover:text-primary",
             className,
           )}
         >
-          <HelpCircle className="h-3.5 w-3.5" />
-        </button>
+          <HelpCircle aria-hidden="true" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
