@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuTrigger,
@@ -24,7 +25,13 @@ export function getInitialLanguage(): SiteLanguage {
     if (typeof window === "undefined") return "pt-BR";
     const hasExplicitLanguage = window.localStorage.getItem(SITE_LANGUAGE_EXPLICIT_STORAGE_KEY) === "true";
     const stored = window.localStorage.getItem(SITE_LANGUAGE_STORAGE_KEY);
-    if (hasExplicitLanguage && isSiteLanguage(stored)) return stored;
+    const migratedLanguage = stored === "es-CL" ? "es-MX" : stored;
+    if (hasExplicitLanguage && isSiteLanguage(migratedLanguage)) {
+        if (migratedLanguage !== stored) {
+            window.localStorage.setItem(SITE_LANGUAGE_STORAGE_KEY, migratedLanguage);
+        }
+        return migratedLanguage;
+    }
     return "pt-BR";
 }
 
@@ -75,14 +82,15 @@ export function LanguageSwitcher() {
                         width={22}
                         height={16}
                         unoptimized
-                        className="h-4 w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+                        className="h-auto w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
                     />
                     <span className="hidden sm:inline">{activeLanguage.shortLabel}</span>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>{copy.language}</DropdownMenuLabel>
-                {SITE_LANGUAGES.map((item) => (
+                <DropdownMenuGroup>
+                  {SITE_LANGUAGES.map((item) => (
                     <DropdownMenuItem key={item.value} onClick={() => setLanguage(item.value)}>
                         <span className="mr-3 inline-flex w-11 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                             <Image
@@ -91,13 +99,14 @@ export function LanguageSwitcher() {
                                 width={22}
                                 height={16}
                                 unoptimized
-                                className="h-4 w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+                                className="h-auto w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
                             />
                             <span>{item.shortLabel}</span>
                         </span>
                         {item.label}
                     </DropdownMenuItem>
-                ))}
+                  ))}
+                </DropdownMenuGroup>
             </DropdownMenuContent>
         </DropdownMenu>
     );

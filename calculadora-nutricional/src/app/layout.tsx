@@ -6,6 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/header";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { InterfaceScaleProvider } from "@/components/interface-scale-control";
+import { Footer } from "@/components/footer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,16 +32,20 @@ export default async function RootLayout({
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex min-h-screen flex-col">
-            <Header isLoggedIn={Boolean(session)} />
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
+          <TooltipProvider>
+            <InterfaceScaleProvider />
+            <div className="flex min-h-screen flex-col">
+              <Header isLoggedIn={Boolean(session)} />
+              <div className="flex-1">
+                {children}
+              </div>
+              <Footer />
+            </div>
+          </TooltipProvider>
           <Toaster />
         </ThemeProvider>
       </body>
