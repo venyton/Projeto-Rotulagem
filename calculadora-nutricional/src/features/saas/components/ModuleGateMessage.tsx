@@ -1,19 +1,20 @@
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LockKeyhole } from "lucide-react";
+
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import type { SaaSModuleKey } from "@/features/saas/domain/modules";
 
 export function ModuleGateMessage({ moduleKey: _moduleKey }: { moduleKey: SaaSModuleKey }) {
   void _moduleKey;
 
   return (
-    <div className="container mx-auto px-4 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Recurso indisponível</CardTitle>
-          <CardDescription>
-            Este recurso não está liberado para esta conta.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+    <div className="app-page">
+      <Empty className="bg-card">
+        <EmptyHeader>
+          <EmptyMedia variant="icon"><LockKeyhole aria-hidden="true" /></EmptyMedia>
+          <EmptyTitle>Recurso indisponível</EmptyTitle>
+          <EmptyDescription>Este recurso não está liberado para esta conta.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     </div>
   );
 }
