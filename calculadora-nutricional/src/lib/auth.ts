@@ -181,15 +181,6 @@ export const authOptions: NextAuthOptions = {
             const email = normalizeEmail(user.email || (profile as { email?: string } | undefined)?.email || "");
             if (!email) return false;
 
-            const existingUser = await prisma.user.findUnique({
-                where: { email },
-                select: { id: true },
-            });
-
-            if (!existingUser) {
-                return false;
-            }
-
             const dbUser = await prisma.user.upsert({
                 where: { email },
                 create: {
