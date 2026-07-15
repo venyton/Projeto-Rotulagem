@@ -6,6 +6,8 @@ import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage"
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+import { FilePenLine } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 
 function readItemMicronutrients(item: Record<string, unknown>) {
     return Object.fromEntries(
@@ -141,11 +143,8 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     };
 
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
-            <div className="mb-6 border-b border-border/70 pb-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Tabela</p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight">Editar Tabela</h1>
-            </div>
+        <div className="app-page flex flex-col gap-6">
+            <PageHeader eyebrow="Tabela" icon={FilePenLine} title="Editar tabela" description="Revise os dados, atualize os cálculos e gere uma nova versão do rótulo." />
             <TableGenerator initialData={initialData} />
         </div>
     );

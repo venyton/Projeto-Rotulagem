@@ -24,6 +24,7 @@ import {
 import { checkFOP, inferFopFoodType, type FOPFoodType } from "@/features/tables/domain/anvisa";
 import { Ingredient } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +32,7 @@ import { HelpTip } from "@/components/ui/help-tip";
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -40,6 +42,7 @@ import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -68,6 +71,12 @@ import {
     toAminoAcidProfileInput,
 } from "@/features/tables/domain/amino-acids";
 import { checkAnnexXxNutritionClaims, NutritionClaimStatus } from "@/features/tables/domain/annex-xx-claims";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { renderElementAsSvg } from "@/lib/render-element-svg";
 
 type ExcelTableType =
     | "VERT"
@@ -83,7 +92,8 @@ type ExcelTableType =
     | "SUPLEM"
     | "SUPLEM-POP";
 
-type ImageExportFormat = "png" | "jpeg" | "webp";
+type ImageExportFormat = "png" | "jpeg" | "webp" | "svg";
+type RasterImageExportFormat = Exclude<ImageExportFormat, "svg">;
 type ServingsDeclarationMode = "auto" | "manual";
 type ComplianceProfile = "general" | "bottled-water" | "iodized-salt" | "flour" | "annex-xvi";
 type FopReferenceMode = "as-sold" | "prepared";
@@ -101,6 +111,10 @@ type ExtraConstituent = {
     name: string;
     amount: string;
     unit: string;
+};
+type ExportFile = {
+    fileName: string;
+    blob: Blob;
 };
 type TableUiState = {
     selectedGroup?: string;
@@ -158,6 +172,13 @@ const EXCEL_TABLE_OPTIONS: Array<{ value: ExcelTableType; label: string }> = [
     { value: "SUPLEM-POP", label: "Suplementos por Grupo" },
 ];
 
+const DEFAULT_IMAGE_EXPORT_FORMATS: ImageExportFormat[] = ["png"];
+const IMAGE_EXPORT_FORMAT_OPTIONS: Array<{ value: ImageExportFormat; label: string }> = [
+    { value: "png", label: "PNG (Recomendado)" },
+    { value: "svg", label: "SVG (Vetor)" },
+    { value: "jpeg", label: "JPEG" },
+    { value: "webp", label: "WEBP" },
+];
 const SUPPLEMENT_TABLE_TYPES: ExcelTableType[] = ["SUPLEM", "SUPLEM-POP"];
 const DEFAULT_NON_SUPPLEMENT_TABLE_TYPE: ExcelTableType = "VERT";
 const COMPLIANCE_PROFILE_OPTIONS: Array<{ value: ComplianceProfile; label: string }> = [
@@ -281,6 +302,27 @@ function formatQuantityInput(value: number) {
     return String(value);
 }
 
+function isImageExportFormat(value: unknown): value is ImageExportFormat {
+    return typeof value === "string" && IMAGE_EXPORT_FORMAT_OPTIONS.some((item) => item.value === value);
+}
+
+function normalizeImageExportFormats(value: unknown): ImageExportFormat[] {
+    if (!Array.isArray(value)) return DEFAULT_IMAGE_EXPORT_FORMATS;
+
+    const formats = value.filter(isImageExportFormat);
+    return formats.length > 0 ? Array.from(new Set(formats)) : DEFAULT_IMAGE_EXPORT_FORMATS;
+}
+
+function isRasterImageExportFormat(format: ImageExportFormat): format is RasterImageExportFormat {
+    return format !== "svg";
+}
+
+function getRasterImageMime(format: RasterImageExportFormat) {
+    if (format === "jpeg") return "image/jpeg";
+    if (format === "webp") return "image/webp";
+    return "image/png";
+}
+
 function toTableUiState(value: unknown): TableUiState {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return {};
@@ -388,7 +430,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             ? savedUiState.selectedTableTypes
             : EXCEL_TABLE_OPTIONS.filter((item) => !SUPPLEMENT_TABLE_TYPES.includes(item.value)).map((item) => item.value)
     );
-    const [selectedImageFormats, setSelectedImageFormats] = useState<ImageExportFormat[]>(savedUiState.selectedImageFormats || ["png"]);
+    const [selectedImageFormats, setSelectedImageFormats] = useState<ImageExportFormat[]>(
+        () => normalizeImageExportFormats(savedUiState.selectedImageFormats)
+    );
     const [includeFopSealOnImageExport, setIncludeFopSealOnImageExport] = useState(
         savedUiState.includeFopSealOnImageExport ?? true
     );
@@ -646,7 +690,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     const previewViewportRef = React.useRef<HTMLDivElement>(null);
     const previewContentRef = React.useRef<HTMLDivElement>(null);
     const [previewScale, setPreviewScale] = useState(1);
-    const [previewStickyTop, setPreviewStickyTop] = useState(20);
+    const [previewStickyTop, setPreviewStickyTop] = useState(76);
     const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
     const availableTableOptionValues = React.useMemo(
         () =>
@@ -737,10 +781,11 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         const updateStickyTop = () => {
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(() => {
-                const offset = 20;
+                const offset = 76;
+                const bottomOffset = 20;
                 const panelHeight = panel.offsetHeight;
                 const viewportHeight = window.innerHeight;
-                const nextTop = Math.min(offset, viewportHeight - panelHeight - offset);
+                const nextTop = Math.min(offset, viewportHeight - panelHeight - bottomOffset);
 
                 setPreviewStickyTop((current) => (Math.abs(current - nextTop) > 1 ? nextTop : current));
             });
@@ -1118,7 +1163,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 setSelectedTableTypes(persisted.selectedTableTypes);
             }
             if (Array.isArray(persisted.selectedImageFormats) && persisted.selectedImageFormats.length > 0) {
-                setSelectedImageFormats(persisted.selectedImageFormats);
+                setSelectedImageFormats(normalizeImageExportFormats(persisted.selectedImageFormats));
             }
 
             if (typeof persisted.includeFopSealOnImageExport === "boolean") {
@@ -1330,7 +1375,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         }
     };
 
-    const renderLabelCanvas = async (elementId: string | string[] = "nutrition-label-container") => {
+    const resolveExportElement = (elementId: string | string[] = "nutrition-label-container") => {
         const candidateIds = Array.isArray(elementId) ? elementId : [elementId];
         const resolvedElementId = candidateIds.find((id) => !!document.getElementById(id));
         const element = resolvedElementId ? document.getElementById(resolvedElementId) : null;
@@ -1338,12 +1383,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             throw new Error("Não foi possível localizar a tabela na tela para exportar.");
         }
 
+        return element as HTMLElement;
+    };
+
+    const prepareElementForExport = async (element: HTMLElement) => {
+
         if (document.fonts?.ready) {
             await document.fonts.ready;
         }
-
-        const captureWidth = Math.ceil(element.scrollWidth || element.clientWidth || 0);
-        const captureHeight = Math.ceil(element.scrollHeight || element.clientHeight || 0);
 
         const images = Array.from(element.querySelectorAll("img"));
         await Promise.all(
@@ -1367,6 +1414,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
         // Small delay to ensure all CSS calculations are done
         await new Promise(resolve => setTimeout(resolve, 500));
+    };
+
+    const renderLabelCanvas = async (elementId: string | string[] = "nutrition-label-container") => {
+        const element = resolveExportElement(elementId);
+        await prepareElementForExport(element);
+
+        const captureWidth = Math.ceil(element.scrollWidth || element.clientWidth || 0);
+        const captureHeight = Math.ceil(element.scrollHeight || element.clientHeight || 0);
 
         const exportWidth = captureWidth > 0 ? captureWidth : element.scrollWidth;
         const exportHeight = captureHeight > 0 ? captureHeight : element.scrollHeight;
@@ -1381,6 +1436,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 backgroundColor: "#ffffff",
             },
         });
+    };
+
+    const renderLabelSvg = async (elementId: string | string[] = "nutrition-label-container") => {
+        const element = resolveExportElement(elementId);
+        await prepareElementForExport(element);
+        return renderElementAsSvg(element, `Tabela nutricional editável — ${title || "SoIZI"}`);
     };
 
     const waitForPreviewRender = () =>
@@ -1412,6 +1473,36 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
             }, mime, quality);
         });
 
+    const addElementImageExportsToFiles = async (
+        files: ExportFile[],
+        elementId: string | string[],
+        baseName: string,
+        formats: ImageExportFormat[]
+    ) => {
+        let canvas: HTMLCanvasElement | null = null;
+        let svg: string | null = null;
+
+        for (const format of formats) {
+            if (format === "svg") {
+                svg = svg ?? await renderLabelSvg(elementId);
+                files.push({
+                    fileName: `${baseName}.svg`,
+                    blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+                });
+                continue;
+            }
+
+            if (isRasterImageExportFormat(format)) {
+                canvas = canvas ?? await renderLabelCanvas(elementId);
+                const blob = await canvasToBlob(canvas, getRasterImageMime(format), 0.92);
+                files.push({
+                    fileName: `${baseName}.${format}`,
+                    blob,
+                });
+            }
+        }
+    };
+
     const getActiveFopModelAssets = () => {
         if (!effectiveHasFopSeal || !fopStatus) return [];
 
@@ -1431,7 +1522,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         return response.blob();
     };
 
-    const addFopModelAssetsToFiles = async (files: Array<{ fileName: string; blob: Blob }>) => {
+    const addFopModelAssetsToFiles = async (files: ExportFile[]) => {
         for (const asset of getActiveFopModelAssets()) {
             files.push({
                 fileName: asset.fileName,
@@ -1493,7 +1584,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         ].join("\n");
     };
 
-    const addPreparationMemorialToFiles = (files: Array<{ fileName: string; blob: Blob }>) => {
+    const addPreparationMemorialToFiles = (files: ExportFile[]) => {
         const text = getPreparationMemorialText();
         if (!text) return;
 
@@ -1512,7 +1603,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
     const handleExportImage = async (formats?: ImageExportFormat[]) => {
         const targetFormats = formats ?? selectedImageFormats;
-        const formatsToExport = targetFormats.length > 0 ? targetFormats : ["png"];
+        const formatsToExport = targetFormats.length > 0 ? targetFormats : DEFAULT_IMAGE_EXPORT_FORMATS;
         if (targetFormats.length === 0) {
             toast.info("Nenhum formato selecionado. Exportando em PNG.");
         }
@@ -1524,33 +1615,21 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 tableType,
                 elementId: `nutrition-label-container-export-${tableType}`,
             }));
-            const files: Array<{ fileName: string; blob: Blob }> = [];
+            const files: ExportFile[] = [];
 
             for (const target of tableTargets) {
-                const canvas = await renderLabelCanvas([target.elementId, "nutrition-label-container"]);
-
-                for (const format of formatsToExport) {
-                    const mime = format === "jpeg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png";
-                    const blob = await canvasToBlob(canvas, mime, 0.92);
-                    files.push({
-                        fileName: `tabela_${target.tableType.toLowerCase()}.${format}`,
-                        blob,
-                    });
-                }
+                await addElementImageExportsToFiles(
+                    files,
+                    [target.elementId, "nutrition-label-container"],
+                    `tabela_${target.tableType.toLowerCase()}`,
+                    formatsToExport
+                );
             }
 
             if (effectiveHasFopSeal) {
                 const fopElement = document.getElementById("nutrition-fop-seal-export");
                 if (fopElement) {
-                    const fopCanvas = await renderLabelCanvas("nutrition-fop-seal-export");
-                    for (const format of formatsToExport) {
-                        const mime = format === "jpeg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png";
-                        const blob = await canvasToBlob(fopCanvas, mime, 0.92);
-                        files.push({
-                            fileName: `selo_fop.${format}`,
-                            blob,
-                        });
-                    }
+                    await addElementImageExportsToFiles(files, "nutrition-fop-seal-export", "selo_fop", formatsToExport);
                 }
             }
             await addFopModelAssetsToFiles(files);
@@ -1595,18 +1674,22 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
             // 2. Capture Images
             await waitForPreviewRender();
+            const imageFormatsToExport = selectedImageFormats.length > 0 ? selectedImageFormats : DEFAULT_IMAGE_EXPORT_FORMATS;
+            const imageFiles: ExportFile[] = [];
             for (const tableType of selectedTableTypes) {
                 const exportElementId = `nutrition-label-container-export-${tableType}`;
-                const canvas = await renderLabelCanvas(exportElementId);
-                const base64Data = canvas.toDataURL("image/png").split(",")[1];
-                zip.file(`tabela_${tableType.toLowerCase()}.png`, base64Data, { base64: true });
+                await addElementImageExportsToFiles(
+                    imageFiles,
+                    exportElementId,
+                    `tabela_${tableType.toLowerCase()}`,
+                    imageFormatsToExport
+                );
             }
 
             if (effectiveHasFopSeal) {
-                const fopCanvas = await renderLabelCanvas("nutrition-fop-seal-export");
-                const fopBase64Data = fopCanvas.toDataURL("image/png").split(",")[1];
-                zip.file("selo_fop.png", fopBase64Data, { base64: true });
+                await addElementImageExportsToFiles(imageFiles, "nutrition-fop-seal-export", "selo_fop", imageFormatsToExport);
             }
+            imageFiles.forEach((file) => zip.file(file.fileName, file.blob));
             await addFopModelAssetsToZip(zip);
             addPreparationMemorialToZip(zip);
 
@@ -1658,24 +1741,24 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                         <p className={PANEL_EYEBROW_CLASS}>Editor de tabela nutricional</p>
-                        <h1 className="mt-1 truncate text-xl font-semibold text-slate-950 dark:text-slate-50">
+                        <h1 className="mt-1 truncate text-xl font-semibold text-foreground">
                             {title.trim() || "Nova tabela nutricional"}
                         </h1>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:flex lg:flex-wrap lg:justify-end">
                         <div className="app-metric">
                             <div className="app-metric-label">Porção</div>
-                            <div className="mt-0.5 font-semibold text-slate-950 dark:text-slate-50">{formatWeight(portionSize)} g</div>
+                            <div className="mt-0.5 font-semibold text-foreground">{formatWeight(portionSize)} g</div>
                         </div>
                         <div className="app-metric">
                             <div className="app-metric-label">Ingredientes</div>
-                            <div className="mt-0.5 font-semibold text-slate-950 dark:text-slate-50">{ingredients.length}</div>
+                            <div className="mt-0.5 font-semibold text-foreground">{ingredients.length}</div>
                         </div>
                         <div className="app-metric">
                             <div className="app-metric-label">Micros</div>
-                            <div className="mt-0.5 font-semibold text-slate-950 dark:text-slate-50">{selectedNutrients.length}</div>
+                            <div className="mt-0.5 font-semibold text-foreground">{selectedNutrients.length}</div>
                         </div>
-                        <div className={`app-metric ${effectiveHasFopSeal ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200" : "text-slate-700 dark:text-slate-200"}`}>
+                        <div className={`app-metric ${effectiveHasFopSeal ? "border-warning/30 bg-warning/10 text-warning-foreground" : "text-muted-foreground"}`}>
                             <div className="app-metric-label opacity-70">Lupa</div>
                             <div className="mt-0.5 font-semibold">{effectiveHasFopSeal ? "Ativa" : "Inativa"}</div>
                         </div>
@@ -1690,16 +1773,16 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className={PANEL_EYEBROW_CLASS}>Etapa principal</p>
-                                <CardTitle className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-50">
+                                <CardTitle className="mt-1 text-base font-semibold text-foreground">
                                     Dados do Produto
                                 </CardTitle>
                             </div>
-                            <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
+                            <Badge variant="secondary">
                                 {selectedOfficialProduct ? "Base oficial" : "Dados livres"}
-                            </span>
+                            </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex flex-col gap-5 bg-slate-50/35 p-4 dark:bg-slate-950/10 sm:p-5">
+                    <CardContent className="flex flex-col gap-5 bg-muted/20 p-4 sm:p-5">
 
                         <div className={`${PANEL_CLASS} grid grid-cols-1 gap-4 p-4`}>
                             <div className={PANEL_EYEBROW_CLASS}>
@@ -1718,11 +1801,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         position="popper"
                                         className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"
                                     >
+                                      <SelectGroup>
                                         {FOOD_GROUPS.map((g, i) => (
                                             <SelectItem key={i} value={g.group} className="max-w-full">
                                                 {g.group}
                                             </SelectItem>
                                         ))}
+                                      </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1739,26 +1824,28 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         position="popper"
                                         className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"
                                     >
+                                      <SelectGroup>
                                         {FOOD_GROUPS.find(g => g.group === selectedGroup)?.products.map((p, i) => (
                                             <SelectItem key={i} value={p.name} className="max-w-full">
                                                 {p.name}
                                             </SelectItem>
                                         ))}
+                                      </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
                         <div className={`${PANEL_CLASS} space-y-2 p-4`}>
-                            <Label className="text-xs font-bold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-200">
+                            <Label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                                 Denominação de venda
                             </Label>
-                            <textarea
+                            <Textarea
                                 value={title}
                                 onChange={e => setTitle(e.target.value)}
                                 placeholder="ex: Barra de cereais com até 10% de gordura"
                                 rows={2}
-                                className="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base leading-relaxed shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive min-h-12 resize-y"
+                                className="min-h-12 resize-y leading-relaxed"
                             />
                         </div>
 
@@ -1816,6 +1903,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         position="popper"
                                         className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,34rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-2.5 [&_[data-slot=select-item]]:pr-10"
                                     >
+                                      <SelectGroup>
                                         {HOUSEHOLD_MEASURE_OPTIONS.map((measure) => (
                                             <SelectItem key={measure.code} value={measure.code}>
                                                 <span className="block max-w-full break-words whitespace-normal leading-relaxed">
@@ -1823,6 +1911,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 </span>
                                             </SelectItem>
                                         ))}
+                                      </SelectGroup>
                                     </SelectContent>
                                 </Select>
                                 {householdMeasureCode === HOUSEHOLD_MEASURE_CODES.OTHER && (
@@ -1832,7 +1921,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         placeholder="Digite a medida caseira (ex: 2 colheres rasas)"
                                     />
                                 )}
-                                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950/20">
+                                <div className="rounded-lg border bg-card p-3">
                                     <div className="flex items-start gap-2">
                                         <Checkbox
                                             id="unit-fraction-measure"
@@ -1854,7 +1943,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 onChange={(e) => setUnitWeightForFraction(e.target.value)}
                                                 placeholder="Peso/volume de 1 unidade"
                                             />
-                                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium dark:border-slate-700 dark:bg-slate-900/40">
+                                            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
                                                 {unitFractionLabel || "-"}
                                             </div>
                                         </div>
@@ -1917,7 +2006,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     placeholder="ex: 500"
                                 />
                             </div>
-                            <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950/20 md:col-span-2">
+                            <div className="space-y-2 rounded-lg border bg-card p-3 md:col-span-2">
                                 <div className="flex items-start gap-2">
                                     <Checkbox
                                         id="individual-package-portion"
@@ -1932,7 +2021,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         </span>
                                     </label>
                                 </div>
-                                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-muted-foreground dark:border-slate-700 dark:bg-slate-900/40">
+                                <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                                     {individualPackagePortion
                                         ? `Aplicado: ${formatWeight(individualPackagePortion.portion)} g (${individualPackagePortion.measure}). Referência: ${formatWeight(currentMeasureSuggestedPortion || 0)} g.`
                                         : "Selecione um produto oficial e informe o conteúdo da embalagem."}
@@ -1951,8 +2040,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                      <SelectGroup>
                                         <SelectItem value="auto">Automático (ANVISA)</SelectItem>
                                         <SelectItem value="manual">Manual (cliente)</SelectItem>
+                                      </SelectGroup>
                                     </SelectContent>
                                 </Select>
                                 {servingsDeclarationMode === "manual" ? (
@@ -1962,7 +2053,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         placeholder='ex: Cerca de 3'
                                     />
                                 ) : (
-                                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950/20">
+                                    <div className="rounded-lg border bg-card px-3 py-2 text-sm">
                                         {servingsPerPackageAuto}
                                     </div>
                                 )}
@@ -1999,11 +2090,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
+                                          <SelectGroup>
                                             {REGULATORY_CATEGORY_OPTIONS.map((option) => (
                                                 <SelectItem key={option.value} value={option.value}>
                                                     {option.label}
                                                 </SelectItem>
                                             ))}
+                                          </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2018,11 +2111,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
+                                          <SelectGroup>
                                             {COMPLIANCE_PROFILE_OPTIONS.map((option) => (
                                                 <SelectItem key={option.value} value={option.value}>
                                                     {option.label}
                                                 </SelectItem>
                                             ))}
+                                          </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2037,8 +2132,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
+                                          <SelectGroup>
                                             <SelectItem value="solid">Sólido/Semissólido (100 g)</SelectItem>
                                             <SelectItem value="liquid">Líquido (100 ml)</SelectItem>
+                                          </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -2055,18 +2152,20 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
+                                          <SelectGroup>
                                             <SelectItem value="as-sold">Como exposto à venda</SelectItem>
                                             <SelectItem value="prepared">Pronto para consumo (Art. 19)</SelectItem>
+                                          </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950/20">
+                                <div className="rounded-lg border bg-card px-3 py-2 text-xs">
                                     {effectiveHasFopSeal ? "Lupa ativa para este produto." : "Lupa inativa para este produto."}
                                 </div>
                             </div>
 
                             {fopReferenceMode === "prepared" && enablePreparationSimulator && result && (
-                                <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white/80 p-3 text-xs dark:border-slate-700 dark:bg-slate-950/20 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-3 rounded-lg border bg-card p-3 text-xs md:grid-cols-3">
                                     <div>
                                         <div className="font-semibold text-foreground">Açúcares adicionados</div>
                                         <div className="mt-1 text-muted-foreground">{formatWeight(result.per100g.sugarAdded)} g/100 g pronto</div>
@@ -2083,7 +2182,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             )}
 
                             {fopReferenceMode === "prepared" && !enablePreparationSimulator && (
-                                <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white/80 p-3 dark:border-slate-700 dark:bg-slate-950/20 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 rounded-lg border bg-card p-3 md:grid-cols-3">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="prepared-sugar">Açúcares adicionados (g/100)</Label>
                                         <Input
@@ -2145,7 +2244,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             )}
                         </div>
 
-                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/30">
+                        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
                             <div className={PANEL_HEADER_CLASS}>
                                 <div className="flex items-center justify-between gap-2">
                                     <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
@@ -2171,7 +2270,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     {ingredients.map((item, idx) => (
                                         <div
                                             key={idx}
-                                            className="flex items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/20"
+                                            className="flex items-end gap-3 rounded-lg border bg-muted/30 p-3"
                                         >
                                             <div className="flex-1 space-y-1">
                                                 <div className="font-medium text-sm">{item.ingredient.name}</div>
@@ -2216,13 +2315,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         </div>
                                     ))}
                                     {ingredients.length === 0 && (
-                                        <div className="rounded-lg border border-dashed border-slate-300 bg-white py-4 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950/20">
+                                        <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                             Adicione ingredientes para começar.
                                         </div>
                                     )}
                                 </div>
                                 {ingredients.length > 0 && (
-                                    <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/20">
+                                    <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-4">
                                         <span className="font-semibold text-sm">Peso Total dos Ingredientes:</span>
                                         <span className="font-bold text-lg text-primary">{formatWeight(ingredients.reduce((acc, item) => acc + (item.quantity || 0), 0))} g</span>
                                     </div>
@@ -2269,13 +2368,13 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <div className="space-y-1.5 md:col-span-2">
                                             <Label htmlFor="preparation-instructions">Instrução de preparo</Label>
-                                            <textarea
+                                            <Textarea
                                                 id="preparation-instructions"
                                                 value={preparationInstructions}
                                                 onChange={(event) => setPreparationInstructions(event.target.value)}
                                                 placeholder="ex: Misturar o conteúdo do pacote com 2 ovos, 150 ml de leite e 40 g de manteiga. Assar até obter 420 g de bolo pronto."
                                                 rows={3}
-                                                className="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm leading-relaxed shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] min-h-20 resize-y"
+                                                className="min-h-20 resize-y leading-relaxed"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -2329,7 +2428,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         </div>
                                     </div>
 
-                                    <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950/20">
+                                    <div className="rounded-lg border bg-card p-3">
                                         <div className="mb-3 flex items-center justify-between gap-2">
                                             <div className="text-sm font-semibold">Ingredientes adicionados no preparo</div>
                                             <Button
@@ -2347,7 +2446,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             {preparationIngredients.map((item, idx) => (
                                                 <div
                                                     key={`prep-${idx}`}
-                                                    className="flex items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/20"
+                                                    className="flex items-end gap-3 rounded-lg border bg-muted/30 p-3"
                                                 >
                                                     <div className="flex-1 space-y-1">
                                                         <div className="font-medium text-sm">{item.ingredient.name}</div>
@@ -2386,14 +2485,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 </div>
                                             ))}
                                             {preparationIngredients.length === 0 && (
-                                                <div className="rounded-lg border border-dashed border-slate-300 bg-white py-4 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950/20">
+                                                <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                                     Adicione ovo, leite, manteiga, água ou outros ingredientes do preparo.
                                                 </div>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-950/20 md:grid-cols-2">
+                                    <div className="grid grid-cols-1 gap-3 rounded-lg border bg-card p-3 text-xs md:grid-cols-2">
                                         <div>
                                             <div className="font-semibold text-foreground">Memorial de cálculo</div>
                                             <div className="mt-1 text-muted-foreground">
@@ -2472,7 +2571,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             placeholder={result ? result.per100g.protein.toFixed(2) : "ex: 18,5"}
                                         />
                                     </div>
-                                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950/20">
+                                    <div className="rounded-lg border bg-card px-3 py-2 text-xs">
                                         <div className="font-semibold text-foreground">{aminoAcidProfileStatus}</div>
                                         <div className="mt-1 text-muted-foreground">
                                             Base: {aminoAcidProteinPer100g > 0 ? `${aminoAcidProteinPer100g.toFixed(2)} g de proteína/100 g` : "sem proteína calculada"}
@@ -2480,25 +2579,25 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950/20">
-                                    <table className="w-full min-w-[42rem] text-sm">
-                                        <thead className="bg-slate-50 text-xs text-muted-foreground dark:bg-slate-900/50">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left font-semibold">Aminoácido</th>
-                                                <th className="px-3 py-2 text-right font-semibold">Perfil (mg/100 g)</th>
-                                                <th className="px-3 py-2 text-right font-semibold">Anexo XXI (mg/g prot.)</th>
-                                                <th className="px-3 py-2 text-right font-semibold">Calculado</th>
-                                                <th className="px-3 py-2 text-left font-semibold">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
+                                <div className="overflow-x-auto rounded-lg border bg-card">
+                                    <Table className="min-w-[42rem]">
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Aminoácido</TableHead>
+                                                <TableHead className="text-right">Perfil (mg/100 g)</TableHead>
+                                                <TableHead className="text-right">Anexo XXI (mg/g prot.)</TableHead>
+                                                <TableHead className="text-right">Calculado</TableHead>
+                                                <TableHead>Status</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
                                             {AMINO_ACID_REFERENCE_PROFILE.map((reference) => {
                                                 const row = aminoAcidResults.find((item) => item.key === reference.key);
                                                 const calculated = row?.calculatedMgPerGProtein;
                                                 return (
-                                                    <tr key={reference.key} className="border-t border-slate-200 dark:border-slate-700">
-                                                        <td className="px-3 py-2 font-medium">{reference.label}</td>
-                                                        <td className="px-3 py-2">
+                                                    <TableRow key={reference.key}>
+                                                        <TableCell className="font-medium">{reference.label}</TableCell>
+                                                        <TableCell>
                                                             <Input
                                                                 type="text"
                                                                 inputMode="decimal"
@@ -2507,101 +2606,98 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                                 placeholder="0"
                                                                 className="h-8 text-right"
                                                             />
-                                                        </td>
-                                                        <td className="px-3 py-2 text-right">{reference.referenceMgPerGProtein}</td>
-                                                        <td className="px-3 py-2 text-right">
+                                                        </TableCell>
+                                                        <TableCell className="text-right">{reference.referenceMgPerGProtein}</TableCell>
+                                                        <TableCell className="text-right">
                                                             {calculated === null || calculated === undefined ? "-" : calculated.toFixed(1)}
-                                                        </td>
-                                                        <td className="px-3 py-2">
+                                                        </TableCell>
+                                                        <TableCell>
                                                             {row?.compliant === null ? (
-                                                                <span className="text-xs text-muted-foreground">Sem dado</span>
+                                                                <Badge variant="secondary">Sem dado</Badge>
                                                             ) : row?.compliant ? (
-                                                                <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
-                                                                    Dentro
-                                                                </span>
+                                                                <Badge variant="success">Dentro</Badge>
                                                             ) : (
-                                                                <span className="inline-flex rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                                                                    Fora
-                                                                </span>
+                                                                <Badge variant="destructive">Fora</Badge>
                                                             )}
-                                                        </td>
-                                                    </tr>
+                                                        </TableCell>
+                                                    </TableRow>
                                                 );
                                             })}
-                                        </tbody>
-                                    </table>
+                                        </TableBody>
+                                    </Table>
                                 </div>
                             </div>
                             )}
                         </div>
 
-                        <div className={`${PANEL_MUTED_CLASS} overflow-hidden`}>
+                        <Collapsible
+                            open={nutritionClaimsSectionOpen}
+                            onOpenChange={setNutritionClaimsSectionOpen}
+                            className={`${PANEL_MUTED_CLASS} overflow-hidden`}
+                        >
                             <div className={PANEL_HEADER_CLASS}>
                                 <div className="inline-flex min-w-0 items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 shrink-0"
-                                        onClick={() => setNutritionClaimsSectionOpen((current) => !current)}
-                                    >
-                                        <ChevronDown className={`h-4 w-4 transition-transform ${nutritionClaimsSectionOpen ? "rotate-0" : "-rotate-90"}`} />
-                                    </Button>
+                                    <CollapsibleTrigger asChild>
+                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Alternar alegações nutricionais">
+                                            <ChevronDown className={`transition-transform ${nutritionClaimsSectionOpen ? "rotate-0" : "-rotate-90"}`} />
+                                        </Button>
+                                    </CollapsibleTrigger>
                                     <h3 className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold">
                                         Alegações Nutricionais - Anexo XX
                                         <HelpTip>Confere alegações de conteúdo absoluto mais comuns. Alegações comparativas e de sem adição exigem dados de referência ou formulação que não estão só na tabela nutricional.</HelpTip>
                                     </h3>
                                 </div>
                             </div>
-                            {nutritionClaimsSectionOpen && (
-                            <div className="space-y-3 p-4">
+                            <CollapsibleContent className="flex flex-col gap-3 p-4">
                                 {nutritionClaims.length > 0 ? (
-                                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950/20">
-                                        <table className="w-full min-w-[46rem] text-sm">
-                                            <thead className="bg-slate-50 text-xs text-muted-foreground dark:bg-slate-900/50">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left font-semibold">Alegação</th>
-                                                    <th className="px-3 py-2 text-left font-semibold">Critério</th>
-                                                    <th className="px-3 py-2 text-left font-semibold">Resultado</th>
-                                                    <th className="px-3 py-2 text-left font-semibold">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
+                                    <div className="overflow-x-auto rounded-lg border bg-card">
+                                        <Table className="min-w-[46rem]">
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Alegação</TableHead>
+                                                    <TableHead>Critério</TableHead>
+                                                    <TableHead>Resultado</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
                                                 {nutritionClaims.map((claim) => {
                                                     const style = CLAIM_STATUS_STYLES[claim.status];
                                                     return (
-                                                        <tr key={claim.key} className="border-t border-slate-200 dark:border-slate-700">
-                                                            <td className="px-3 py-2">
+                                                        <TableRow key={claim.key}>
+                                                            <TableCell>
                                                                 <div className="font-medium">{claim.label}</div>
                                                                 <div className="text-xs text-muted-foreground">{claim.group}</div>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-xs leading-relaxed">{claim.criterion}</td>
-                                                            <td className="px-3 py-2 text-xs leading-relaxed">
+                                                            </TableCell>
+                                                            <TableCell className="text-xs leading-relaxed">{claim.criterion}</TableCell>
+                                                            <TableCell className="text-xs leading-relaxed">
                                                                 <div>{claim.evidence}</div>
                                                                 {claim.note && <div className="mt-1 text-muted-foreground">{claim.note}</div>}
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${style.className}`}>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="outline" className={style.className}>
                                                                     {style.label}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
+                                                                </Badge>
+                                                            </TableCell>
+                                                        </TableRow>
                                                     );
                                                 })}
-                                            </tbody>
-                                        </table>
+                                            </TableBody>
+                                        </Table>
                                     </div>
                                 ) : (
-                                    <div className="rounded-lg border border-dashed border-slate-300 bg-white py-4 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950/20">
-                                        Adicione ingredientes para avaliar alegações.
-                                    </div>
+                                    <Empty className="min-h-24 border">
+                                        <EmptyHeader>
+                                            <EmptyTitle>Sem alegações para avaliar</EmptyTitle>
+                                            <EmptyDescription>Adicione ingredientes para iniciar a avaliação.</EmptyDescription>
+                                        </EmptyHeader>
+                                    </Empty>
                                 )}
                                 <p className="text-xs leading-relaxed text-muted-foreground">
                                     Para embalagem individual, alegações também precisam atender o conteúdo total da embalagem quando aplicável.
                                 </p>
-                            </div>
-                            )}
-                        </div>
+                            </CollapsibleContent>
+                        </Collapsible>
 
                         <div className={`${PANEL_MUTED_CLASS} overflow-hidden`}>
                             <div className={PANEL_HEADER_CLASS}>
@@ -2643,8 +2739,10 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     <SelectValue placeholder="Selecione a base regulatória" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectGroup>
                                     <SelectItem value="general">População geral - alimentos em geral (Anexo II)</SelectItem>
                                     <SelectItem value="specific">Grupo populacional específico / suplementos (Anexo VIII)</SelectItem>
+                                  </SelectGroup>
                                 </SelectContent>
                             </Select>
 
@@ -2663,6 +2761,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     position="popper"
                                     className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-2.5 [&_[data-slot=select-item]]:pr-10"
                                 >
+                                  <SelectGroup>
                                     {Object.entries(SPECIFIC_POPULATION_LABELS).map(([key, label]) => (
                                         <SelectItem key={key} value={key}>
                                             <span className="block max-w-full break-words whitespace-normal leading-relaxed">
@@ -2670,6 +2769,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                             </span>
                                         </SelectItem>
                                     ))}
+                                  </SelectGroup>
                                 </SelectContent>
                                 </Select>
                             )}
@@ -2679,8 +2779,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/35">
-                    <CardHeader className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950/60">
+                <Card className="overflow-hidden">
+                    <CardHeader className="border-b bg-card px-5 py-4">
                         <div className="flex items-center justify-between gap-2">
                             <div className="inline-flex min-w-0 items-center gap-2">
                                 <Button
@@ -2709,7 +2809,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         </div>
                     </CardHeader>
                     {micronutrientsSectionOpen && (
-                    <CardContent className="h-64 overflow-y-auto bg-slate-50/35 pt-3 dark:bg-slate-950/10">
+                    <CardContent className="h-64 overflow-y-auto bg-muted/20 pt-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {MICRONUTRIENTS_A_TO_Z.map(m => (
                                 <div key={m.name} className="flex items-center space-x-2">
@@ -2731,8 +2831,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     )}
                 </Card>
 
-                <Card className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/35">
-                    <CardHeader className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950/60">
+                <Card className="overflow-hidden">
+                    <CardHeader className="border-b bg-card px-5 py-4">
                         <div className="flex items-center justify-between gap-2">
                             <div className="inline-flex min-w-0 items-center gap-2">
                                 <Button
@@ -2763,14 +2863,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         </div>
                     </CardHeader>
                     {extraConstituentsSectionOpen && (
-                    <CardContent className="space-y-3 bg-slate-50/35 p-4 dark:bg-slate-950/10">
+                    <CardContent className="space-y-3 bg-muted/20 p-4">
                         {extraConstituents.length === 0 && (
-                            <div className="rounded-lg border border-dashed border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-950/20 py-4 text-center text-sm text-muted-foreground">
+                            <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                 Use para lactose, galactose, creatina, cafeína, probióticos, enzimas e substâncias bioativas.
                             </div>
                         )}
                         {extraConstituents.map((item) => (
-                            <div key={item.id} className="grid grid-cols-1 items-end gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/20 sm:grid-cols-[1fr_7rem_6rem_2.5rem]">
+                            <div key={item.id} className="grid grid-cols-1 items-end gap-2 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_7rem_6rem_2.5rem]">
                                 <div className="space-y-1">
                                     <Label className="text-xs">Nome</Label>
                                     <Input
@@ -2863,8 +2963,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                 className="space-y-5 lg:sticky lg:z-10 lg:self-start"
                 style={{ top: previewStickyTop }}
             >
-                <Card className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/35">
-                    <CardHeader className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950/60">
+                <Card className="overflow-hidden">
+                    <CardHeader className="border-b bg-card px-5 py-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <p className={PANEL_EYEBROW_CLASS}>Saída</p>
@@ -2873,9 +2973,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                     <HelpTip>Mostra como a tabela ficará com os dados atuais. Use essa área para conferir antes de exportar ou salvar.</HelpTip>
                                 </CardTitle>
                             </div>
-                            <span className={`rounded-md border px-2.5 py-1 text-[11px] font-medium ${result ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-300" : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300"}`}>
+                            <Badge variant={result ? "success" : "secondary"}>
                                 {result ? "Calculada" : "Sem dados"}
-                            </span>
+                            </Badge>
                         </div>
                         <div className="space-y-2 pt-2">
                             <Label className="inline-flex items-center gap-1.5">
@@ -2887,16 +2987,18 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         <SelectValue placeholder="Selecione o modelo" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                      <SelectGroup>
                                         {previewTableOptions.map((item) => (
                                             <SelectItem key={item.value} value={item.value}>
                                                 {item.label}
                                         </SelectItem>
                                     ))}
+                                      </SelectGroup>
                                 </SelectContent>
                             </Select>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex min-w-0 flex-col items-center gap-8 overflow-visible bg-slate-100/50 px-4 py-8 dark:bg-slate-900/25">
+                    <CardContent className="flex min-w-0 flex-col items-center gap-8 overflow-visible bg-muted/35 px-4 py-8">
                         {result ? (
                             <>
                                 <div ref={previewViewportRef} className="w-full min-w-0 overflow-x-auto overflow-y-visible">
@@ -2958,17 +3060,17 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                     )}
 
                     {result && (
-                        <div className="shrink-0 space-y-4 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/60 sm:p-5">
+                        <div className="shrink-0 space-y-4 border-t bg-card p-4 sm:p-5">
                             <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2">
                                 <DropdownMenu>
-                                    <div className="inline-flex w-full h-10 min-w-0 rounded-md border border-input overflow-hidden bg-background shadow-sm">
+                                    <ButtonGroup className="w-full">
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             onClick={() => handleExportImage()}
-                                            className="h-full min-w-0 flex-1 justify-center gap-1.5 rounded-none border-0 px-2 text-[12px] font-semibold hover:bg-accent/60 whitespace-nowrap"
+                                            className="min-w-0 flex-1"
                                         >
-                                            <Download className="h-3.5 w-3.5 shrink-0" />
+                                            <Download data-icon="inline-start" />
                                             <span>Exportar Só Imagem</span>
                                         </Button>
                                         <DropdownMenuTrigger asChild>
@@ -2976,13 +3078,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-full w-10 shrink-0 rounded-none border-0 border-l border-input text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                                                aria-label="Opções de exportação de imagem"
                                             >
-                                                <ChevronDown className="h-4 w-4 shrink-0" />
+                                                <ChevronDown aria-hidden="true" />
                                             </Button>
                                         </DropdownMenuTrigger>
-                                    </div>
+                                    </ButtonGroup>
                                     <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-y-auto">
+                                      <DropdownMenuGroup>
                                         <DropdownMenuLabel>Modelos para Imagem</DropdownMenuLabel>
                                         {availableTableOptions.map((item) => (
                                             <DropdownMenuCheckboxItem
@@ -2994,30 +3097,23 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 {item.label}
                                             </DropdownMenuCheckboxItem>
                                         ))}
+                                      </DropdownMenuGroup>
                                         <DropdownMenuSeparator />
+                                      <DropdownMenuGroup>
                                         <DropdownMenuLabel>Formato da Imagem</DropdownMenuLabel>
-                                        <DropdownMenuCheckboxItem
-                                            checked={selectedImageFormats.includes("png")}
-                                            onSelect={(e) => e.preventDefault()}
-                                            onCheckedChange={() => toggleImageFormat("png")}
-                                        >
-                                            PNG (Recomendado)
-                                        </DropdownMenuCheckboxItem>
-                                        <DropdownMenuCheckboxItem
-                                            checked={selectedImageFormats.includes("jpeg")}
-                                            onSelect={(e) => e.preventDefault()}
-                                            onCheckedChange={() => toggleImageFormat("jpeg")}
-                                        >
-                                            JPEG
-                                        </DropdownMenuCheckboxItem>
-                                        <DropdownMenuCheckboxItem
-                                            checked={selectedImageFormats.includes("webp")}
-                                            onSelect={(e) => e.preventDefault()}
-                                            onCheckedChange={() => toggleImageFormat("webp")}
-                                        >
-                                            WEBP
-                                        </DropdownMenuCheckboxItem>
+                                        {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
+                                            <DropdownMenuCheckboxItem
+                                                key={`img-format-${item.value}`}
+                                                checked={selectedImageFormats.includes(item.value)}
+                                                onSelect={(e) => e.preventDefault()}
+                                                onCheckedChange={() => toggleImageFormat(item.value)}
+                                            >
+                                                {item.label}
+                                            </DropdownMenuCheckboxItem>
+                                        ))}
+                                      </DropdownMenuGroup>
                                         <DropdownMenuSeparator />
+                                      <DropdownMenuGroup>
                                         <DropdownMenuCheckboxItem
                                             checked={effectiveHasFopSeal}
                                             onSelect={(e) => e.preventDefault()}
@@ -3025,7 +3121,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         >
                                             Modelos de lupa ANVISA no ZIP
                                         </DropdownMenuCheckboxItem>
+                                      </DropdownMenuGroup>
                                         <DropdownMenuSeparator />
+                                      <DropdownMenuGroup>
                                         <DropdownMenuItem
                                             onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}
                                         >
@@ -3037,24 +3135,25 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         <DropdownMenuItem onClick={() => setSelectedImageFormats([])}>
                                             Limpar formatos
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setSelectedImageFormats(["png"])}>
+                                        <DropdownMenuItem onClick={() => setSelectedImageFormats(DEFAULT_IMAGE_EXPORT_FORMATS)}>
                                             Restaurar padrão (PNG)
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleExportImage(selectedImageFormats)}>
                                             Exportar agora ({selectedImageTableCount} tabela(s))
                                         </DropdownMenuItem>
+                                      </DropdownMenuGroup>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
 
                                 <DropdownMenu>
-                                    <div className="inline-flex w-full h-10 min-w-0 rounded-md border border-input overflow-hidden bg-background shadow-sm">
+                                    <ButtonGroup className="w-full">
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             onClick={handleExportCompleteZip}
-                                            className="h-full min-w-0 flex-1 justify-center gap-1.5 rounded-none border-0 px-2 text-[12px] font-semibold hover:bg-accent/60 whitespace-nowrap"
+                                            className="min-w-0 flex-1"
                                         >
-                                            <Download className="h-3.5 w-3.5 shrink-0" />
+                                            <Download data-icon="inline-start" />
                                             <span>Exportar Imagem + Excel</span>
                                         </Button>
                                         <DropdownMenuTrigger asChild>
@@ -3062,13 +3161,14 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-full w-10 shrink-0 rounded-none border-0 border-l border-input text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                                                aria-label="Opções de exportação completa"
                                             >
-                                                <ChevronDown className="h-4 w-4 shrink-0" />
+                                                <ChevronDown aria-hidden="true" />
                                             </Button>
                                         </DropdownMenuTrigger>
-                                    </div>
+                                    </ButtonGroup>
                                     <DropdownMenuContent align="end" className="w-72 max-h-[70vh] overflow-y-auto">
+                                      <DropdownMenuGroup>
                                         <DropdownMenuLabel>Modelos para o Excel</DropdownMenuLabel>
                                         {availableTableOptions.map((item) => (
                                             <DropdownMenuCheckboxItem
@@ -3080,7 +3180,23 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 {item.label}
                                             </DropdownMenuCheckboxItem>
                                         ))}
+                                      </DropdownMenuGroup>
                                         <DropdownMenuSeparator />
+                                      <DropdownMenuGroup>
+                                        <DropdownMenuLabel>Formato da imagem no ZIP</DropdownMenuLabel>
+                                        {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
+                                            <DropdownMenuCheckboxItem
+                                                key={`zip-img-format-${item.value}`}
+                                                checked={selectedImageFormats.includes(item.value)}
+                                                onSelect={(e) => e.preventDefault()}
+                                                onCheckedChange={() => toggleImageFormat(item.value)}
+                                            >
+                                                {item.label}
+                                            </DropdownMenuCheckboxItem>
+                                        ))}
+                                      </DropdownMenuGroup>
+                                        <DropdownMenuSeparator />
+                                      <DropdownMenuGroup>
                                         <DropdownMenuItem
                                             onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}
                                         >
@@ -3092,13 +3208,18 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                         <DropdownMenuItem onClick={handleExportCompleteZip}>
                                             Exportar ZIP (Excel + imagem) ({selectedTableTypes.length})
                                         </DropdownMenuItem>
+                                      </DropdownMenuGroup>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
-                            <Button onClick={handleSave} disabled={saving} className="w-full h-10 text-[13px] font-semibold">
+                            <Button type="button" variant="outline" onClick={() => handleExportImage(["svg"])} className="w-full">
+                                <Download data-icon="inline-start" />
+                                <span>Exportar SVG editável</span>
+                            </Button>
+                            <Button onClick={handleSave} disabled={saving} className="w-full">
                                 {saving ? "Salvando..." : (
                                     <>
-                                        <Save className="h-3.5 w-3.5 shrink-0" />
+                                        <Save data-icon="inline-start" />
                                         <span>Salvar Projeto</span>
                                     </>
                                 )}
