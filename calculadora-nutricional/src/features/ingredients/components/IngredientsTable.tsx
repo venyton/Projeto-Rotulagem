@@ -9,7 +9,6 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
@@ -19,8 +18,21 @@ import { AddIngredientForm } from "./AddIngredientForm";
 import { deleteCustomIngredient } from "@/features/ingredients/actions/custom-ingredient-actions";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 
-type Ingredient = {
+export type IngredientTableRow = {
     id: string;
     name: string;
     energy: number;
@@ -37,9 +49,11 @@ type Ingredient = {
     userId: string;
 }
 
-export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] }) {
+export function IngredientsTable({ ingredients }: { ingredients: IngredientTableRow[] }) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [deleteTarget, setDeleteTarget] = useState<IngredientTableRow | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const handleExport = async () => {
         const data = ingredients.map(ing => ({
@@ -95,41 +109,44 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
         }
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if (confirm(`Tem certeza que deseja excluir "${name}"?`)) {
-            const res = await deleteCustomIngredient(id);
+    const handleDelete = async () => {
+        if (deleteTarget) {
+            setDeleting(true);
+            const res = await deleteCustomIngredient(deleteTarget.id);
             if (res.error) {
                 toast.error(res.error);
             } else {
                 toast.success("Ingrediente excluído.");
+                setDeleteTarget(null);
             }
+            setDeleting(false);
         }
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
-                <h2 className="text-lg font-semibold tracking-tight">Tabela de Ingredientes</h2>
-                <div className="flex gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
+        <Card>
+            <CardHeader className="border-b">
+                <CardTitle>Ingredientes cadastrados</CardTitle>
+                <CardDescription>Busque, revise, importe ou exporte sua base de ingredientes.</CardDescription>
+                <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center">
+                    <InputGroup className="w-full sm:max-w-xs">
+                        <InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon>
+                        <InputGroupInput
                             type="search"
                             placeholder="Buscar ingrediente..."
-                            className="w-full sm:w-[250px] pl-8 bg-background shadow-sm"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
-                    </div>
+                    </InputGroup>
                     <ImportIngredientsDialog />
-                    <Button onClick={handleExport} variant="outline" className="shadow-sm">
-                        <Download className="mr-2 h-4 w-4" />
+                    <Button onClick={handleExport} variant="outline">
+                        <Download data-icon="inline-start" />
                         Exportar
                     </Button>
                 </div>
-            </div>
+            </CardHeader>
 
-            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+            <CardContent className="overflow-x-auto px-0">
                 <Table>
                     <TableHeader className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                         <TableRow className="hover:bg-transparent">
@@ -166,14 +183,16 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                                                 size="icon"
                                                 onClick={() => setEditingId(ingredient.id)}
                                             >
-                                                <Edit2 className="h-4 w-4" />
+                                                <Edit2 aria-hidden="true" />
+                                                <span className="sr-only">Editar {ingredient.name}</span>
                                             </Button>
                                             <Button
                                                 variant="destructive"
                                                 size="icon"
-                                                onClick={() => handleDelete(ingredient.id, ingredient.name)}
+                                                onClick={() => setDeleteTarget(ingredient)}
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                <Trash2 aria-hidden="true" />
+                                                <span className="sr-only">Excluir {ingredient.name}</span>
                                             </Button>
                                         </div>
                                     </TableCell>
@@ -182,7 +201,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                         )}
                     </TableBody>
                 </Table>
-            </div>
+            </CardContent>
 
             {/* Edit Dialog */}
             {editingId && (
@@ -193,6 +212,24 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                     onOpenChange={(open) => !open && setEditingId(null)}
                 />
             )}
-        </div>
+
+            <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir ingrediente?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação remove “{deleteTarget?.name}” da sua biblioteca e não pode ser desfeita.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={deleting}>
+                            {deleting ? <Spinner data-icon="inline-start" /> : <Trash2 data-icon="inline-start" />}
+                            {deleting ? "Excluindo..." : "Excluir ingrediente"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </Card>
     )
 }
