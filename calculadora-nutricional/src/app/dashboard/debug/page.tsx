@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { AlertCircle, CheckCircle2, Database } from "lucide-react";
+
+import { PageHeader } from "@/components/layout/page-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
 
 type ColumnRow = {
     column_name: string;
@@ -26,28 +33,33 @@ export default async function DebugPage() {
     }
 
     return (
-        <div className="container mx-auto py-10 px-4">
-            <h1 className="text-2xl font-bold mb-6">Database Debug Info</h1>
+        <div className="app-page flex flex-col gap-6">
+            <PageHeader eyebrow="Diagnóstico" icon={Database} title="Banco de dados" description="Verificação técnica da estrutura disponível para ingredientes personalizados." />
 
             {error ? (
-                <div className="bg-red-100 p-4 rounded text-red-900 border border-red-200">
-                    <h2 className="font-bold">Connection Error:</h2>
-                    <pre className="whitespace-pre-wrap text-xs mt-2">{error}</pre>
-                </div>
+                <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" />
+                    <AlertTitle>Falha na conexão</AlertTitle>
+                    <AlertDescription><pre className="mt-2 whitespace-pre-wrap text-xs">{error}</pre></AlertDescription>
+                </Alert>
             ) : (
-                <div className="bg-green-50 p-4 rounded border border-green-200">
-                    <h2 className="font-bold text-green-800 mb-2">Connection Successful</h2>
-                    <p className="mb-2">Found {columns.length} columns in CustomIngredient table.</p>
-
-                    <h3 className="font-semibold mt-4 mb-2">Columns Found:</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+                            <CardTitle>Conexão ativa</CardTitle>
+                            <Badge variant="success">{columns.length} colunas</Badge>
+                        </div>
+                        <CardDescription>Estrutura encontrada na tabela CustomIngredient.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {columns.map((col) => (
-                            <div key={col.column_name} className="bg-white p-2 rounded shadow-sm text-sm border">
-                                {col.column_name}
-                            </div>
+                            <Item key={col.column_name} variant="outline" size="sm">
+                                <ItemContent><ItemTitle className="font-mono text-xs">{col.column_name}</ItemTitle></ItemContent>
+                            </Item>
                         ))}
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
             )}
         </div>
     );
