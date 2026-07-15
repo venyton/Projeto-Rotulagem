@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { MODULE_CATALOG, type SaaSModuleKey } from "@/features/saas/domain/modules";
 
 type ModuleGrant = {
@@ -107,22 +109,22 @@ export function ParticipantModuleManager() {
                 const key = `${member.id}:${module.key}`;
 
                 return (
-                  <label
+                  <FieldLabel
                     key={module.key}
-                    className="flex items-start gap-3 rounded-md border border-border/70 bg-background/55 p-3 text-sm transition-colors hover:border-primary/35 hover:bg-secondary/55"
+                    className="rounded-md border p-3 transition-colors hover:border-primary/35 hover:bg-accent/55"
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 accent-primary"
+                    <Field orientation="horizontal">
+                    <Checkbox
                       checked={enabled}
                       disabled={!organizationHasModule || member.role === "OWNER" || savingKey === key}
-                      onChange={(event) => toggle(member.id, module.key, event.target.checked)}
+                      onCheckedChange={(checked) => toggle(member.id, module.key, checked === true)}
                     />
                     <span>
                       <span className="block font-medium">{module.name}</span>
                       <span className="block text-muted-foreground">{organizationHasModule ? module.description : "Fora do plano atual."}</span>
                     </span>
-                  </label>
+                    </Field>
+                  </FieldLabel>
                 );
               })}
             </CardContent>

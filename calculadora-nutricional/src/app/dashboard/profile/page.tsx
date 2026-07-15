@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useActionState, useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-import { BadgeCheck, CheckCircle2, KeyRound, Loader2, QrCode, ScanLine, ShieldCheck, ShieldOff, Smartphone, UserRound } from "lucide-react";
+import { BadgeCheck, KeyRound, QrCode, ScanLine, ShieldCheck, ShieldOff, Smartphone, UserRound } from "lucide-react";
 import {
     changePassword,
     confirmTwoFactorSetup,
@@ -14,9 +14,16 @@ import {
 } from "@/features/profile/actions/profile-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { InterfaceScaleControl } from "@/components/interface-scale-control";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
+import { PageHeader } from "@/components/layout/page-header";
 
 type ProfileData = {
     name: string;
@@ -33,30 +40,18 @@ function ActionMessage({ state }: { state?: ActionMessageState }) {
     if (!state?.error && !state?.success) return null;
 
     return (
-        <p
-            className={
-                state.error
-                    ? "rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                    : "rounded-md border border-emerald-300/60 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"
-            }
-        >
-            {state.error || state.success}
-        </p>
+        <Alert variant={state.error ? "destructive" : "default"}>
+            <AlertDescription>{state.error || state.success}</AlertDescription>
+        </Alert>
     );
 }
 
 function StatusBadge({ active }: { active: boolean }) {
     return (
-        <span
-            className={
-                active
-                    ? "inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-                    : "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/[0.28] px-3 py-1 text-xs font-medium text-muted-foreground"
-            }
-        >
-            {active ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldOff className="h-3.5 w-3.5" />}
+        <Badge variant={active ? "success" : "secondary"}>
+            {active ? <ShieldCheck aria-hidden="true" /> : <ShieldOff aria-hidden="true" />}
             {active ? "Ativo" : "Opcional"}
-        </span>
+        </Badge>
     );
 }
 
@@ -79,20 +74,24 @@ function StepTitle({ step, title, active }: { step: string; title: string; activ
 
 function OtpField({ id, name, label }: { id: string; name: string; label: string }) {
     return (
-        <div className="space-y-2">
-            <Label htmlFor={id}>{label}</Label>
-            <Input
+        <Field>
+            <FieldLabel htmlFor={id}>{label}</FieldLabel>
+            <InputOTP
                 id={id}
                 name={name}
-                inputMode="numeric"
-                autoComplete="one-time-code"
                 maxLength={6}
-                pattern="[0-9]{6}"
-                placeholder="000000"
-                className="h-12 text-center font-mono text-lg tracking-[0.45em]"
+                pattern="^[0-9]+$"
+                containerClassName="justify-start"
+                autoComplete="one-time-code"
                 required
-            />
-        </div>
+            >
+                <InputOTPGroup>
+                    {Array.from({ length: 6 }, (_, index) => (
+                        <InputOTPSlot key={index} index={index} className="size-11 font-mono text-lg" />
+                    ))}
+                </InputOTPGroup>
+            </InputOTP>
+        </Field>
     );
 }
 
@@ -152,13 +151,8 @@ export default function ProfilePage() {
     const hasTwoFactorSetup = Boolean(setupState?.qrCodeDataUrl && setupState?.manualSecret);
 
     return (
-        <div className="container mx-auto max-w-4xl py-8">
-            <div className="mb-6">
-                <h1 className="text-2xl font-semibold tracking-tight">Perfil e Segurança</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Atualize seus dados de acesso e mantenha sua conta protegida.
-                </p>
-            </div>
+        <div className="app-page flex max-w-5xl flex-col gap-6">
+            <PageHeader eyebrow="Conta" icon={ShieldCheck} title="Perfil e segurança" description="Atualize seus dados de acesso, preferências e proteção da conta." />
 
             <Card className="mb-6 border-border/70">
                 <CardHeader>
@@ -188,20 +182,11 @@ export default function ProfilePage() {
                         <CardDescription>Nome e email usados no seu acesso ao sistema.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form action={profileAction} className="space-y-4">
-                            {profileState?.error && (
-                                <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                                    {profileState.error}
-                                </p>
-                            )}
-                            {profileState?.success && (
-                                <p className="rounded-md border border-emerald-300/60 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-                                    {profileState.success}
-                                </p>
-                            )}
-
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Nome</Label>
+                        <form action={profileAction}>
+                          <FieldGroup className="gap-4">
+                            <ActionMessage state={profileState} />
+                            <Field>
+                                <FieldLabel htmlFor="name">Nome</FieldLabel>
                                 <Input
                                     id="name"
                                     name="name"
@@ -210,10 +195,10 @@ export default function ProfilePage() {
                                     placeholder="Seu nome"
                                     disabled={loadingProfile}
                                 />
-                            </div>
+                            </Field>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
+                            <Field>
+                                <FieldLabel htmlFor="email">Email</FieldLabel>
                                 <Input
                                     id="email"
                                     name="email"
@@ -224,24 +209,25 @@ export default function ProfilePage() {
                                     required
                                     disabled={loadingProfile}
                                 />
-                            </div>
+                            </Field>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="profileCurrentPassword">Senha atual para trocar email</Label>
+                            <Field>
+                                <FieldLabel htmlFor="profileCurrentPassword">Senha atual para trocar email</FieldLabel>
                                 <Input id="profileCurrentPassword" name="profileCurrentPassword" type="password" />
-                            </div>
+                            </Field>
 
                             {profile.twoFactorEnabled && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="profileTwoFactorCode">Código 2FA para trocar email</Label>
+                                <Field>
+                                    <FieldLabel htmlFor="profileTwoFactorCode">Código 2FA para trocar email</FieldLabel>
                                     <Input id="profileTwoFactorCode" name="profileTwoFactorCode" inputMode="numeric" autoComplete="one-time-code" />
-                                </div>
+                                </Field>
                             )}
 
                             <Button type="submit" className="w-full" disabled={loadingProfile || profilePending}>
-                                {(loadingProfile || profilePending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Salvar dados da conta
+                                {(loadingProfile || profilePending) && <Spinner data-icon="inline-start" />}
+                                {(loadingProfile || profilePending) ? "Salvando..." : "Salvar dados da conta"}
                             </Button>
+                          </FieldGroup>
                         </form>
                     </CardContent>
                 </Card>
@@ -255,36 +241,28 @@ export default function ProfilePage() {
                         <CardDescription>Use no mínimo 10 caracteres para a nova senha.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form action={passwordAction} className="space-y-4">
-                            {passwordState?.error && (
-                                <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                                    {passwordState.error}
-                                </p>
-                            )}
-                            {passwordState?.success && (
-                                <p className="rounded-md border border-emerald-300/60 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-                                    {passwordState.success}
-                                </p>
-                            )}
-
-                            <div className="space-y-2">
-                                <Label htmlFor="currentPassword">Senha atual</Label>
+                        <form action={passwordAction}>
+                          <FieldGroup className="gap-4">
+                            <ActionMessage state={passwordState} />
+                            <Field>
+                                <FieldLabel htmlFor="currentPassword">Senha atual</FieldLabel>
                                 <Input id="currentPassword" name="currentPassword" type="password" required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="newPassword">Nova senha</Label>
+                            </Field>
+                            <Field>
+                                <FieldLabel htmlFor="newPassword">Nova senha</FieldLabel>
                                 <Input id="newPassword" name="newPassword" type="password" required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
+                            </Field>
+                            <Field>
+                                <FieldLabel htmlFor="confirmPassword">Confirmar nova senha</FieldLabel>
                                 <Input id="confirmPassword" name="confirmPassword" type="password" required />
-                            </div>
+                            </Field>
                             {profile.twoFactorEnabled && <OtpField id="twoFactorCode" name="twoFactorCode" label="Código 2FA" />}
 
                             <Button type="submit" className="w-full" disabled={passwordPending}>
-                                {passwordPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Atualizar senha
+                                {passwordPending && <Spinner data-icon="inline-start" />}
+                                {passwordPending ? "Atualizando..." : "Atualizar senha"}
                             </Button>
+                          </FieldGroup>
                         </form>
                     </CardContent>
                 </Card>
@@ -311,16 +289,18 @@ export default function ProfilePage() {
                             <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
                                 <div className="space-y-5 border-b border-border/70 p-6 lg:border-b-0 lg:border-r">
                                     <StepTitle step="1" title="Gerar chave segura" active />
-                                    <form action={setupAction} className="space-y-4">
+                                    <form action={setupAction}>
+                                      <FieldGroup className="gap-4">
                                         <ActionMessage state={setupState} />
-                                        <div className="space-y-2">
-                                            <Label htmlFor="twoFactorCurrentPassword">Senha atual</Label>
+                                        <Field>
+                                            <FieldLabel htmlFor="twoFactorCurrentPassword">Senha atual</FieldLabel>
                                             <Input id="twoFactorCurrentPassword" name="currentPassword" type="password" required />
-                                        </div>
-                                        <Button type="submit" disabled={setupPending} className="h-11 w-full gap-2">
-                                            {setupPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                                            Gerar QR Code
+                                        </Field>
+                                        <Button type="submit" disabled={setupPending} className="h-11 w-full">
+                                            {setupPending ? <Spinner data-icon="inline-start" /> : <QrCode data-icon="inline-start" />}
+                                            {setupPending ? "Gerando..." : "Gerar QR Code"}
                                         </Button>
+                                      </FieldGroup>
                                     </form>
 
                                     <div className="flex items-start gap-3 rounded-md bg-muted/[0.18] px-3 py-3 text-sm text-muted-foreground">
@@ -358,12 +338,13 @@ export default function ProfilePage() {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/[0.12] px-6 text-center">
-                                            <div className="space-y-2">
-                                                <QrCode className="mx-auto h-8 w-8 text-muted-foreground" />
-                                                <p className="text-sm text-muted-foreground">Gere o QR Code para continuar.</p>
-                                            </div>
-                                        </div>
+                                        <Empty className="min-h-40 p-4">
+                                            <EmptyHeader>
+                                                <EmptyMedia variant="icon"><QrCode aria-hidden="true" /></EmptyMedia>
+                                                <EmptyTitle>QR Code ainda não gerado</EmptyTitle>
+                                                <EmptyDescription>Gere a chave segura para continuar.</EmptyDescription>
+                                            </EmptyHeader>
+                                        </Empty>
                                     )}
 
                                     {hasTwoFactorSetup && (
@@ -374,9 +355,9 @@ export default function ProfilePage() {
                                                 <Input id="confirmCurrentPassword" name="confirmCurrentPassword" type="password" required />
                                             </div>
                                             <OtpField id="setupCode" name="setupCode" label="Código do aplicativo" />
-                                            <Button type="submit" disabled={confirmPending} className="h-11 w-full gap-2">
-                                                {confirmPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
-                                                Ativar 2FA
+                                            <Button type="submit" disabled={confirmPending} className="h-11 w-full">
+                                                {confirmPending ? <Spinner data-icon="inline-start" /> : <BadgeCheck data-icon="inline-start" />}
+                                                {confirmPending ? "Ativando..." : "Ativar 2FA"}
                                             </Button>
                                         </form>
                                     )}
@@ -385,10 +366,7 @@ export default function ProfilePage() {
                         ) : (
                             <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
                                 <div className="space-y-4 border-b border-border/70 p-6 lg:border-b-0 lg:border-r">
-                                    <div className="flex items-start gap-3 rounded-md bg-emerald-500/10 px-3 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                                        <span>O login desta conta pede senha e código do aplicativo.</span>
-                                    </div>
+                                    <Alert><ShieldCheck aria-hidden="true" /><AlertDescription>O login desta conta pede senha e código do aplicativo.</AlertDescription></Alert>
                                     <div className="flex items-start gap-3 rounded-md bg-muted/[0.18] px-3 py-3 text-sm text-muted-foreground">
                                         <Smartphone className="mt-0.5 h-4 w-4 shrink-0" />
                                         <span>Mantenha o aplicativo autenticador instalado antes de sair.</span>
@@ -404,8 +382,8 @@ export default function ProfilePage() {
                                         </div>
                                         <OtpField id="disableTwoFactorCode" name="disableTwoFactorCode" label="Código 2FA" />
                                         <Button type="submit" variant="destructive" disabled={disablePending} className="h-11 w-full">
-                                            {disablePending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Desativar 2FA
+                                            {disablePending && <Spinner data-icon="inline-start" />}
+                                            {disablePending ? "Desativando..." : "Desativar 2FA"}
                                         </Button>
                                     </form>
                                 </div>
