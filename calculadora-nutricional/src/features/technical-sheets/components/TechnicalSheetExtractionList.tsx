@@ -11,6 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import type { TechnicalSheetDocumentListItem } from "@/features/technical-sheets/domain/technical-sheet-types";
 
 const statusIcon = {
@@ -46,15 +49,12 @@ const REVIEW_STATUS_LABELS: Record<string, string> = {
   REJECTED: "Rejeitado",
 };
 
-const statusColor: Record<string, string> = {
-  COMPLETED: "text-emerald-600",
-  APPROVED: "text-emerald-600",
-  PROCESSING: "text-amber-500",
-  PENDING: "text-muted-foreground",
-  NEEDS_REVIEW: "text-amber-500",
-  FAILED: "text-red-500",
-  REJECTED: "text-red-500",
-};
+function statusVariant(status: string) {
+  if (status === "COMPLETED" || status === "APPROVED") return "success" as const;
+  if (status === "PROCESSING" || status === "NEEDS_REVIEW") return "warning" as const;
+  if (status === "FAILED" || status === "REJECTED") return "destructive" as const;
+  return "secondary" as const;
+}
 
 export function TechnicalSheetExtractionList({
   documents,
@@ -66,7 +66,7 @@ export function TechnicalSheetExtractionList({
   const router = useRouter();
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+    <Card className="overflow-hidden py-0">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/[0.22]">
@@ -88,7 +88,9 @@ export function TechnicalSheetExtractionList({
               const displayStatus = document.reviewStatus || document.status;
               const Icon = statusIcon[document.status as keyof typeof statusIcon] || AlertCircle;
               const active = selectedDocumentId === document.id;
-              const color = statusColor[displayStatus] || "text-muted-foreground";
+              const confidence = typeof document.confidence === "number"
+                ? Math.round(document.confidence * 100)
+                : null;
 
               return (
                 <TableRow
@@ -106,15 +108,18 @@ export function TechnicalSheetExtractionList({
                     {DOC_TYPE_LABELS[document.documentType] || document.documentType}
                   </TableCell>
                   <TableCell>
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${color}`}>
-                      <Icon className="h-3.5 w-3.5" />
+                    <Badge variant={statusVariant(displayStatus)}>
+                      <Icon aria-hidden="true" />
                       {REVIEW_STATUS_LABELS[displayStatus] || STATUS_LABELS[displayStatus] || displayStatus}
-                    </span>
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    {typeof document.confidence === "number"
-                      ? `${Math.round(document.confidence * 100)}%`
-                      : "-"}
+                    {confidence === null ? "-" : (
+                      <div className="flex min-w-24 items-center gap-2">
+                        <Progress value={confidence} aria-label={`Confiança: ${confidence}%`} />
+                        <span className="w-9 text-xs tabular-nums">{confidence}%</span>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -122,6 +127,6 @@ export function TechnicalSheetExtractionList({
           )}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }
