@@ -137,7 +137,7 @@ function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: strin
         selenium: firstNumber(nutriments, ["selenium_100g", "selenium"]),
         zinc: firstNumber(nutriments, ["zinc_100g", "zinc"]),
         choline: firstNumber(nutriments, ["choline_100g", "choline"]),
-        customNutrients: null as any,
+        customNutrients: null,
     };
 }
 

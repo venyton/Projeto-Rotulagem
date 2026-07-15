@@ -4,16 +4,55 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Globe2, LayoutGrid, UserCircle2, LogOut, PackageSearch, Home, Settings2 } from "lucide-react";
+import {
+    Globe2,
+    Home,
+    LayoutGrid,
+    LogOut,
+    PackageSearch,
+    Plus,
+    Settings2,
+    UserCircle2,
+} from "lucide-react";
+
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarInset,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarProvider,
+    SidebarRail,
+    SidebarSeparator,
+    SidebarTrigger,
+    useSidebar,
+} from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher, useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
 import { SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
@@ -26,12 +65,38 @@ const PRODUCT_NAV_ITEMS: Array<{
     moduleKey?: SaaSModuleKey;
     settingsOnly?: boolean;
 }> = [
-    { href: "/dashboard", label: "Inicio", copyKey: "home", icon: Home },
+    { href: "/dashboard", label: "Início", copyKey: "home", icon: Home },
     { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid, moduleKey: SAAS_MODULES.TABLES },
     { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch, moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
     { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2, moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
     { href: "/dashboard/settings", label: "Configurações", icon: Settings2, settingsOnly: true },
 ];
+
+function DashboardLogo() {
+    const { isMobile, state } = useSidebar();
+    const isCollapsed = state === "collapsed" && !isMobile;
+
+    return (
+        <span className={`relative h-8 shrink-0 ${isCollapsed ? "w-8" : "w-32"}`}>
+            <Image
+                src={isCollapsed ? "/logo-tabela.png" : "/logo.png"}
+                alt="SoIZI"
+                fill
+                sizes={isCollapsed ? "32px" : "128px"}
+                className="object-contain object-left dark:hidden"
+                priority
+            />
+            <Image
+                src={isCollapsed ? "/logo-tabela-branco.png" : "/logo-branco.png"}
+                alt="SoIZI"
+                fill
+                sizes={isCollapsed ? "32px" : "128px"}
+                className="hidden object-contain object-left dark:block"
+                priority
+            />
+        </span>
+    );
+}
 
 export function DashboardShell({
     children,
@@ -50,125 +115,180 @@ export function DashboardShell({
         if (item.moduleKey) return accessibleModuleSet.has(item.moduleKey);
         return true;
     });
-    const isNavActive = (href: string) => {
-        if (href === "/dashboard") {
-            return pathname === "/dashboard";
-        }
-        return pathname === href || pathname.startsWith(`${href}/`);
-    };
+    const isNavActive = (href: string) => href === "/dashboard"
+        ? pathname === href
+        : pathname === href || pathname.startsWith(`${href}/`);
+    const currentItem = [...navItems]
+        .sort((a, b) => b.href.length - a.href.length)
+        .find((item) => isNavActive(item.href));
+    const currentLabel = pathname.startsWith("/dashboard/profile")
+        ? copy.profileSecurity
+        : currentItem?.copyKey
+            ? copy[currentItem.copyKey]
+            : currentItem?.label ?? "Workspace";
+    const workspaceItems = navItems.filter((item) => !item.settingsOnly);
+    const managementItems = navItems.filter((item) => item.settingsOnly);
 
     return (
-        <div className="flex min-h-screen flex-col bg-background">
-            <header className="dashboard-header sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl">
-                <div className="container mx-auto flex h-16 items-center gap-3 px-4 md:px-6">
+        <SidebarProvider>
+            <Sidebar collapsible="icon" variant="inset">
+                <SidebarHeader className="p-3 group-data-[collapsible=icon]:p-1">
                     <Link
                         href="/dashboard"
-                        className="group -ml-1 flex items-center rounded-md px-1 py-1 transition-colors hover:bg-secondary"
+                        className="flex min-h-8 items-center overflow-hidden rounded-lg px-2 outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 group-data-[collapsible=icon]:min-h-6 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                     >
-                        <div className="relative h-10 w-36">
-                            <Image
-                                src="/logo.png"
-                                alt="SoIZI"
-                                fill
-                                sizes="160px"
-                                className="object-contain dark:hidden"
-                                priority
-                            />
-                            <Image
-                                src="/logo-branco.png"
-                                alt="SoIZI"
-                                fill
-                                sizes="160px"
-                                className="hidden object-contain dark:block"
-                                priority
-                            />
-                        </div>
+                        <DashboardLogo />
                     </Link>
+                </SidebarHeader>
 
-                    <nav className="items-center gap-2 md:flex">
-                        {navItems.map((item) => {
-                            const Icon = item.icon;
-                            const active = isNavActive(item.href);
-                            return (
-                                <Button
-                                    key={item.href}
-                                    variant="ghost"
-                                    asChild
-                                    data-nav-active={active ? "true" : undefined}
-                                    className="dashboard-nav-button h-8 px-2.5 text-[13px] xl:px-3"
-                                >
-                                    <Link href={item.href} className="inline-flex items-center gap-1.5">
-                                        <Icon className="h-4 w-4" />
-                                        {"copyKey" in item && item.copyKey ? copy[item.copyKey] : item.label}
-                                    </Link>
-                                </Button>
-                            );
-                        })}
-                    </nav>
+                <SidebarSeparator />
+
+                <SidebarContent>
+                    <SidebarGroup className="group-data-[collapsible=icon]:p-1">
+                        <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {workspaceItems.map((item) => {
+                                    const Icon = item.icon;
+                                    const label = item.copyKey ? copy[item.copyKey] : item.label;
+
+                                    return (
+                                        <SidebarMenuItem key={item.href}>
+                                            <SidebarMenuButton asChild isActive={isNavActive(item.href)} tooltip={label} size="lg" className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
+                                                <Link href={item.href}>
+                                                    <Icon aria-hidden="true" />
+                                                    <span className="group-data-[collapsible=icon]:hidden">{label}</span>
+                                                </Link>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    );
+                                })}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                    {managementItems.length > 0 ? (
+                        <SidebarGroup className="group-data-[collapsible=icon]:p-1">
+                            <SidebarGroupLabel>Administração</SidebarGroupLabel>
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    {managementItems.map((item) => {
+                                        const Icon = item.icon;
+                                        return (
+                                            <SidebarMenuItem key={item.href}>
+                                    <SidebarMenuButton asChild isActive={isNavActive(item.href)} tooltip={item.label} className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
+                                        <Link href={item.href}>
+                                            <Icon aria-hidden="true" />
+                                            <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                                                    </Link>
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        );
+                                    })}
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                    ) : null}
+                </SidebarContent>
+
+                <SidebarSeparator />
+
+                <SidebarFooter className="p-3 group-data-[collapsible=icon]:p-1">
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild isActive={isNavActive("/dashboard/profile")} tooltip={copy.profileSecurity} className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
+                                <Link href="/dashboard/profile">
+                                    <UserCircle2 aria-hidden="true" />
+                                    <span className="group-data-[collapsible=icon]:hidden">{copy.profileSecurity}</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarFooter>
+                <SidebarRail />
+            </Sidebar>
+
+            <SidebarInset className="min-w-0 overflow-x-clip">
+                <header className="app-topbar sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl sm:px-6">
+                    <SidebarTrigger aria-label="Abrir ou recolher navegação" />
+                    <Separator orientation="vertical" className="mr-1 h-4" />
+                    <Breadcrumb>
+                        <BreadcrumbList>
+                            {pathname !== "/dashboard" ? (
+                              <>
+                                <BreadcrumbItem className="hidden sm:inline-flex">
+                                    <BreadcrumbLink asChild><Link href="/dashboard">Workspace</Link></BreadcrumbLink>
+                                </BreadcrumbItem>
+                                <BreadcrumbSeparator className="hidden sm:block" />
+                              </>
+                            ) : null}
+                            <BreadcrumbItem>
+                                <BreadcrumbPage>{currentLabel}</BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
 
                     <div className="ml-auto flex items-center gap-2">
+                        <Button asChild size="sm" className="hidden sm:inline-flex">
+                            <Link href="/dashboard/new">
+                                <Plus data-icon="inline-start" />
+                                Nova tabela
+                            </Link>
+                        </Button>
                         <LanguageSwitcher />
                         <ModeToggle />
-
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="h-9 gap-2 px-2.5 text-[13px]">
-                                    <UserCircle2 className="h-4 w-4" />
-                                    <span className="hidden sm:inline">{copy.account}</span>
+                                <Button variant="ghost" size="icon" className="rounded-full" aria-label={copy.account}>
+                                    <Avatar className="size-8 border">
+                                        <AvatarFallback className="bg-primary/10 text-primary">
+                                            <UserCircle2 aria-hidden="true" className="size-4" />
+                                        </AvatarFallback>
+                                    </Avatar>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuLabel>{copy.myAccount}</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                    <Link href="/dashboard/profile">{copy.profileSecurity}</Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                    <Link href="/dashboard/tables">{copy.myTables}</Link>
-                                </DropdownMenuItem>
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/dashboard/profile">
+                                            <UserCircle2 aria-hidden="true" />
+                                            {copy.profileSecurity}
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/dashboard/tables">
+                                            <LayoutGrid aria-hidden="true" />
+                                            {copy.myTables}
+                                        </Link>
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    onSelect={(event) => {
-                                        event.preventDefault();
-                                        signOut({ callbackUrl: "/" });
-                                    }}
-                                    className="text-red-600 focus:text-red-700 dark:text-red-300 dark:focus:text-red-200"
-                                >
-                                    <LogOut className="mr-2 h-4 w-4" />
-                                    {copy.logout}
-                                </DropdownMenuItem>
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={(event) => {
+                                            event.preventDefault();
+                                            signOut({ callbackUrl: "/" });
+                                        }}
+                                    >
+                                        <LogOut aria-hidden="true" />
+                                        {copy.logout}
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
-                </div>
-
-                <div className="container mx-auto px-4 pb-2 md:hidden">
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                        {navItems.map((item) => {
-                            const Icon = item.icon;
-                            const active = isNavActive(item.href);
-                            return (
-                                <Button
-                                    key={item.href}
-                                    variant="ghost"
-                                    asChild
-                                    data-nav-active={active ? "true" : undefined}
-                                    className="dashboard-nav-button h-8 px-2.5 text-[12px]"
-                                >
-                                    <Link href={item.href} className="inline-flex items-center gap-1.5">
-                                        <Icon className="h-3.5 w-3.5" />
-                                        {"copyKey" in item && item.copyKey ? copy[item.copyKey] : item.label}
-                                    </Link>
-                                </Button>
-                            );
-                        })}
+                </header>
+                <div className="min-w-0 flex-1">{children}</div>
+                <footer className="app-footer flex flex-col gap-2 border-t px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <p>SoIZI · Rotulagem nutricional</p>
+                    <div className="flex items-center gap-4">
+                        <Link href="/dashboard/profile" className="transition-colors hover:text-foreground">Conta</Link>
+                        <Link href="/" className="transition-colors hover:text-foreground">Site institucional</Link>
                     </div>
-                </div>
-            </header>
-
-            <main className="flex-1 bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,255,255,0)_22rem)] dark:bg-[linear-gradient(180deg,rgba(20,28,45,0.72),rgba(20,28,45,0)_22rem)]">
-                {children}
-            </main>
-        </div>
+                </footer>
+            </SidebarInset>
+        </SidebarProvider>
     );
 }

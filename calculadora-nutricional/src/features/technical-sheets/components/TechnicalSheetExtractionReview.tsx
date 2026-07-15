@@ -7,8 +7,16 @@ import { Check, HelpCircle, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { Spinner } from "@/components/ui/spinner";
 import {
   approveTechnicalSheetExtraction,
   rejectTechnicalSheetExtraction,
@@ -184,7 +192,7 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
   );
 
   return (
-    <div className="space-y-5 rounded-lg border border-border/70 bg-card p-5">
+    <Card className="gap-5 p-5">
       {/* Header */}
       <div className="flex flex-col gap-3 border-b border-border/70 pb-4 md:flex-row md:items-start md:justify-between">
         <div>
@@ -222,28 +230,22 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
 
       {/* Global low confidence banner */}
       {hasGlobalLowConfidence && (
-        <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          <div>
-            <p className="font-medium">Extração com baixa confiança</p>
-            <p className="text-xs opacity-80">
+        <Alert className="border-warning/40 bg-warning/10 text-warning-foreground">
+          <HelpCircle aria-hidden="true" />
+          <AlertTitle>Extração com baixa confiança</AlertTitle>
+          <AlertDescription>
               A IA teve dificuldade ao processar este documento. Revise todos os campos
               abaixo com atenção antes de aprovar.
-            </p>
-          </div>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {state.error && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {state.error}
-        </div>
+        <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert>
       )}
 
       {data.document.errorMessage && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {data.document.errorMessage}
-        </div>
+        <Alert variant="destructive"><AlertDescription>{data.document.errorMessage}</AlertDescription></Alert>
       )}
 
       <form action={formAction} className="space-y-5">
@@ -355,24 +357,20 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
             inReview={isFieldInReview("gluten")}
             reviewExplanation={getReviewExplanation("gluten")}
           >
-            <select
+            <NativeSelect
               name="containsGluten"
               defaultValue={
                 data.extraction.containsGluten === null
                   ? ""
                   : String(data.extraction.containsGluten)
               }
-              className={`h-9 w-full rounded-md border bg-background px-3 text-sm transition-colors ${
-                isFieldInReview("gluten")
-                  ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]"
-                  : "border-input"
-              }`}
+              aria-invalid={isFieldInReview("gluten")}
               onChange={() => handleFieldChange("gluten")}
             >
-              <option value="">Não informado</option>
-              <option value="false">Não contém</option>
-              <option value="true">Contém</option>
-            </select>
+              <NativeSelectOption value="">Não informado</NativeSelectOption>
+              <NativeSelectOption value="false">Não contém</NativeSelectOption>
+              <NativeSelectOption value="true">Contém</NativeSelectOption>
+            </NativeSelect>
           </FieldContainer>
           <EditableField
             name="glutenText"
@@ -464,16 +462,12 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
             <h3 className="border-b border-border/70 pb-2 text-sm font-semibold">
               Informações técnicas adicionais
             </h3>
-            <div className="grid gap-3 md:grid-cols-2">
+            <Accordion type="multiple" className="rounded-md border px-4">
               {data.additionalInfo.map((group) => (
-                <div
-                  key={group.title}
-                  className="rounded-md border border-border/70 p-3 bg-muted/5"
-                >
-                  <div className="mb-2 text-xs font-medium uppercase tracking-normal text-muted-foreground">
-                    {group.title}
-                  </div>
-                  <dl className="space-y-2 text-sm">
+                <AccordionItem key={group.title} value={group.title}>
+                  <AccordionTrigger>{group.title}</AccordionTrigger>
+                  <AccordionContent>
+                  <dl className="flex flex-col gap-2 text-sm">
                     {group.items.map((entry) => (
                       <div key={`${group.title}-${entry.label}`}>
                         <dt className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -483,9 +477,10 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
                       </div>
                     ))}
                   </dl>
-                </div>
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           </section>
         )}
 
@@ -502,11 +497,11 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
                   className="rounded-md border border-border/70 p-3 text-sm bg-muted/5"
                 >
                   <div className="font-medium">{allergen.label}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <Badge variant="outline" className="mt-1">
                     {DECLARATION_TYPE_LABELS[allergen.declarationType || ""] ||
                       allergen.declarationType ||
                       "Não informado"}
-                  </div>
+                  </Badge>
                   {allergen.sourceText && (
                     <p className="mt-2 text-xs opacity-80 italic">
                       &quot;{allergen.sourceText}&quot;
@@ -530,17 +525,18 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
           className="w-full"
           disabled={isApproved || isRejected}
         >
-          <X className="mr-2 h-4 w-4" />
+          <X data-icon="inline-start" />
           Rejeitar extração
         </Button>
       </form>
 
       {isApproved && data.extraction.approvedTargetId && (
-        <div className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-800 animate-in fade-in slide-in-from-bottom-2">
-          Ingrediente criado com sucesso!
-        </div>
+        <Alert className="border-success/40 bg-success/10 text-success-foreground animate-in fade-in slide-in-from-bottom-2">
+          <Check aria-hidden="true" />
+          <AlertDescription>Ingrediente criado com sucesso!</AlertDescription>
+        </Alert>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -657,7 +653,7 @@ function ApproveButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" className="w-full" disabled={disabled || pending}>
-      <Check className="mr-2 h-4 w-4" />
+      {pending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
       {pending ? "Salvando..." : "Aprovar e salvar como ingrediente"}
     </Button>
   );
@@ -703,28 +699,14 @@ function FieldContainer({
         <Label className={labelClass}>{label}</Label>
 
         {/* Help tooltip — always visible */}
-        {helpText && (
-          <div className="group relative">
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-              <HelpCircle className="h-3 w-3" />
-            </div>
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md bg-popover p-2.5 text-[11px] leading-relaxed text-popover-foreground opacity-0 shadow-xl ring-1 ring-border transition-all group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 z-50">
-              <p>{helpText}</p>
-            </div>
-          </div>
-        )}
+        {helpText && <HelpTip>{helpText}</HelpTip>}
 
         {/* Review warning tooltip — only when flagged */}
         {inReview && reviewExplanation && (
-          <div className="group relative">
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-red-100 text-red-500 transition-colors group-hover:bg-red-200">
-              <span className="text-[10px] font-bold leading-none">!</span>
-            </div>
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-60 -translate-x-1/2 rounded-md bg-popover p-2.5 text-[11px] leading-relaxed text-popover-foreground opacity-0 shadow-xl ring-1 ring-red-200 transition-all group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 z-50">
-              <p className="font-medium mb-1 text-red-600">⚠ Revisão necessária</p>
-              <p>{reviewExplanation}</p>
-            </div>
-          </div>
+          <HelpTip className="text-destructive hover:text-destructive">
+            <span className="font-medium text-destructive">Revisão necessária.</span>{" "}
+            {reviewExplanation}
+          </HelpTip>
         )}
       </div>
       <div className="transition-all">{children}</div>
@@ -797,16 +779,13 @@ function TextAreaField({
       inReview={inReview}
       reviewExplanation={reviewExplanation}
     >
-      <textarea
+      <Textarea
         name={name}
         defaultValue={defaultValue || ""}
         onChange={onChange}
         rows={rows}
-        className={`w-full rounded-md border bg-background px-3 py-2 text-sm transition-all resize-y ${
-          inReview
-            ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]"
-            : "border-input"
-        }`}
+        aria-invalid={inReview}
+        className="resize-y"
       />
     </FieldContainer>
   );

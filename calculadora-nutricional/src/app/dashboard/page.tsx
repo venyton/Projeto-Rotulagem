@@ -1,152 +1,171 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { FileText, Globe2, PackageSearch, Plus, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import {
+    ArrowRight,
+    CheckCircle2,
+    FileText,
+    Globe2,
+    PackageSearch,
+    Plus,
+    ShieldCheck,
+} from "lucide-react";
+
+import { authOptions } from "@/lib/auth";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Item,
+    ItemActions,
+    ItemContent,
+    ItemDescription,
+    ItemMedia,
+    ItemTitle,
+} from "@/components/ui/item";
 
 const workspaceGuide = [
     {
         title: "Tabelas nutricionais",
-        description: "Crie, revise e exporte tabelas no padrão brasileiro, com porção, medida caseira, nutrientes e alertas regulatórios.",
+        description: "Cálculo, revisão regulatória, modelos oficiais e exportação.",
         href: "/dashboard/tables",
-        action: "Abrir Tabelas",
+        action: "Abrir tabelas",
         icon: FileText,
-        color: "text-primary",
-        bg: "bg-secondary",
     },
     {
         title: "Ingredientes e fichas técnicas",
-        description: "Monte sua base de ingredientes, importe fichas técnicas e reaproveite dados nas próximas formulações.",
+        description: "Base própria, importação por arquivo e extração assistida por IA.",
         href: "/dashboard/ingredients",
-        action: "Abrir Ingredientes",
+        action: "Abrir ingredientes",
         icon: PackageSearch,
-        color: "text-primary",
-        bg: "bg-secondary",
     },
     {
         title: "Enterprise",
-        description: "Prepare rótulos por mercado, idioma e regra internacional, com histórico de versões, aprovação e exportação.",
+        description: "Mercados internacionais, versões, aprovações e entregáveis.",
         href: "/dashboard/enterprise",
         action: "Abrir Enterprise",
         icon: Globe2,
-        color: "text-primary",
-        bg: "bg-secondary",
     },
     {
         title: "Conta e segurança",
-        description: "Atualize dados da conta, senha e segurança antes de compartilhar ou aprovar materiais finais.",
+        description: "Dados pessoais, senha, preferências e autenticação em duas etapas.",
         href: "/dashboard/profile",
         action: "Ver conta",
         icon: ShieldCheck,
-        color: "text-primary",
-        bg: "bg-secondary",
     },
 ];
 
 const highlights = [
-    "Cálculo automático de % VD e alertas ANVISA",
-    "Exportação em PDF, PNG e Excel",
+    "Cálculo automático e % VD",
+    "Alertas regulatórios ANVISA",
+    "Exportação em imagem e Excel",
     "Base de ingredientes reutilizável",
-    "Suporte a rótulos internacionais",
+];
+
+const workflow = [
+    { step: "01", title: "Organize os dados", description: "Cadastre ou importe seus ingredientes." },
+    { step: "02", title: "Monte a formulação", description: "Defina porção, medidas e composição." },
+    { step: "03", title: "Revise e exporte", description: "Valide os alertas e gere os arquivos finais." },
 ];
 
 export default async function DashboardHomePage() {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
-        redirect("/login");
-    }
+    if (!session) redirect("/login");
 
     const firstName = session.user?.name?.split(" ")[0] ?? "por aqui";
 
     return (
-        <div className="app-page-loose space-y-10">
-            <div className="app-feature-panel">
-                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                    <div className="max-w-xl space-y-3">
-                        <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-                            Olá, {firstName}!
-                        </h1>
-                        <p className="text-base leading-relaxed text-muted-foreground">
-                            A plataforma completa para formulação de rótulos nutricionais no padrão ANVISA.
-                            Crie tabelas, organize ingredientes e exporte para qualquer mercado.
-                        </p>
-                        <ul className="mt-2 space-y-1.5">
-                            {highlights.map((h) => (
-                                <li key={h} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                                    {h}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    <Button size="lg" asChild className="shrink-0 gap-2 self-start md:self-auto">
-                        <Link href="/dashboard/new">
-                            <Plus className="h-5 w-5" />
-                            Nova Tabela
-                        </Link>
-                    </Button>
-                </div>
-            </div>
-
-            <div>
-                <div className="mb-5 space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Como funciona</p>
-                    <h2 className="text-2xl font-semibold tracking-tight">Explore o sistema</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Tudo que você precisa para formular, revisar e exportar rótulos nutricionais conformes.
+        <div className="app-page-loose flex flex-col gap-12">
+            <section className="app-enter grid gap-8 border-b pb-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-end">
+                <div className="max-w-3xl">
+                    <h1 className="text-balance text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">
+                        Olá, {firstName}. O que vamos rotular hoje?
+                    </h1>
+                    <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
+                        Organize ingredientes, calcule a informação nutricional e prepare os arquivos finais em um único fluxo.
                     </p>
+                    <div className="mt-7 flex flex-wrap gap-3">
+                        <Button size="lg" asChild>
+                            <Link href="/dashboard/new">
+                                <Plus data-icon="inline-start" />
+                                Nova tabela
+                            </Link>
+                        </Button>
+                        <Button size="lg" variant="outline" asChild>
+                            <Link href="/dashboard/tables">Continuar uma tabela</Link>
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                    {workspaceGuide.map((item) => {
+                <div className="border-l-2 border-primary/15 pl-5 sm:pl-7">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">No seu fluxo</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                        {highlights.map((highlight) => (
+                            <div key={highlight} className="flex items-start gap-2 text-sm leading-5">
+                                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                                <span>{highlight}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section className="app-enter app-enter-delay-1" aria-labelledby="workspace-title">
+                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Ferramentas</p>
+                        <h2 id="workspace-title" className="mt-2 text-2xl font-semibold tracking-tight">Áreas de trabalho</h2>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Escolha uma área para continuar.</p>
+                </div>
+
+                <div className="grid overflow-hidden rounded-xl border bg-card shadow-sm sm:grid-cols-2">
+                    {workspaceGuide.map((item, index) => {
                         const Icon = item.icon;
                         return (
-                            <Link
+                            <Item
                                 key={item.title}
-                                href={item.href}
-                                className="app-panel group min-w-0 p-5 transition-all hover:border-primary/40 hover:bg-card"
+                                asChild
+                                className={`group min-h-36 rounded-none p-5 hover:bg-accent/50 sm:p-6 ${
+                                    index % 2 === 0 ? "sm:border-r" : ""
+                                } ${index < 2 ? "border-b" : ""}`}
                             >
-                                <div className="flex min-w-0 items-start gap-4">
-                                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.bg} ${item.color}`}>
-                                        <Icon className="h-5 w-5" />
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="break-words text-base font-semibold tracking-tight">{item.title}</h3>
-                                        <p className="mt-1 break-words text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
-                                            {item.description}
-                                        </p>
-                                        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary group-hover:underline">
-                                            {item.action}
-                                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                                        </span>
-                                    </div>
-                                </div>
-                            </Link>
+                                <Link href={item.href}>
+                                    <ItemMedia className="size-11 rounded-lg border-primary/15 bg-primary/5 text-primary">
+                                        <Icon className="size-5" aria-hidden="true" />
+                                    </ItemMedia>
+                                    <ItemContent className="gap-1.5">
+                                        <ItemTitle className="text-base">{item.title}</ItemTitle>
+                                        <ItemDescription className="line-clamp-none max-w-md leading-6">{item.description}</ItemDescription>
+                                    </ItemContent>
+                                    <ItemActions className="self-center text-xs font-semibold text-primary">
+                                        <span className="hidden xl:inline">{item.action}</span>
+                                        <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                                    </ItemActions>
+                                </Link>
+                            </Item>
                         );
                     })}
                 </div>
-            </div>
+            </section>
 
-            <div className="app-empty-state px-6 py-8">
-                <p className="text-sm font-medium text-muted-foreground">Pronto para começar?</p>
-                <h3 className="mt-1 text-xl font-semibold tracking-tight">Crie sua tabela agora</h3>
-                <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-                    Basta adicionar os ingredientes e o sistema calcula tudo automaticamente no padrão ANVISA.
-                </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                    <Button asChild>
-                        <Link href="/dashboard/new">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Nova Tabela
-                        </Link>
-                    </Button>
-                    <Button variant="outline" asChild>
-                        <Link href="/dashboard/tables">Ver minhas tabelas</Link>
-                    </Button>
+            <section className="app-enter app-enter-delay-2 border-t pt-8" aria-labelledby="workflow-title">
+                <div className="grid gap-7 lg:grid-cols-[18rem_1fr]">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Fluxo recomendado</p>
+                        <h2 id="workflow-title" className="mt-2 text-2xl font-semibold tracking-tight">Da ficha ao rótulo</h2>
+                    </div>
+                    <ol className="grid gap-6 sm:grid-cols-3">
+                        {workflow.map((item) => (
+                            <li key={item.step} className="border-l pl-4">
+                                <span className="font-mono text-xs font-semibold text-primary">{item.step}</span>
+                                <h3 className="mt-2 text-sm font-semibold">{item.title}</h3>
+                                <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.description}</p>
+                            </li>
+                        ))}
+                    </ol>
                 </div>
-            </div>
+            </section>
         </div>
     );
 }

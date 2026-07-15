@@ -26,6 +26,8 @@ import {
     saveEnterpriseLabelProject,
 } from "@/features/enterprise/actions/enterprise-label-actions";
 import { InternationalNutritionLabel } from "@/features/enterprise/components/InternationalNutritionLabel";
+import { useStickyPanelTop } from "@/hooks/use-sticky-panel-top";
+import { renderElementAsSvg } from "@/lib/render-element-svg";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
@@ -33,10 +35,13 @@ import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
     ArrowUpRight,
     CheckCircle2,
@@ -50,7 +55,6 @@ import {
     AlertCircle,
     CheckCircle,
     Info,
-    Check,
     Lock
 } from "lucide-react";
 import { toast } from "sonner";
@@ -76,6 +80,17 @@ const CLAIM_STYLES = {
 const SAFE_TEXT_CLASS = "min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere]";
 const ENTERPRISE_SELECT_TRIGGER_CLASS = "min-h-10 w-full min-w-0 *:data-[slot=select-value]:truncate";
 const ENTERPRISE_INPUT_CLASS = "min-w-0 overflow-hidden text-ellipsis";
+
+function downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
 
 type LocalizedMetadata = LegalLabelData;
 type LegalFieldDefinition = {
@@ -386,6 +401,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     const [localizedDrafts, setLocalizedDrafts] = React.useState<Record<string, EnterpriseTable>>({});
     const [localizedMetadata, setLocalizedMetadata] = React.useState<Record<string, LocalizedMetadata>>({});
     const [savedProjects, setSavedProjects] = React.useState<EnterpriseLabelProjectSummary[]>(projects);
+    const { ref: previewPanelRef, top: previewStickyTop } = useStickyPanelTop<HTMLElement>();
 
     const selectedTable = React.useMemo(
         () => tables.find((table) => table.id === selectedTableId) || tables[0],
@@ -624,6 +640,21 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
         recordExport("PNG", fileName, { market, title: workingTable.title });
     };
 
+    const downloadLabelVector = async () => {
+        const element = document.getElementById("international-label-preview");
+        if (!element || !workingTable) return;
+
+        try {
+            const svg = await renderElementAsSvg(element, `Rótulo ${marketConfig.label} editável — ${workingTable.title || "SoIZI"}`);
+            const fileName = `rotulo-${market}-${workingTable.title || workingTable.id}.svg`;
+            downloadBlob(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), fileName);
+            toast.success("SVG editável exportado com sucesso.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Não foi possível exportar o SVG vetorial.");
+        }
+    };
+
     const copyGs1Link = async () => {
         if (!analysis) return;
         await navigator.clipboard.writeText(analysis.gs1Link);
@@ -678,6 +709,10 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <Download className="h-4 w-4" />
                             PNG
                         </Button>
+                        <Button onClick={downloadLabelVector} variant="secondary" className="gap-2">
+                            <Download className="h-4 w-4" />
+                            SVG editável
+                        </Button>
                         <Button onClick={downloadPassport} variant="default" className="gap-2">
                             <FileJson className="h-4 w-4" />
                             JSON
@@ -698,11 +733,13 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectGroup>
                                 {tables.map((table) => (
                                     <SelectItem key={table.id} value={table.id}>
                                         {table.title || "Sem título"}
                                     </SelectItem>
                                 ))}
+                              </SelectGroup>
                             </SelectContent>
                         </Select>
                     </ControlSelect>
@@ -713,11 +750,13 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectGroup>
                                 {INTERNATIONAL_MARKETS.map((item) => (
                                     <SelectItem key={item.value} value={item.value}>
                                         {getMarketLabel(item.value, language)}
                                     </SelectItem>
                                 ))}
+                              </SelectGroup>
                             </SelectContent>
                         </Select>
                     </ControlSelect>
@@ -728,8 +767,10 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectGroup>
                                 <SelectItem value="solid">{copy.solid}</SelectItem>
                                 <SelectItem value="liquid">{copy.liquid}</SelectItem>
+                              </SelectGroup>
                             </SelectContent>
                         </Select>
                     </ControlSelect>
@@ -740,11 +781,13 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectGroup>
                                 {APPROVAL_FLOW.map((item) => (
                                     <SelectItem key={item.status} value={item.status}>
                                         {getApprovalLabel(item.status, language)}
                                     </SelectItem>
                                 ))}
+                              </SelectGroup>
                             </SelectContent>
                         </Select>
                     </ControlSelect>
@@ -752,7 +795,11 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
             </section>
 
             <div className="grid gap-6 xl:grid-cols-[minmax(28rem,0.95fr)_minmax(28rem,1.05fr)]">
-                <section className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+                <section
+                    ref={previewPanelRef}
+                    className="space-y-4 xl:sticky xl:z-10 xl:self-start"
+                    style={{ top: previewStickyTop }}
+                >
                     <Panel>
                         <div className="app-panel-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <PanelTitle title={copy.countryLabel} detail={`${marketConfig.authority} · ${marketConfig.tableName}`} />
@@ -775,38 +822,21 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                     <Panel>
                         <PanelHeader title={copy.approval} detail={copy.approvalDetail} />
                         <div className="p-6">
-                            <div className="relative flex justify-between">
-                                <div className="absolute left-0 top-4 -z-10 h-0.5 w-full -translate-y-1/2 bg-border/50"></div>
+                            <ToggleGroup type="single" value={approvalStatus} onValueChange={(value) => value && setApprovalStatus(value as ApprovalStatus)} variant="outline" className="grid w-full grid-cols-2 gap-2 md:grid-cols-4">
                                 {APPROVAL_FLOW.map((step, index) => {
-                                    const active = index === activeApprovalIndex;
                                     const done = index < activeApprovalIndex;
-                                    const future = index > activeApprovalIndex;
                                     return (
-                                        <button
+                                        <ToggleGroupItem
                                             key={step.status}
-                                            type="button"
-                                            onClick={() => setApprovalStatus(step.status)}
-                                            className="group flex flex-col items-center gap-2"
+                                            value={step.status}
+                                            className="h-auto min-h-20 flex-col gap-1 px-3 py-2"
                                         >
-                                            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300 ${
-                                                active ? "border-primary bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110" :
-                                                done ? "border-emerald-500 bg-emerald-500 text-white" :
-                                                "border-border bg-background text-muted-foreground group-hover:border-primary/50 group-hover:bg-muted/50"
-                                            }`}>
-                                                {done ? <CheckCircle2 className="h-5 w-5" /> : <span className="text-xs font-semibold">{index + 1}</span>}
-                                            </div>
-                                            <div className="text-center mt-1">
-                                                <div className={`text-xs font-semibold transition-colors ${active ? "text-foreground" : future ? "text-muted-foreground" : "text-foreground"}`}>
-                                                    {getApprovalLabel(step.status, language)}
-                                                </div>
-                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                                    {getApprovalOwner(step.status, language)}
-                                                </div>
-                                            </div>
-                                        </button>
+                                            <span className="text-xs font-semibold">{done ? <CheckCircle2 aria-hidden="true" /> : index + 1} {getApprovalLabel(step.status, language)}</span>
+                                            <span className="text-[10px] text-muted-foreground">{getApprovalOwner(step.status, language)}</span>
+                                        </ToggleGroupItem>
                                     );
                                 })}
-                            </div>
+                            </ToggleGroup>
                         </div>
                     </Panel>
                 </section>
@@ -891,9 +921,11 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                      <SelectGroup>
                                         <SelectItem value="g">g</SelectItem>
                                         <SelectItem value="ml">ml</SelectItem>
                                         <SelectItem value="oz">oz</SelectItem>
+                                      </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             </Field>
@@ -1060,26 +1092,26 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                         </div>
                         <div className="overflow-x-auto p-5">
                             <div className="overflow-hidden rounded-lg border border-border shadow-sm">
-                                <table className="w-full min-w-[34rem] border-collapse text-sm text-left">
-                                    <thead className="bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        <tr>
-                                            <th className="py-3 px-4">{copy.nutrient}</th>
-                                            <th className="py-3 px-4">100 g/ml</th>
-                                            <th className="py-3 px-4">{copy.perServing}</th>
-                                            <th className="py-3 px-4">%DV</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/50">
+                                <Table className="min-w-[34rem]">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>{copy.nutrient}</TableHead>
+                                            <TableHead>100 g/ml</TableHead>
+                                            <TableHead>{copy.perServing}</TableHead>
+                                            <TableHead>%DV</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
                                         {analysis.nutritionLines.map((line) => (
-                                            <tr key={`${line.key}-${line.label}`} className="transition-colors hover:bg-muted/30">
-                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere]">{line.label}</td>
-                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.per100, line.unit)}</td>
-                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.perPortion, line.unit)}</td>
-                                                <td className="py-2.5 px-4 break-words [overflow-wrap:anywhere] text-muted-foreground">{line.dailyValueLabel || "-"}</td>
-                                            </tr>
+                                            <TableRow key={`${line.key}-${line.label}`}>
+                                                <TableCell className="break-words [overflow-wrap:anywhere]">{line.label}</TableCell>
+                                                <TableCell className="break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.per100, line.unit)}</TableCell>
+                                                <TableCell className="break-words [overflow-wrap:anywhere] text-muted-foreground">{formatNutrientValue(line.perPortion, line.unit)}</TableCell>
+                                                <TableCell className="break-words [overflow-wrap:anywhere] text-muted-foreground">{line.dailyValueLabel || "-"}</TableCell>
+                                            </TableRow>
                                         ))}
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
                         </div>
                     </Panel>

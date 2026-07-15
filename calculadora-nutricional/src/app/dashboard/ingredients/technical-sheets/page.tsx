@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileSearch } from "lucide-react";
 
+import { PageHeader } from "@/components/layout/page-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import {
   getTechnicalSheetExtraction,
   listTechnicalSheetDocuments,
@@ -31,23 +34,24 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
   ]);
 
   return (
-    <div className="app-page space-y-6">
-      <div className="flex flex-col gap-4 border-b border-border/70 pb-5 md:flex-row md:items-end md:justify-between">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
+    <div className="app-page flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Ingredientes"
+        icon={FileSearch}
+        title="Fichas técnicas importadas"
+        description="Revise as extrações por IA antes de salvar os dados em seus ingredientes."
+        actions={
+          <>
+            <Button asChild variant="outline">
             <Link href="/dashboard/ingredients">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft data-icon="inline-start" />
               Ingredientes
             </Link>
-          </Button>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Ingredientes</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Fichas técnicas importadas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Revise extrações por IA antes de salvar em meus ingredientes.
-          </p>
-        </div>
-        <TechnicalSheetImportDialog />
-      </div>
+            </Button>
+            <TechnicalSheetImportDialog />
+          </>
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
         <TechnicalSheetExtractionList
@@ -60,15 +64,21 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
         )}
 
         {selectedDocumentId && !selectedExtraction && (
-          <div className="app-panel p-6 text-sm text-amber-800">
-            Nenhuma extração encontrada para este documento. Ele pode ainda estar sendo processado ou ter falhado.
-          </div>
+          <Alert variant="default">
+            <AlertTriangle aria-hidden="true" />
+            <AlertTitle>Extração indisponível</AlertTitle>
+            <AlertDescription>O documento pode ainda estar em processamento ou ter falhado.</AlertDescription>
+          </Alert>
         )}
 
         {!selectedDocumentId && (
-          <div className="app-empty-state p-6 text-sm">
-            Selecione uma ficha técnica para revisar.
-          </div>
+          <Empty className="min-h-64 border bg-card">
+            <EmptyHeader>
+              <EmptyMedia variant="icon"><FileSearch aria-hidden="true" /></EmptyMedia>
+              <EmptyTitle>Selecione uma ficha técnica</EmptyTitle>
+              <EmptyDescription>Escolha um documento na lista para revisar a extração.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
     </div>

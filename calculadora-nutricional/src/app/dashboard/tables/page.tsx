@@ -7,6 +7,7 @@ import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage"
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { TablesGrid } from "@/features/tables/components/TablesGrid";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default async function TablesPage() {
     const context = await getCurrentSaaSContext();
@@ -39,32 +40,18 @@ export default async function TablesPage() {
 
 
     return (
-        <div className="app-page space-y-8">
-            <header className="app-header-panel mb-8 md:p-8">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-3">
-                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground backdrop-blur-sm">
-                            <FileText className="h-4 w-4 text-primary" />
-                            Workspace
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Tabelas</h1>
-                            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
-                                Suas tabelas nutricionais salvas, prontas para revisar ou exportar.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 lg:flex-nowrap">
-                        <Button asChild className="gap-2 shadow-sm">
-                            <Link href="/dashboard/new">
-                                <Plus className="h-4 w-4" /> Nova Tabela
-                            </Link>
-                        </Button>
-                    </div>
-                </div>
-            </header>
-
+        <div className="app-page flex flex-col gap-8">
+            <PageHeader
+                eyebrow="Catálogo"
+                icon={FileText}
+                title="Tabelas"
+                description="Suas tabelas nutricionais salvas, prontas para revisar ou exportar."
+                actions={(
+                    <Button asChild>
+                        <Link href="/dashboard/new"><Plus data-icon="inline-start" />Nova tabela</Link>
+                    </Button>
+                )}
+            />
             <TablesGrid tables={tables} hasEnterprise={contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)} />
         </div>
     );

@@ -2,8 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus, Settings2, ShieldCheck, UsersRound } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Table,
     TableBody,
@@ -26,6 +34,7 @@ import {
     updateMemberProfile,
     updateOrganizationProfile,
 } from "@/features/settings/actions/settings-actions";
+import { PageHeader } from "@/components/layout/page-header";
 
 type SettingsPageProps = {
     searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string }>;
@@ -43,20 +52,16 @@ const userErrorMessages: Record<string, string> = {
     profile: "Selecione um perfil válido.",
 };
 
-function TabLink({ tab, active }: { tab: (typeof tabs)[number]; active: boolean }) {
+function TabLink({ tab }: { tab: (typeof tabs)[number] }) {
     const Icon = tab.icon;
 
     return (
-        <Button
-            variant={active ? "secondary" : "ghost"}
-            asChild
-            className="h-9 rounded-md px-3 text-sm"
-        >
+        <TabsTrigger value={tab.key} asChild>
             <Link href={`/dashboard/settings?tab=${tab.key}`} className="inline-flex items-center gap-2">
-                <Icon className="h-4 w-4" />
+                <Icon aria-hidden="true" />
                 {tab.label}
             </Link>
-        </Button>
+        </TabsTrigger>
     );
 }
 
@@ -92,25 +97,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const defaultNewUserProfile = data.profiles.find((profile) => profile.systemKey === "MEMBER") ?? selectedProfile;
 
     return (
-        <div className="app-page space-y-6">
-            <header className="app-header-panel flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                        <Settings2 className="h-4 w-4 text-primary" />
-                        Configuração
-                    </div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Usuários e perfis</h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
-                        Veja os usuários do workspace, defina o perfil de cada um e controle o acesso por funcionalidade.
-                    </p>
-                </div>
-            </header>
+        <div className="app-page flex flex-col gap-6">
+            <PageHeader eyebrow="Configuração" icon={Settings2} title="Usuários e perfis" description="Gerencie participantes, perfis e acessos por funcionalidade." />
 
-            <div className="app-tabs">
+            <Tabs value={activeTab}>
+              <TabsList>
                 {tabs.map((tab) => (
-                    <TabLink key={tab.key} tab={tab} active={activeTab === tab.key} />
+                    <TabLink key={tab.key} tab={tab} />
                 ))}
-            </div>
+              </TabsList>
+            </Tabs>
 
             {activeTab === "users" ? (
                 <div className="grid gap-4">
@@ -120,65 +116,59 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             <CardDescription>Crie o acesso e defina o perfil inicial.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <form action={createOrganizationUser} className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_16rem_auto] lg:items-end">
-                                <label className="space-y-1">
-                                    <span className="text-sm font-medium">Nome</span>
-                                    <input
+                            <form action={createOrganizationUser}>
+                              <FieldGroup className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_16rem_auto] lg:items-end">
+                                <Field>
+                                    <FieldLabel htmlFor="new-user-name">Nome</FieldLabel>
+                                    <Input id="new-user-name"
                                         name="name"
                                         required
                                         minLength={2}
                                         maxLength={80}
-                                        className="app-input"
                                     />
-                                </label>
-                                <label className="space-y-1">
-                                    <span className="text-sm font-medium">Email</span>
-                                    <input
+                                </Field>
+                                <Field>
+                                    <FieldLabel htmlFor="new-user-email">Email</FieldLabel>
+                                    <Input id="new-user-email"
                                         name="email"
                                         type="email"
                                         required
-                                        className="app-input"
                                     />
-                                </label>
-                                <label className="space-y-1">
-                                    <span className="text-sm font-medium">Senha temporária</span>
-                                    <input
+                                </Field>
+                                <Field>
+                                    <FieldLabel htmlFor="new-user-password">Senha temporária</FieldLabel>
+                                    <Input id="new-user-password"
                                         name="password"
                                         type="password"
                                         required
                                         minLength={10}
-                                        className="app-input"
                                     />
-                                </label>
-                                <label className="space-y-1">
-                                    <span className="text-sm font-medium">Perfil</span>
-                                    <select
+                                </Field>
+                                <Field>
+                                    <FieldLabel htmlFor="new-user-profile">Perfil</FieldLabel>
+                                    <NativeSelect id="new-user-profile"
                                         name="profileId"
                                         required
                                         defaultValue={defaultNewUserProfile?.id || ""}
-                                        className="app-input"
                                     >
                                         {data.profiles.map((profile) => (
-                                            <option key={profile.id} value={profile.id}>
+                                            <NativeSelectOption key={profile.id} value={profile.id}>
                                                 {profile.name}
-                                            </option>
+                                            </NativeSelectOption>
                                         ))}
-                                    </select>
-                                </label>
+                                    </NativeSelect>
+                                </Field>
                                 <Button type="submit">
-                                    <Plus className="h-4 w-4" />
+                                    <Plus data-icon="inline-start" />
                                     Criar
                                 </Button>
+                              </FieldGroup>
                             </form>
                             {params?.userError ? (
-                                <p className="mt-3 text-sm text-red-600 dark:text-red-400">
-                                    {userErrorMessages[params.userError] || "Não foi possível criar o usuário."}
-                                </p>
+                                <Alert variant="destructive" className="mt-3"><AlertDescription>{userErrorMessages[params.userError] || "Não foi possível criar o usuário."}</AlertDescription></Alert>
                             ) : null}
                             {params?.userCreated ? (
-                                <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">
-                                    Usuário criado.
-                                </p>
+                                <Alert className="mt-3"><AlertDescription>Usuário criado.</AlertDescription></Alert>
                             ) : null}
                         </CardContent>
                     </Card>
@@ -207,31 +197,23 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                             </TableCell>
                                             <TableCell>{member.profile?.name || member.role}</TableCell>
                                             <TableCell>
-                                                <span
-                                                    className={cn(
-                                                        "inline-flex rounded-full px-2 py-1 text-xs font-medium",
-                                                        member.active
-                                                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                                            : "bg-muted text-muted-foreground",
-                                                    )}
-                                                >
+                                                <Badge variant={member.active ? "success" : "secondary"}>
                                                     {member.active ? "Ativo" : "Inativo"}
-                                                </span>
+                                                </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <form action={updateMemberProfile} className="flex min-w-[18rem] items-center gap-2">
                                                     <input type="hidden" name="memberId" value={member.id} />
-                                                    <select
+                                                    <NativeSelect
                                                         name="profileId"
                                                         defaultValue={member.profileId || ""}
-                                                        className="app-input flex-1"
                                                     >
                                                         {data.profiles.map((profile) => (
-                                                            <option key={profile.id} value={profile.id}>
+                                                            <NativeSelectOption key={profile.id} value={profile.id}>
                                                                 {profile.name}
-                                                            </option>
+                                                            </NativeSelectOption>
                                                         ))}
-                                                    </select>
+                                                    </NativeSelect>
                                                     <Button type="submit" variant="outline" size="sm">
                                                         Salvar
                                                     </Button>
@@ -246,32 +228,38 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 </div>
             ) : (
                 <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
-                    <div className="space-y-4">
+                    <div className="flex flex-col gap-4">
                         <Card>
                             <CardHeader>
                                 <CardTitle>Novo perfil</CardTitle>
                                 <CardDescription>Crie o perfil e depois selecione os módulos.</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <form action={createOrganizationProfile} className="space-y-3">
-                                    <input
+                                <form action={createOrganizationProfile}>
+                                  <FieldGroup className="gap-3">
+                                    <Field>
+                                      <FieldLabel htmlFor="new-profile-name" className="sr-only">Nome do perfil</FieldLabel>
+                                      <Input id="new-profile-name"
                                         name="name"
                                         required
                                         minLength={2}
                                         maxLength={60}
                                         placeholder="Nome do perfil"
-                                        className="app-input"
-                                    />
-                                    <textarea
+                                      />
+                                    </Field>
+                                    <Field>
+                                      <FieldLabel htmlFor="new-profile-description" className="sr-only">Descrição</FieldLabel>
+                                      <Textarea id="new-profile-description"
                                         name="description"
                                         maxLength={180}
                                         placeholder="Descrição"
-                                        className="app-textarea"
-                                    />
+                                      />
+                                    </Field>
                                     <Button type="submit" className="w-full">
-                                        <Plus className="h-4 w-4" />
+                                        <Plus data-icon="inline-start" />
                                         Criar perfil
                                     </Button>
+                                  </FieldGroup>
                                 </form>
                             </CardContent>
                         </Card>
@@ -281,7 +269,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                 <CardTitle>Perfis</CardTitle>
                                 <CardDescription>Escolha um perfil para editar.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-1">
+                            <CardContent className="flex flex-col gap-1">
                                 {data.profiles.map((profile) => {
                                     const active = selectedProfile?.id === profile.id;
 
@@ -295,9 +283,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                             )}
                                         >
                                             <span className="min-w-0 truncate font-medium">{profile.name}</span>
-                                            <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
-                                                {profile._count.members}
-                                            </span>
+                                            <Badge variant="secondary">{profile._count.members}</Badge>
                                         </Link>
                                     );
                                 })}
@@ -308,56 +294,47 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                     <Card>
                         <CardHeader>
                             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                <div className="space-y-1">
+                                <div className="flex flex-col gap-1">
                                     <CardTitle>{selectedProfile?.name || "Perfil"}</CardTitle>
                                     <CardDescription>
                                         {selectedProfilePermissions.length} módulo(s) ativo(s)
                                     </CardDescription>
                                 </div>
                                 {selectedProfile ? (
-                                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-                                        {selectedProfile._count.members} usuário(s)
-                                    </span>
+                                    <Badge variant="secondary">{selectedProfile._count.members} usuário(s)</Badge>
                                 ) : null}
                             </div>
                         </CardHeader>
                         <CardContent>
                             {selectedProfile ? (
-                                <form action={updateOrganizationProfile} className="space-y-6">
+                                <form action={updateOrganizationProfile} className="flex flex-col gap-6">
                                     <input type="hidden" name="profileId" value={selectedProfile.id} />
 
                                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-                                        <label className="space-y-1">
-                                            <span className="text-sm font-medium">Nome</span>
-                                            <input
+                                        <Field>
+                                            <FieldLabel htmlFor="profile-name">Nome</FieldLabel>
+                                            <Input id="profile-name"
                                                 name="name"
                                                 required
                                                 minLength={2}
                                                 maxLength={60}
                                                 defaultValue={selectedProfile.name}
-                                                className="app-input"
                                             />
-                                        </label>
-                                        <label className="space-y-1">
-                                            <span className="text-sm font-medium">Descrição</span>
-                                            <input
+                                        </Field>
+                                        <Field>
+                                            <FieldLabel htmlFor="profile-description">Descrição</FieldLabel>
+                                            <Input id="profile-description"
                                                 name="description"
                                                 maxLength={180}
                                                 defaultValue={selectedProfile.description || ""}
-                                                className="app-input"
                                             />
-                                        </label>
+                                        </Field>
                                     </div>
 
-                                    <div className="space-y-3">
-                                        <div>
-                                            <h3 className="text-sm font-semibold">Módulos liberados</h3>
-                                            <p className="text-sm text-muted-foreground">
-                                                Marque as funcionalidades que este perfil pode acessar.
-                                            </p>
-                                        </div>
-
-                                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                    <FieldSet>
+                                        <FieldLegend variant="label">Módulos liberados</FieldLegend>
+                                        <FieldDescription>Marque as funcionalidades que este perfil pode acessar.</FieldDescription>
+                                        <FieldGroup className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                                             {PROFILE_PERMISSION_MODULES.map((moduleKey) => {
                                                 const moduleDefinition = getProfilePermissionDefinition(moduleKey);
                                                 if (!moduleDefinition) return null;
@@ -366,33 +343,31 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                 const organizationHasModule = enabledOrganizationModules.has(moduleKey);
 
                                                 return (
-                                                    <label
+                                                    <FieldLabel
                                                         key={moduleKey}
-                                                        className="app-subpanel flex min-h-24 items-start gap-3 text-sm transition-colors hover:border-primary/35 hover:bg-secondary/40"
+                                                        className="min-h-24 rounded-lg border p-3 transition-colors hover:border-primary/35 hover:bg-accent/40"
                                                     >
-                                                        <input
-                                                            type="checkbox"
+                                                        <Field orientation="horizontal">
+                                                          <Checkbox
                                                             name="moduleKey"
                                                             value={moduleKey}
                                                             defaultChecked={enabled}
-                                                            className="mt-1 h-4 w-4 shrink-0 accent-primary"
-                                                        />
-                                                        <span className="min-w-0 space-y-1">
+                                                          />
+                                                          <span className="flex min-w-0 flex-col gap-1">
                                                             <span className="block font-medium">{moduleDefinition.name}</span>
                                                             <span className="block leading-5 text-muted-foreground">
                                                                 {moduleDefinition.description}
                                                             </span>
                                                             {!organizationHasModule ? (
-                                                                <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                                                    Fora do plano atual
-                                                                </span>
+                                                                <Badge variant="warning">Fora do plano atual</Badge>
                                                             ) : null}
-                                                        </span>
-                                                    </label>
+                                                          </span>
+                                                        </Field>
+                                                    </FieldLabel>
                                                 );
                                             })}
-                                        </div>
-                                    </div>
+                                        </FieldGroup>
+                                    </FieldSet>
 
                                     <div className="flex justify-end">
                                         <Button type="submit">Salvar alterações</Button>

@@ -3,19 +3,22 @@
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { UploadCloud } from "lucide-react";
+import { Info, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
 import { importTechnicalSheet } from "@/features/technical-sheets/actions/technical-sheet-actions";
 import type { TechnicalSheetActionState } from "@/features/technical-sheets/domain/technical-sheet-types";
 
@@ -54,10 +57,12 @@ export function TechnicalSheetImportDialog({ trigger }: { trigger?: React.ReactN
       <DialogContent className="w-[min(94vw,34rem)] max-w-none">
         <DialogHeader>
           <DialogTitle>Importar ficha técnica com IA</DialogTitle>
+          <DialogDescription>Envie arquivos para extrair e revisar os dados antes do cadastro.</DialogDescription>
         </DialogHeader>
-        <form action={formAction} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="technical-sheet-file">PDF ou imagem</Label>
+        <form action={formAction}>
+          <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="technical-sheet-file">PDF ou imagem</FieldLabel>
             <Input
               id="technical-sheet-file"
               name="files"
@@ -67,18 +72,20 @@ export function TechnicalSheetImportDialog({ trigger }: { trigger?: React.ReactN
               required
               onChange={(event) => setSelectedCount(event.currentTarget.files?.length || 0)}
             />
-            <p className="text-xs text-muted-foreground">
+            <FieldDescription>
               {selectedCount > 0
                 ? `${selectedCount} arquivo(s) selecionado(s).`
                 : "Pode selecionar mais de um arquivo. O processamento é em fila."}
-            </p>
-          </div>
+            </FieldDescription>
+          </Field>
 
-          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
-            A extração fica pendente. O ingrediente só nasce depois da sua aprovação.
-          </div>
+          <Alert>
+            <Info aria-hidden="true" />
+            <AlertDescription>A extração fica pendente. O ingrediente só é criado depois da sua aprovação.</AlertDescription>
+          </Alert>
 
           <SubmitButton />
+          </FieldGroup>
         </form>
       </DialogContent>
     </Dialog>
@@ -90,6 +97,7 @@ function SubmitButton() {
 
   return (
     <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? <Spinner data-icon="inline-start" /> : <UploadCloud data-icon="inline-start" />}
       {pending ? "Processando fila..." : "Enviar para IA"}
     </Button>
   );
