@@ -72,29 +72,61 @@ const PRODUCT_NAV_ITEMS: Array<{
     { href: "/dashboard/settings", label: "Configurações", icon: Settings2, settingsOnly: true },
 ];
 
-function DashboardLogo() {
+function DashboardSidebarHeader() {
     const { isMobile, state } = useSidebar();
     const isCollapsed = state === "collapsed" && !isMobile;
 
     return (
-        <span className={`relative h-8 shrink-0 ${isCollapsed ? "w-8" : "w-32"}`}>
-            <Image
-                src={isCollapsed ? "/logo-tabela.png" : "/logo.png"}
-                alt="SoIZI"
-                fill
-                sizes={isCollapsed ? "32px" : "128px"}
-                className="object-contain object-left dark:hidden"
-                priority
-            />
-            <Image
-                src={isCollapsed ? "/logo-tabela-branco.png" : "/logo-branco.png"}
-                alt="SoIZI"
-                fill
-                sizes={isCollapsed ? "32px" : "128px"}
-                className="hidden object-contain object-left dark:block"
-                priority
-            />
-        </span>
+        <SidebarHeader
+            className={isCollapsed ? undefined : "p-3"}
+            style={isCollapsed ? { padding: "4px" } : undefined}
+        >
+            <Link
+                href="/dashboard"
+                className={`flex items-center overflow-hidden rounded-lg outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 ${isCollapsed ? "justify-center" : "min-h-8 px-2"}`}
+                style={isCollapsed ? { minHeight: "40px", paddingInline: 0 } : undefined}
+            >
+                {isCollapsed ? (
+                    <span className="relative shrink-0" style={{ width: "32px", height: "32px" }}>
+                        <Image
+                            src="/logo-tabela.png"
+                            alt="SoIZI"
+                            width={32}
+                            height={32}
+                            className="size-[32px] object-contain dark:hidden"
+                            priority
+                        />
+                        <Image
+                            src="/logo-tabela-branco.png"
+                            alt="SoIZI"
+                            width={32}
+                            height={32}
+                            className="hidden size-[32px] object-contain dark:block"
+                            priority
+                        />
+                    </span>
+                ) : (
+                    <span className="relative h-8 w-32 shrink-0">
+                        <Image
+                            src="/logo.png"
+                            alt="SoIZI"
+                            fill
+                            sizes="128px"
+                            className="object-contain object-left dark:hidden"
+                            priority
+                        />
+                        <Image
+                            src="/logo-branco.png"
+                            alt="SoIZI"
+                            fill
+                            sizes="128px"
+                            className="hidden object-contain object-left dark:block"
+                            priority
+                        />
+                    </span>
+                )}
+            </Link>
+        </SidebarHeader>
     );
 }
 
@@ -132,19 +164,12 @@ export function DashboardShell({
     return (
         <SidebarProvider>
             <Sidebar collapsible="icon" variant="inset">
-                <SidebarHeader className="p-3 group-data-[collapsible=icon]:p-1">
-                    <Link
-                        href="/dashboard"
-                        className="flex min-h-8 items-center overflow-hidden rounded-lg px-2 outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 group-data-[collapsible=icon]:min-h-6 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-                    >
-                        <DashboardLogo />
-                    </Link>
-                </SidebarHeader>
+                <DashboardSidebarHeader />
 
                 <SidebarSeparator />
 
                 <SidebarContent>
-                    <SidebarGroup className="group-data-[collapsible=icon]:p-1">
+                    <SidebarGroup className="group-data-[collapsible=icon]:p-[4px]!">
                         <SidebarGroupLabel>Workspace</SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
@@ -167,7 +192,7 @@ export function DashboardShell({
                         </SidebarGroupContent>
                     </SidebarGroup>
                     {managementItems.length > 0 ? (
-                        <SidebarGroup className="group-data-[collapsible=icon]:p-1">
+                        <SidebarGroup className="group-data-[collapsible=icon]:p-[4px]!">
                             <SidebarGroupLabel>Administração</SidebarGroupLabel>
                             <SidebarGroupContent>
                                 <SidebarMenu>
@@ -192,7 +217,7 @@ export function DashboardShell({
 
                 <SidebarSeparator />
 
-                <SidebarFooter className="p-3 group-data-[collapsible=icon]:p-1">
+                <SidebarFooter className="p-3 group-data-[collapsible=icon]:p-[4px]!">
                     <SidebarMenu>
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild isActive={isNavActive("/dashboard/profile")} tooltip={copy.profileSecurity} className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
