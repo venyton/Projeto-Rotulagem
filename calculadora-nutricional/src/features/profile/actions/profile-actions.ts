@@ -13,6 +13,11 @@ import {
     formatTotpSecret,
     verifyTotpCode,
 } from "@/lib/security/totp";
+import {
+    clearPersistentRateLimit,
+    isPersistentRateLimited,
+    recordPersistentRateLimitFailure,
+} from "@/lib/security/persistent-rate-limit";
 
 type ProfileResult = { error?: string; success?: string; requireRelogin?: boolean };
 export type ProfileInfo = { name: string; email: string; twoFactorEnabled: boolean };
@@ -46,6 +51,18 @@ async function getCurrentUser() {
 }
 
 type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+
+async function isSensitiveActionBlocked(scope: string, userId: string) {
+    return isPersistentRateLimited(`profile.${scope}`, userId, 8);
+}
+
+async function recordSensitiveFailure(scope: string, userId: string) {
+    await recordPersistentRateLimitFailure(`profile.${scope}`, userId, 15 * 60 * 1000);
+}
+
+async function clearSensitiveFailures(scope: string, userId: string) {
+    await clearPersistentRateLimit(`profile.${scope}`, userId);
+}
 
 function getFormValue(formData: FormData, key: string) {
     return ((formData.get(key) as string | null) ?? "").trim();
@@ -131,6 +148,8 @@ export async function updateProfileInfo(prevState: unknown, formData: FormData):
 export async function changePassword(prevState: unknown, formData: FormData): Promise<ProfileResult> {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+    const scope = "change_password";
+    if (await isSensitiveActionBlocked(scope, user.id)) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const currentPassword = formData.get("currentPassword") as string;
     const newPassword = formData.get("newPassword") as string;
@@ -145,10 +164,16 @@ export async function changePassword(prevState: unknown, formData: FormData): Pr
     if (passwordError) return { error: passwordError };
 
     const currentPasswordError = await validateCurrentPassword(user, currentPassword);
-    if (currentPasswordError) return { error: currentPasswordError };
+    if (currentPasswordError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: currentPasswordError };
+    }
 
     const twoFactorError = await validateUserTwoFactorCode(user, twoFactorCode);
-    if (twoFactorError) return { error: twoFactorError };
+    if (twoFactorError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: twoFactorError };
+    }
 
     const samePassword = user.password ? await compare(newPassword, user.password) : false;
     if (samePassword) return { error: "A nova senha precisa ser diferente da senha atual." };
@@ -160,6 +185,8 @@ export async function changePassword(prevState: unknown, formData: FormData): Pr
         data: { password: hashedPassword }
     });
 
+    await clearSensitiveFailures(scope, user.id);
+
     return { success: "Senha alterada com sucesso!" };
 }
 
@@ -170,10 +197,15 @@ export async function startTwoFactorSetup(
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
     if (user.twoFactorEnabled) return { error: "2FA já está ativo nesta conta." };
+    const scope = "start_2fa";
+    if (await isSensitiveActionBlocked(scope, user.id)) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const currentPassword = getFormValue(formData, "currentPassword");
     const passwordError = await validateCurrentPassword(user, currentPassword);
-    if (passwordError) return { error: passwordError };
+    if (passwordError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: passwordError };
+    }
 
     try {
         const setup = createTotpSetup(user.email);
@@ -184,6 +216,8 @@ export async function startTwoFactorSetup(
             where: { id: user.id },
             data: { twoFactorPendingSecret: encryptedSecret },
         });
+
+        await clearSensitiveFailures(scope, user.id);
 
         return {
             success: "Escaneie o QR Code e confirme o primeiro código.",
@@ -202,17 +236,25 @@ export async function confirmTwoFactorSetup(
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
     if (user.twoFactorEnabled) return { error: "2FA já está ativo nesta conta.", enabled: true };
+    const scope = "confirm_2fa";
+    if (await isSensitiveActionBlocked(scope, user.id)) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const currentPassword = getFormValue(formData, "confirmCurrentPassword");
     const code = getFormValue(formData, "setupCode");
 
     const passwordError = await validateCurrentPassword(user, currentPassword);
-    if (passwordError) return { error: passwordError };
+    if (passwordError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: passwordError };
+    }
     if (!user.twoFactorPendingSecret) return { error: "Gere um QR Code antes de confirmar." };
 
     try {
         const secret = decryptTotpSecret(user.twoFactorPendingSecret);
-        if (!(await verifyTotpCode(secret, code))) return { error: "Código 2FA inválido." };
+        if (!(await verifyTotpCode(secret, code))) {
+            await recordSensitiveFailure(scope, user.id);
+            return { error: "Código 2FA inválido." };
+        }
 
         await prisma.user.update({
             where: { id: user.id },
@@ -223,6 +265,8 @@ export async function confirmTwoFactorSetup(
                 twoFactorConfirmedAt: new Date(),
             },
         });
+
+        await clearSensitiveFailures(scope, user.id);
 
         return { success: "2FA ativado com sucesso.", enabled: true };
     } catch {
@@ -237,15 +281,23 @@ export async function disableTwoFactor(
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
     if (!user.twoFactorEnabled) return { success: "2FA já está desativado.", disabled: true };
+    const scope = "disable_2fa";
+    if (await isSensitiveActionBlocked(scope, user.id)) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const currentPassword = getFormValue(formData, "disableCurrentPassword");
     const code = getFormValue(formData, "disableTwoFactorCode");
 
     const passwordError = await validateCurrentPassword(user, currentPassword);
-    if (passwordError) return { error: passwordError };
+    if (passwordError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: passwordError };
+    }
 
     const twoFactorError = await validateUserTwoFactorCode(user, code);
-    if (twoFactorError) return { error: twoFactorError };
+    if (twoFactorError) {
+        await recordSensitiveFailure(scope, user.id);
+        return { error: twoFactorError };
+    }
 
     await prisma.user.update({
         where: { id: user.id },
@@ -257,6 +309,8 @@ export async function disableTwoFactor(
             twoFactorLastUsedAt: null,
         },
     });
+
+    await clearSensitiveFailures(scope, user.id);
 
     return { success: "2FA desativado.", disabled: true };
 }

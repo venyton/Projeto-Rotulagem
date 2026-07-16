@@ -1,55 +1,66 @@
-import { NextResponse } from "next/server";
+import { createHash, randomBytes } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import {
+  isPersistentRateLimited,
+  recordPersistentRateLimitFailure,
+} from "@/lib/security/persistent-rate-limit";
+import { sendPasswordResetEmail } from "@/lib/security/password-reset-email";
+import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 
-export async function POST(request: Request) {
-    try {
-        const body = await request.json();
-        const { email } = body;
+const requestSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+}).strict();
 
-        if (!email) {
-            return NextResponse.json({ error: "E-mail é obrigatório." }, { status: 400 });
-        }
+const successResponse = () => NextResponse.json(
+  { success: true },
+  { headers: { "Cache-Control": "no-store" } },
+);
 
-        const user = await prisma.user.findUnique({
-            where: { email },
-        });
+export async function POST(request: NextRequest) {
+  const originError = rejectCrossOriginRequest(request);
+  if (originError) return originError;
 
-        // We return success even if user doesn't exist to prevent email enumeration
-        if (!user) {
-            return NextResponse.json({ success: true });
-        }
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (!Number.isFinite(contentLength) || contentLength > 4096) return successResponse();
 
-        // Generate a random token
-        const rawToken = crypto.randomBytes(32).toString("hex");
-        
-        // Hash the token for storage
-        const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
-        
-        // Token expires in 1 hour
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return successResponse();
 
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                resetPasswordToken: hashedToken,
-                resetPasswordExpiresAt: expiresAt,
-            },
-        });
+  const { email } = parsed.data;
+  const scope = "auth.password_reset.request";
 
-        const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reset-password?token=${rawToken}`;
+  try {
+    if (await isPersistentRateLimited(scope, email, 5)) return successResponse();
+    await recordPersistentRateLimitFailure(scope, email, 60 * 60 * 1000);
 
-        // TODO: Send actual email using a provider like Resend or SendGrid
-        // For now, we just mock the send by logging to the server console.
-        console.log(`\n\n[MOCK EMAIL SEND]`);
-        console.log(`To: ${user.email}`);
-        console.log(`Subject: Redefinição de Senha - SolZI`);
-        console.log(`Body: Clique no link para redefinir sua senha: ${resetUrl}`);
-        console.log(`\n\n`);
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true },
+    });
+    if (!user) return successResponse();
 
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Forgot password error:", error);
-        return NextResponse.json({ error: "Erro interno no servidor." }, { status: 500 });
+    const rawToken = randomBytes(32).toString("hex");
+    const hashedToken = createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetPasswordToken: hashedToken, resetPasswordExpiresAt: expiresAt },
+    });
+
+    const delivered = await sendPasswordResetEmail(user.email, rawToken);
+    if (!delivered) {
+      await prisma.user.updateMany({
+        where: { id: user.id, resetPasswordToken: hashedToken },
+        data: { resetPasswordToken: null, resetPasswordExpiresAt: null },
+      });
     }
+
+    return successResponse();
+  } catch {
+    return successResponse();
+  }
 }
