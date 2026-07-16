@@ -148,7 +148,13 @@ function humanizeReviewExplanation(raw: string): string {
   return `Atenção: ${raw}`;
 }
 
-export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetReviewData }) {
+export function TechnicalSheetExtractionReview({
+  data,
+  canApprove = true,
+}: {
+  data: TechnicalSheetReviewData;
+  canApprove?: boolean;
+}) {
   const router = useRouter();
   const approveAction = approveTechnicalSheetExtraction.bind(null, data.extraction.id);
   const [state, formAction] = useActionState(approveAction, initialState);
@@ -513,9 +519,11 @@ export function TechnicalSheetExtractionReview({ data }: { data: TechnicalSheetR
           </section>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row">
-          <ApproveButton disabled={isApproved || isRejected} />
-        </div>
+        {canApprove ? (
+          <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row">
+            <ApproveButton disabled={isApproved || isRejected} />
+          </div>
+        ) : null}
       </form>
 
       <form action={rejectTechnicalSheetExtraction.bind(null, data.extraction.id)}>

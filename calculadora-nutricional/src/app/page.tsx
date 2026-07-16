@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import {
   Accordion,
   AccordionContent,
@@ -166,11 +168,13 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const isLoggedIn = Boolean(session);
+  const context = isLoggedIn ? await getCurrentSaaSContext() : null;
+  const canUseTables = Boolean(context && contextHasModuleAccess(context, SAAS_MODULES.TABLES));
 
   const primaryHref = isLoggedIn ? "/dashboard" : "/register";
   const primaryLabel = isLoggedIn ? "Abrir meu painel" : "Criar minha conta";
-  const secondaryHref = isLoggedIn ? "/dashboard/new" : "/login";
-  const secondaryLabel = isLoggedIn ? "Nova tabela" : "Já tenho conta";
+  const secondaryHref = isLoggedIn && canUseTables ? "/dashboard/new" : isLoggedIn ? "/dashboard" : "/login";
+  const secondaryLabel = isLoggedIn && canUseTables ? "Nova tabela" : isLoggedIn ? "Voltar ao painel" : "Já tenho conta";
 
   return (
     <div className={`${bodyFont.className} bg-background text-foreground`}>

@@ -354,6 +354,8 @@ function calculateServingsPerPackage(portionSize: number, packageContent: number
 }
 
 interface TableGeneratorProps {
+    canUseOpenFoodFacts?: boolean;
+    canExport?: boolean;
     initialData?: {
         id: string;
         title: string;
@@ -369,7 +371,11 @@ interface TableGeneratorProps {
     };
 }
 
-export function TableGenerator({ initialData }: TableGeneratorProps) {
+export function TableGenerator({
+    initialData,
+    canUseOpenFoodFacts = false,
+    canExport = false,
+}: TableGeneratorProps) {
     const initialMeasure = initialData?.householdMeasure || "";
     const savedUiState: TableUiState = toTableUiState(initialData?.uiState);
     const [tableId, setTableId] = useState(initialData?.id || "");
@@ -686,11 +692,9 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         [selectedTableTypes, previewTableType]
     );
     const selectedImageTableCount = selectedTableTypes.length > 0 ? selectedTableTypes.length : 1;
-    const previewPanelRef = React.useRef<HTMLDivElement>(null);
     const previewViewportRef = React.useRef<HTMLDivElement>(null);
     const previewContentRef = React.useRef<HTMLDivElement>(null);
     const [previewScale, setPreviewScale] = useState(1);
-    const [previewStickyTop, setPreviewStickyTop] = useState(76);
     const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
     const availableTableOptionValues = React.useMemo(
         () =>
@@ -772,36 +776,6 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
         selectedNutrients,
         servingsPerPackage,
     ]);
-
-    useEffect(() => {
-        const panel = previewPanelRef.current;
-        if (!panel) return;
-
-        let rafId = 0;
-        const updateStickyTop = () => {
-            cancelAnimationFrame(rafId);
-            rafId = requestAnimationFrame(() => {
-                const offset = 76;
-                const bottomOffset = 20;
-                const panelHeight = panel.offsetHeight;
-                const viewportHeight = window.innerHeight;
-                const nextTop = Math.min(offset, viewportHeight - panelHeight - bottomOffset);
-
-                setPreviewStickyTop((current) => (Math.abs(current - nextTop) > 1 ? nextTop : current));
-            });
-        };
-
-        updateStickyTop();
-        const resizeObserver = new ResizeObserver(updateStickyTop);
-        resizeObserver.observe(panel);
-        window.addEventListener("resize", updateStickyTop);
-
-        return () => {
-            cancelAnimationFrame(rafId);
-            resizeObserver.disconnect();
-            window.removeEventListener("resize", updateStickyTop);
-        };
-    }, []);
 
     const handleGroupChange = (group: string) => {
         setSelectedGroup(group);
@@ -1602,6 +1576,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     };
 
     const handleExportImage = async (formats?: ImageExportFormat[]) => {
+        if (!canExport) return;
         const targetFormats = formats ?? selectedImageFormats;
         const formatsToExport = targetFormats.length > 0 ? targetFormats : DEFAULT_IMAGE_EXPORT_FORMATS;
         if (targetFormats.length === 0) {
@@ -1655,6 +1630,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
     };
 
     const handleExportCompleteZip = async () => {
+        if (!canExport) return;
         if (!result) {
             toast.error("Gere a tabela antes de exportar.");
             return;
@@ -2246,15 +2222,20 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
                             <div className={PANEL_HEADER_CLASS}>
-                                <div className="flex items-center justify-between gap-2">
-                                    <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                                <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <h3 className="inline-flex min-w-0 items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]">
                                         Ingredientes / Formulação
-                                        <HelpTip>Monte a receita com ingredientes da base, ingredientes próprios ou produtos importados do Open Food Facts.</HelpTip>
+                                        <HelpTip>
+                                            {canUseOpenFoodFacts
+                                                ? "Monte a receita com ingredientes da base, ingredientes próprios ou produtos importados do Open Food Facts."
+                                                : "Monte a receita com ingredientes da base ou ingredientes próprios."}
+                                        </HelpTip>
                                     </h3>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
+                                        className="w-full whitespace-normal sm:w-auto"
                                         onClick={clearIngredients}
                                         disabled={ingredients.length === 0}
                                     >
@@ -2264,7 +2245,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                             </div>
                             <div className="space-y-4 p-4">
                                 <IngredientSelector onSelect={handleAddIngredient} />
-                                <OpenFoodFactsImporter onSelect={handleAddIngredient} />
+                                {canUseOpenFoodFacts ? <OpenFoodFactsImporter onSelect={handleAddIngredient} /> : null}
 
                                 <div className="space-y-2">
                                     {ingredients.map((item, idx) => (
@@ -2512,8 +2493,8 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                         <div className={`${PANEL_MUTED_CLASS} overflow-hidden`}>
                             <div className={PANEL_HEADER_CLASS}>
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="inline-flex min-w-0 flex-1 items-center gap-2">
+                                <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex min-w-0 flex-1 items-start gap-2">
                                         <Button
                                             type="button"
                                             variant="ghost"
@@ -2526,12 +2507,12 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                                 className={`h-4 w-4 transition-transform ${aminoAcidSectionOpen && !aminoAcidNotApplicable ? "rotate-0" : "-rotate-90"}`}
                                             />
                                         </Button>
-                                        <h3 className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold">
-                                            Perfil de Aminoácidos - Anexo XXI
+                                        <h3 className="flex min-w-0 items-start gap-1.5 text-sm font-semibold">
+                                            <span className="min-w-0 break-words [overflow-wrap:anywhere]">Perfil de Aminoácidos - Anexo XXI</span>
                                             <HelpTip>Informe o perfil teórico em mg de aminoácido por 100 g de produto. O sistema divide pela proteína em g/100 g e compara com a referência em mg/g de proteína.</HelpTip>
                                         </h3>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                                         <div className="flex items-center gap-2">
                                             <Checkbox
                                                 id="amino-acid-not-applicable"
@@ -2781,7 +2762,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
                 <Card className="overflow-hidden">
                     <CardHeader className="border-b bg-card px-5 py-4">
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="inline-flex min-w-0 items-center gap-2">
                                 <Button
                                     type="button"
@@ -2792,7 +2773,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 >
                                     <ChevronDown className={`h-4 w-4 transition-transform ${micronutrientsSectionOpen ? "rotate-0" : "-rotate-90"}`} />
                                 </Button>
-                                <CardTitle className="inline-flex items-center gap-1.5 text-base">
+                                <CardTitle className="inline-flex min-w-0 items-center gap-1.5 break-words text-base [overflow-wrap:anywhere]">
                                     Micronutrientes Opcionais
                                     <HelpTip>Marque apenas os micronutrientes que precisam aparecer na tabela. Os valores vêm dos ingredientes cadastrados.</HelpTip>
                                 </CardTitle>
@@ -2801,6 +2782,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
+                                className="w-full whitespace-normal sm:w-auto"
                                 onClick={clearSelectedMicronutrients}
                                 disabled={selectedNutrients.length === 0}
                             >
@@ -2958,11 +2940,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
 
             </div>
 
-            <div
-                ref={previewPanelRef}
-                className="space-y-5 lg:sticky lg:z-10 lg:self-start"
-                style={{ top: previewStickyTop }}
-            >
+            <div className="space-y-5 lg:sticky lg:self-start" style={{ top: "4rem" }}>
                 <Card className="overflow-hidden">
                     <CardHeader className="border-b bg-card px-5 py-4">
                         <div className="flex items-start justify-between gap-3">
@@ -3059,7 +3037,7 @@ export function TableGenerator({ initialData }: TableGeneratorProps) {
                         </div>
                     )}
 
-                    {result && (
+                    {result && canExport && (
                         <div className="shrink-0 space-y-4 border-t bg-card p-4 sm:p-5">
                             <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2">
                                 <DropdownMenu>

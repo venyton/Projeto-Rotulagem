@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
 import {
     ArrowRight,
     CheckCircle2,
+    FileSearch,
     FileText,
     Globe2,
     PackageSearch,
@@ -11,8 +11,6 @@ import {
     ShieldCheck,
 } from "lucide-react";
 
-import { authOptions } from "@/lib/auth";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Item,
@@ -22,6 +20,8 @@ import {
     ItemMedia,
     ItemTitle,
 } from "@/components/ui/item";
+import { ALL_SAAS_MODULES, SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 
 const workspaceGuide = [
     {
@@ -30,6 +30,7 @@ const workspaceGuide = [
         href: "/dashboard/tables",
         action: "Abrir tabelas",
         icon: FileText,
+        moduleKey: SAAS_MODULES.TABLES,
     },
     {
         title: "Ingredientes e fichas técnicas",
@@ -37,6 +38,15 @@ const workspaceGuide = [
         href: "/dashboard/ingredients",
         action: "Abrir ingredientes",
         icon: PackageSearch,
+        moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS,
+    },
+    {
+        title: "Fichas técnicas",
+        description: "Upload, revisão e aproveitamento de documentos técnicos.",
+        href: "/dashboard/ingredients/technical-sheets",
+        action: "Abrir fichas",
+        icon: FileSearch,
+        moduleKey: SAAS_MODULES.TECHNICAL_SHEETS,
     },
     {
         title: "Enterprise",
@@ -44,6 +54,7 @@ const workspaceGuide = [
         href: "/dashboard/enterprise",
         action: "Abrir Enterprise",
         icon: Globe2,
+        moduleKey: SAAS_MODULES.ENTERPRISE_LABELS,
     },
     {
         title: "Conta e segurança",
@@ -51,14 +62,15 @@ const workspaceGuide = [
         href: "/dashboard/profile",
         action: "Ver conta",
         icon: ShieldCheck,
+        moduleKey: null,
     },
 ];
 
-const highlights = [
-    "Cálculo automático e % VD",
-    "Alertas regulatórios ANVISA",
-    "Exportação em imagem e Excel",
-    "Base de ingredientes reutilizável",
+const highlights: Array<{ label: string; moduleKey: SaaSModuleKey }> = [
+    { label: "Cálculo automático e % VD", moduleKey: SAAS_MODULES.TABLES },
+    { label: "Base de ingredientes reutilizável", moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
+    { label: "Exportação em imagem e Excel", moduleKey: SAAS_MODULES.EXPORTS },
+    { label: "Importação assistida por IA", moduleKey: SAAS_MODULES.AI_IMPORT },
 ];
 
 const workflow = [
@@ -68,11 +80,18 @@ const workflow = [
 ];
 
 export default async function DashboardHomePage() {
-    const session = await getServerSession(authOptions);
+    const context = await getCurrentSaaSContext();
+    if (!context) redirect("/login");
 
-    if (!session) redirect("/login");
-
-    const firstName = session.user?.name?.split(" ")[0] ?? "por aqui";
+    const accessibleModules = new Set(
+        ALL_SAAS_MODULES.filter((moduleKey) => contextHasModuleAccess(context, moduleKey)),
+    );
+    const visibleWorkspaceGuide = workspaceGuide.filter(
+        (item) => !item.moduleKey || accessibleModules.has(item.moduleKey),
+    );
+    const visibleHighlights = highlights.filter((item) => accessibleModules.has(item.moduleKey));
+    const hasTables = accessibleModules.has(SAAS_MODULES.TABLES);
+    const firstName = context.user.name?.split(" ")[0] ?? "por aqui";
 
     return (
         <div className="app-page-loose flex flex-col gap-12">
@@ -84,26 +103,28 @@ export default async function DashboardHomePage() {
                     <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
                         Organize ingredientes, calcule a informação nutricional e prepare os arquivos finais em um único fluxo.
                     </p>
-                    <div className="mt-7 flex flex-wrap gap-3">
-                        <Button size="lg" asChild>
-                            <Link href="/dashboard/new">
-                                <Plus data-icon="inline-start" />
-                                Nova tabela
-                            </Link>
-                        </Button>
-                        <Button size="lg" variant="outline" asChild>
-                            <Link href="/dashboard/tables">Continuar uma tabela</Link>
-                        </Button>
-                    </div>
+                    {hasTables ? (
+                        <div className="mt-7 flex flex-wrap gap-3">
+                            <Button size="lg" asChild>
+                                <Link href="/dashboard/new">
+                                    <Plus data-icon="inline-start" />
+                                    Nova tabela
+                                </Link>
+                            </Button>
+                            <Button size="lg" variant="outline" asChild>
+                                <Link href="/dashboard/tables">Continuar uma tabela</Link>
+                            </Button>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className="border-l-2 border-primary/15 pl-5 sm:pl-7">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">No seu fluxo</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                        {highlights.map((highlight) => (
-                            <div key={highlight} className="flex items-start gap-2 text-sm leading-5">
+                        {visibleHighlights.map((highlight) => (
+                            <div key={highlight.label} className="flex items-start gap-2 text-sm leading-5">
                                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                                <span>{highlight}</span>
+                                <span>{highlight.label}</span>
                             </div>
                         ))}
                     </div>
@@ -120,7 +141,7 @@ export default async function DashboardHomePage() {
                 </div>
 
                 <div className="grid overflow-hidden rounded-xl border bg-card shadow-sm sm:grid-cols-2">
-                    {workspaceGuide.map((item, index) => {
+                    {visibleWorkspaceGuide.map((item, index) => {
                         const Icon = item.icon;
                         return (
                             <Item

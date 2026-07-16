@@ -27,10 +27,12 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
   }
 
   const params = await searchParams;
+  const canUseAiImport = contextHasModuleAccess(context, SAAS_MODULES.AI_IMPORT);
+  const canUseCustomIngredients = contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS);
   const selectedDocumentId = params.documentId;
   const [documents, selectedExtraction] = await Promise.all([
-    listTechnicalSheetDocuments(context.user.id),
-    selectedDocumentId ? getTechnicalSheetExtraction(selectedDocumentId, context.user.id) : Promise.resolve(null),
+    listTechnicalSheetDocuments(),
+    selectedDocumentId ? getTechnicalSheetExtraction(selectedDocumentId) : Promise.resolve(null),
   ]);
 
   return (
@@ -42,13 +44,15 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
         description="Revise as extrações por IA antes de salvar os dados em seus ingredientes."
         actions={
           <>
-            <Button asChild variant="outline">
-            <Link href="/dashboard/ingredients">
-              <ArrowLeft data-icon="inline-start" />
-              Ingredientes
-            </Link>
-            </Button>
-            <TechnicalSheetImportDialog />
+            {canUseCustomIngredients ? (
+              <Button asChild variant="outline">
+                <Link href="/dashboard/ingredients">
+                  <ArrowLeft data-icon="inline-start" />
+                  Ingredientes
+                </Link>
+              </Button>
+            ) : null}
+            {canUseAiImport ? <TechnicalSheetImportDialog /> : null}
           </>
         }
       />
@@ -60,7 +64,7 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
         />
 
         {selectedDocumentId && selectedExtraction && (
-          <TechnicalSheetExtractionReview data={selectedExtraction} />
+          <TechnicalSheetExtractionReview data={selectedExtraction} canApprove={canUseCustomIngredients} />
         )}
 
         {selectedDocumentId && !selectedExtraction && (

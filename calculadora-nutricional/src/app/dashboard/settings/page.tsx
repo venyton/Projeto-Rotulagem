@@ -35,6 +35,8 @@ import {
     updateOrganizationProfile,
 } from "@/features/settings/actions/settings-actions";
 import { PageHeader } from "@/components/layout/page-header";
+import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
 
 type SettingsPageProps = {
     searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string }>;
@@ -75,7 +77,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     }
 
     if (!canManageOrganizationSettings(context)) {
-        redirect("/dashboard");
+        return <ModuleGateMessage moduleKey={SAAS_MODULES.SETTINGS} />;
     }
 
     const data = await getOrganizationSettingsData(context.organization.id);
@@ -94,6 +96,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const selectedProfilePermissions = selectedProfile
         ? PROFILE_PERMISSION_MODULES.filter((moduleKey) => profilePermissionEnabled(selectedProfile.permissions, moduleKey))
         : [];
+    const isAdministratorProfile = selectedProfile?.systemKey === "ADMIN";
     const defaultNewUserProfile = data.profiles.find((profile) => profile.systemKey === "MEMBER") ?? selectedProfile;
 
     return (
@@ -109,13 +112,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             </Tabs>
 
             {activeTab === "users" ? (
-                <div className="grid gap-4">
-                    <Card>
+                <div className="grid min-w-0 gap-4">
+                    <Card className="min-w-0">
                         <CardHeader>
                             <CardTitle>Novo usuário</CardTitle>
                             <CardDescription>Crie o acesso e defina o perfil inicial.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="min-w-0">
                             <form action={createOrganizationUser}>
                               <FieldGroup className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_16rem_auto] lg:items-end">
                                 <Field>
@@ -173,12 +176,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="min-w-0">
                         <CardHeader>
                             <CardTitle>Controle de usuários</CardTitle>
                             <CardDescription>Usuários ativos e perfil atribuído.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="min-w-0">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -333,7 +336,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
                                     <FieldSet>
                                         <FieldLegend variant="label">Módulos liberados</FieldLegend>
-                                        <FieldDescription>Marque as funcionalidades que este perfil pode acessar.</FieldDescription>
+                                        <FieldDescription>
+                                            {isAdministratorProfile
+                                                ? "O perfil Administrador possui todos os módulos ativos e não pode ser alterado."
+                                                : "Marque as funcionalidades que este perfil pode acessar."}
+                                        </FieldDescription>
                                         <FieldGroup className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                                             {PROFILE_PERMISSION_MODULES.map((moduleKey) => {
                                                 const moduleDefinition = getProfilePermissionDefinition(moduleKey);
@@ -351,7 +358,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                           <Checkbox
                                                             name="moduleKey"
                                                             value={moduleKey}
-                                                            defaultChecked={enabled}
+                                                            defaultChecked={isAdministratorProfile || (enabled && organizationHasModule)}
+                                                            disabled={isAdministratorProfile || !organizationHasModule}
                                                           />
                                                           <span className="flex min-w-0 flex-col gap-1">
                                                             <span className="block font-medium">{moduleDefinition.name}</span>
