@@ -456,3 +456,32 @@
   }
 
 }
+/* Nutritional preview rules stay in static CSS to avoid runtime HTML/style injection. */
+.nutrition-label-scope :is(td, th, p, span, div, h1, h2, h3) {
+  white-space: nowrap !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+.nutrition-label-scope :is(td, th) {
+  vertical-align: middle !important;
+  line-height: 1.15 !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+.nutrition-label-scope table :is(th, td) + :is(th, td) {
+  border-left: 1px solid #000000 !important;
+}
+
+.nutrition-label-scope .linear-preview-content {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.nutrition-label-scope .nutrition-wrap-cell {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
