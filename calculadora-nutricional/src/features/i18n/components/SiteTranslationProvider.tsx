@@ -6,14 +6,14 @@ import { useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
 import { GENERATED_UI_TRANSLATIONS } from "@/features/i18n/domain/generated-ui-translations";
 import type { SiteLanguage } from "@/features/i18n/domain/site-i18n";
 
-type TranslationTuple = readonly [string, string, string];
+type TranslationTuple = readonly [string, string, string, string];
 
 const LANGUAGE_INDEX: Record<SiteLanguage, number> = {
     "pt-BR": 0,
     "en-US": 1,
     "es-MX": 2,
     "es-CL": 2,
-    "fr-CA": 0,
+    "fr-CA": 3,
 };
 
 const TRANSLATABLE_ATTRIBUTES = ["alt", "aria-label", "placeholder", "title"] as const;

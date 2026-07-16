@@ -8,6 +8,7 @@ export const SITE_LANGUAGES: Array<{ value: SiteLanguage; label: string; shortLa
     { value: "pt-BR", label: "Português do Brasil", shortLabel: "PT", flagSrc: "/images/flags/br.svg", flagAlt: "Bandeira do Brasil" },
     { value: "en-US", label: "English", shortLabel: "EN", flagSrc: "/images/flags/us.svg", flagAlt: "United States flag" },
     { value: "es-MX", label: "Español", shortLabel: "ES", flagSrc: "/images/flags/mx.svg", flagAlt: "Bandera de México" },
+    { value: "fr-CA", label: "Français", shortLabel: "FR", flagSrc: "/images/flags/ca.svg", flagAlt: "Drapeau du Canada" },
 ];
 
 export const SITE_COPY = {

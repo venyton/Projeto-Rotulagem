@@ -5,7 +5,7 @@ import { translate as translateWithBing } from "bing-translate-api";
 
 const ROOT = process.cwd();
 const OUTPUT = path.join(ROOT, "src/features/i18n/domain/generated-ui-translations.ts");
-const TARGETS = ["pt", "en", "es"];
+const TARGETS = ["pt", "en", "es", "fr"];
 const SPLIT = "<<<SOIZI_I18N_SPLIT>>>";
 const TRANSLATABLE_ATTRIBUTES = new Set(["alt", "aria-label", "placeholder", "title"]);
 const TRANSLATABLE_COMPONENT_PROPS = new Set([
@@ -89,6 +89,35 @@ const OVERRIDES = {
   "Lupa inativa para este produto.": ["Lupa inativa para este produto.", "Front-of-pack warning inactive for this product.", "Advertencia frontal inactiva para este producto."],
   "Modelos de lupa ANVISA no ZIP": ["Modelos de lupa ANVISA no ZIP", "ANVISA front-of-pack warning formats in the ZIP", "Formatos de advertencia frontal de ANVISA en el ZIP"],
   "Área para ajustar regras especiais do rótulo, como lupa frontal, suplementos e categorias com declarações obrigatórias.": ["Área para ajustar regras especiais do rótulo, como lupa frontal, suplementos e categorias com declarações obrigatórias.", "Area for adjusting special label rules, such as front-of-pack warnings, supplements, and categories with mandatory statements.", "Área para ajustar reglas especiales de la etiqueta, como advertencias frontales, suplementos y categorías con declaraciones obligatorias."],
+};
+
+const FRENCH_OVERRIDES = {
+  "Tabelas": "Étiquettes nutritionnelles",
+  "Minhas tabelas": "Mes étiquettes nutritionnelles",
+  "Nova tabela": "Nouvelle étiquette nutritionnelle",
+  "Nova tabela nutricional": "Nouvelle étiquette nutritionnelle",
+  "Editor de tabela nutricional": "Éditeur d’étiquettes nutritionnelles",
+  "Tabela salva com sucesso!": "Étiquette nutritionnelle enregistrée avec succès!",
+  "Tabela excluída.": "Étiquette nutritionnelle supprimée.",
+  "Rotulagem nutricional": "Étiquetage nutritionnel",
+  "Abrir tabelas": "Ouvrir les étiquettes nutritionnelles",
+  "Buscar tabela...": "Rechercher des étiquettes nutritionnelles...",
+  "Compare modelos e confira a tabela antes de gerar os arquivos finais.": "Comparez les formats et vérifiez l’étiquette nutritionnelle avant de générer les fichiers finaux.",
+  "Consigo revisar a tabela antes de exportar?": "Puis-je vérifier l’étiquette nutritionnelle avant de l’exporter?",
+  "Continuar uma tabela": "Continuer une étiquette nutritionnelle",
+  "Criar tabela": "Créer une étiquette nutritionnelle",
+  "Crie sua primeira tabela nutricional para começar.": "Créez votre première étiquette nutritionnelle pour commencer.",
+  "Crie tabelas nutricionais padrão ANVISA": "Créez des étiquettes nutritionnelles conformes aux normes de l’ANVISA",
+  "Editar tabela": "Modifier l’étiquette nutritionnelle",
+  "Erro ao excluir tabela.": "Impossible de supprimer l’étiquette nutritionnelle.",
+  "Erro ao salvar tabela.": "Impossible d’enregistrer l’étiquette nutritionnelle.",
+  "Gere a tabela antes de exportar.": "Générez l’étiquette nutritionnelle avant de l’exporter.",
+  "Nenhuma tabela encontrada": "Aucune étiquette nutritionnelle trouvée",
+  "Nenhuma tabela salva": "Aucune étiquette nutritionnelle enregistrée",
+  "Selecionar todas as tabelas": "Sélectionner toutes les étiquettes nutritionnelles",
+  "Tabelas nutricionais": "Étiquettes nutritionnelles",
+  "Da ficha ao rótulo": "De la fiche technique à l’étiquette",
+  "SoIZI - Tabela Nutricional": "SoIZI - Étiquetage nutritionnel",
 };
 
 function walkFiles(directory) {
@@ -206,7 +235,12 @@ async function translateBatch(values, target) {
     }
   }
   const translated = result.translation.split(SPLIT).map(normalize);
-  if (translated.length !== values.length) throw new Error(`Unexpected translation batch size: ${translated.length}/${values.length}`);
+  if (translated.length !== values.length) {
+    if (values.length === 1) throw new Error(`Unexpected translation batch size: ${translated.length}/${values.length}`);
+    const individualTranslations = [];
+    for (const value of values) individualTranslations.push(...await translateBatch([value], target));
+    return individualTranslations;
+  }
   return translated;
 }
 
@@ -254,7 +288,7 @@ async function main() {
     ? collectedSources.filter((source) => existing[source] || OVERRIDES[source])
     : collectedSources;
   const translations = Object.fromEntries(sources.map((source) => [source, existing[source]
-    ? { en: existing[source][1], es: existing[source][2] }
+    ? { en: existing[source][1], es: existing[source][2], fr: existing[source][3] }
     : {}]));
   const jobs = [];
 
@@ -277,7 +311,10 @@ async function main() {
 
   const entries = sources.map((source) => {
     const override = OVERRIDES[source];
-    const values = override ?? [source, translations[source].en, translations[source].es];
+    const french = FRENCH_OVERRIDES[source] ?? translations[source].fr;
+    const values = override
+      ? [...override, french]
+      : [source, translations[source].en, translations[source].es, french];
     return `  ${JSON.stringify(source)}: ${JSON.stringify(values)},`;
   });
   const output = `// Generated by scripts/generate-ui-translations.mjs.\n` +
