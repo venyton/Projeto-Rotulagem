@@ -136,7 +136,6 @@ Protegidas:
 /dashboard/ingredients/technical-sheets
 /dashboard/enterprise
 /dashboard/profile
-/dashboard/debug
 ```
 
 APIs:
@@ -146,8 +145,6 @@ APIs:
 /api/export/excel
 /api/export/complete
 /api/open-food-facts/products
-/api/debug-auth
-/api/debug/force-migrate
 ```
 
 ## Variaveis de ambiente
