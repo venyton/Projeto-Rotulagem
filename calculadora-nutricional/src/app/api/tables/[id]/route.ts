@@ -13,6 +13,9 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     if (originError) return originError;
 
     const params = await props.params;
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(params.id)) {
+        return NextResponse.json({ error: "Solicitação inválida" }, { status: 400 });
+    }
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
         return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

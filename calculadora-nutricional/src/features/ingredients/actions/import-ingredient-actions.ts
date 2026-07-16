@@ -58,6 +58,39 @@ export type IngredientData = {
     choline: number;
 }
 
+const IMPORT_NUMERIC_FIELDS = [
+    "energy", "protein", "carbs", "fatTotal", "fatSat", "fatTrans", "fiber", "sodium",
+    "sugarTotal", "sugarAdded", "fatMono", "fatPoly", "omega6", "omega3", "cholesterol",
+    "vitaminA", "vitaminD", "vitaminE", "vitaminK", "vitaminC", "thiamin", "riboflavin",
+    "niacin", "vitaminB6", "biotin", "folicAcid", "pantothenicAcid", "vitaminB12",
+    "calcium", "chloride", "copper", "chromium", "iron", "fluoride", "phosphorus", "iodine",
+    "magnesium", "manganese", "molybdenum", "potassium", "selenium", "zinc", "choline",
+] as const satisfies readonly (keyof IngredientData)[];
+
+function sanitizeImportedIngredients(value: unknown) {
+    if (!Array.isArray(value) || value.length === 0 || value.length > 1000) return null;
+
+    const sanitized: IngredientData[] = [];
+    for (const item of value) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+        const input = item as Record<string, unknown>;
+        const name = typeof input.name === "string" ? input.name.trim() : "";
+        if (name.length < 1 || name.length > 160) return null;
+
+        const row = { name } as IngredientData;
+        for (const field of IMPORT_NUMERIC_FIELDS) {
+            const numeric = input[field];
+            if (typeof numeric !== "number" || !Number.isFinite(numeric) || numeric < 0 || numeric > 1_000_000_000) {
+                return null;
+            }
+            row[field] = numeric;
+        }
+        sanitized.push(row);
+    }
+
+    return sanitized;
+}
+
 export async function getUserIngredients() {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) {
@@ -69,6 +102,12 @@ export async function getUserIngredients() {
     });
 
     if (!user) return [];
+
+    try {
+        await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
+    } catch {
+        return [];
+    }
 
     return await prisma.customIngredient.findMany({
         where: { userId: user.id },
@@ -98,15 +137,18 @@ export async function importIngredients(ingredients: IngredientData[]) {
     }
 
     try {
+        const safeIngredients = sanitizeImportedIngredients(ingredients);
+        if (!safeIngredients) return { error: "Dados de importação inválidos." };
+
         await prisma.customIngredient.createMany({
-            data: ingredients.map(ing => ({
+            data: safeIngredients.map(ing => ({
                 ...ing,
                 userId: user.id
             }))
         });
 
         revalidatePath('/my-ingredients');
-        return { success: true, count: ingredients.length };
+        return { success: true, count: safeIngredients.length };
     } catch {
         return { error: "Erro ao importar ingredientes." };
     }
