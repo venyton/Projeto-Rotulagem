@@ -43,7 +43,7 @@ export async function createOrganizationUser(formData: FormData) {
     const profileId = String(formData.get("profileId") || "");
 
     if (name.length < 2 || name.length > 80) redirectUserError("invalid");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) redirectUserError("invalid");
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) redirectUserError("invalid");
 
     const passwordError = validatePasswordStrength(password, { email, name });
     if (passwordError) redirectUserError("password");
@@ -108,7 +108,7 @@ export async function updateMemberProfile(formData: FormData) {
     const memberId = String(formData.get("memberId") || "");
     const profileId = String(formData.get("profileId") || "");
 
-    if (!memberId || !profileId) return;
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(memberId) || !/^[A-Za-z0-9_-]{1,100}$/.test(profileId)) return;
 
     const [targetMember, targetProfile] = await Promise.all([
         prisma.organizationMember.findFirst({
@@ -162,7 +162,7 @@ export async function createOrganizationProfile(formData: FormData) {
     const name = String(formData.get("name") || "").trim();
     const description = String(formData.get("description") || "").trim();
 
-    if (name.length < 2 || name.length > 60) return;
+    if (name.length < 2 || name.length > 60 || description.length > 500) return;
 
     const existingProfile = await prisma.organizationProfile.findFirst({
         where: {
@@ -221,7 +221,7 @@ export async function updateOrganizationProfile(formData: FormData) {
             .filter(isSaaSModuleKey),
     );
 
-    if (!profileId || name.length < 2 || name.length > 60) return;
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(profileId) || name.length < 2 || name.length > 60 || description.length > 500) return;
 
     const [profile, duplicateProfile] = await Promise.all([
         prisma.organizationProfile.findFirst({
@@ -229,7 +229,7 @@ export async function updateOrganizationProfile(formData: FormData) {
                 id: profileId,
                 organizationId: context.organization.id,
             },
-            select: { id: true, name: true },
+            select: { id: true, name: true, systemKey: true },
         }),
         prisma.organizationProfile.findFirst({
             where: {
@@ -242,6 +242,10 @@ export async function updateOrganizationProfile(formData: FormData) {
     ]);
 
     if (!profile || duplicateProfile) return;
+
+    const effectiveSelectedModules = profile.systemKey === "ADMIN"
+        ? new Set(PROFILE_PERMISSION_MODULES)
+        : selectedModules;
 
     await prisma.$transaction(async (tx) => {
         await tx.organizationProfile.update({
@@ -263,9 +267,9 @@ export async function updateOrganizationProfile(formData: FormData) {
                 create: {
                     organizationProfileId: profile.id,
                     moduleKey: moduleKey as PrismaSaaSModuleKey,
-                    enabled: selectedModules.has(moduleKey),
+                    enabled: effectiveSelectedModules.has(moduleKey),
                 },
-                update: { enabled: selectedModules.has(moduleKey) },
+                update: { enabled: effectiveSelectedModules.has(moduleKey) },
             });
         }
     }, { timeout: 20_000 });
@@ -280,7 +284,7 @@ export async function updateOrganizationProfile(formData: FormData) {
                 profileId: profile.id,
                 previousProfileName: profile.name,
                 profileName: name,
-                enabledModules: Array.from(selectedModules),
+                enabledModules: Array.from(effectiveSelectedModules),
             }),
         },
     });

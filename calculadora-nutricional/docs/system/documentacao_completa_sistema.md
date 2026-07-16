@@ -702,7 +702,6 @@ Protegidas:
 /dashboard/ingredients/technical-sheets Fichas tecnicas importadas
 /dashboard/enterprise              Workspace enterprise
 /dashboard/profile                 Perfil e seguranca
-/dashboard/debug                   Diagnostico interno
 ```
 
 ## 5. Mapa de APIs
@@ -712,8 +711,6 @@ Protegidas:
 /api/export/excel         Exportacao Excel
 /api/export/complete      Exportacao ZIP completo
 /api/open-food-facts/products Busca segura no Open Food Facts
-/api/debug-auth           Diagnostico de autenticacao
-/api/debug/force-migrate  Suporte operacional de migracao
 ```
 
 ## 6. Banco de dados

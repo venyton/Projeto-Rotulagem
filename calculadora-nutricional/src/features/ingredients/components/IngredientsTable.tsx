@@ -49,13 +49,20 @@ export type IngredientTableRow = {
     userId: string;
 }
 
-export function IngredientsTable({ ingredients }: { ingredients: IngredientTableRow[] }) {
+export function IngredientsTable({
+    ingredients,
+    canExport = false,
+}: {
+    ingredients: IngredientTableRow[];
+    canExport?: boolean;
+}) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [deleteTarget, setDeleteTarget] = useState<IngredientTableRow | null>(null);
     const [deleting, setDeleting] = useState(false);
 
     const handleExport = async () => {
+        if (!canExport) return;
         const data = ingredients.map(ing => ({
             'Nome': ing.name.replace(/^\[Meu\]\s*/, ''),
             'Energia': ing.energy,
@@ -139,10 +146,12 @@ export function IngredientsTable({ ingredients }: { ingredients: IngredientTable
                         />
                     </InputGroup>
                     <ImportIngredientsDialog />
-                    <Button onClick={handleExport} variant="outline">
-                        <Download data-icon="inline-start" />
-                        Exportar
-                    </Button>
+                    {canExport ? (
+                        <Button onClick={handleExport} variant="outline">
+                            <Download data-icon="inline-start" />
+                            Exportar
+                        </Button>
+                    ) : null}
                 </div>
             </CardHeader>
 

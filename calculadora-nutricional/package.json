@@ -9,9 +9,12 @@
     "db:push": "npx prisma db push --schema=./prisma/schema.prisma",
     "start": "next start",
     "lint": "eslint",
+    "security:check": "node scripts/security-check.mjs && npm audit --audit-level=moderate",
     "seed": "npx -y tsx scripts/seed.ts",
     "seed-user": "npx -y tsx scripts/seed-test-user.js",
-    "test-db": "npx -y tsx scripts/test-db.js"
+    "test-db": "npx -y tsx scripts/test-db.js",
+    "test:modules": "rm -rf /tmp/soizi-module-tests && tsc src/features/saas/domain/modules.ts src/features/saas/domain/module-access.ts src/features/saas/domain/module-access.test.ts --outDir /tmp/soizi-module-tests --module commonjs --moduleResolution node --target es2022 --esModuleInterop --skipLibCheck && node --test /tmp/soizi-module-tests/module-access.test.js",
+    "verify:modules:runtime": "node scripts/verify-modules-runtime.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.2.0",
@@ -51,6 +54,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "bing-translate-api": "^4.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "prisma": "^5.22.0",
@@ -59,6 +63,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "^8.5.14"
+    "postcss": "^8.5.14",
+    "uuid": "^11.1.1"
   }
 }

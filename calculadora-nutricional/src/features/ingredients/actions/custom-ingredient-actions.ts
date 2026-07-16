@@ -5,8 +5,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
-import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import {
+    contextHasModuleAccess,
+    getCurrentSaaSContext,
+    ModuleAccessError,
+    requireModuleAccess,
+} from "@/features/saas/services/entitlements";
 import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+import type { Prisma } from "@prisma/client";
 
 async function requireCustomIngredientsModule() {
     try {
@@ -23,7 +29,38 @@ function optionalNumber(formData: FormData, key: string) {
     if (typeof value !== "string" || value.trim() === "") return null;
     const normalized = value.replace(",", ".");
     const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1_000_000_000 ? parsed : null;
+}
+
+function readText(formData: FormData, key: string, maxLength: number) {
+    const value = formData.get(key);
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length <= maxLength ? trimmed : null;
+}
+
+function parseCustomNutrients(raw: FormDataEntryValue | null) {
+    if (raw === null || raw === "") return { value: undefined };
+    if (typeof raw !== "string" || raw.length > 50_000) return { error: true };
+
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { error: true };
+        const entries = Object.entries(parsed);
+        if (entries.length > 100) return { error: true };
+        for (const [key, item] of entries) {
+            if (key.length < 1 || key.length > 80 || !item || typeof item !== "object" || Array.isArray(item)) {
+                return { error: true };
+            }
+            const value = (item as Record<string, unknown>).value;
+            const unit = (item as Record<string, unknown>).unit;
+            if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1_000_000_000) return { error: true };
+            if (typeof unit !== "string" || unit.length > 30) return { error: true };
+        }
+        return { value: parsed };
+    } catch {
+        return { error: true };
+    }
 }
 
 function optionalMicronutrientPayload(formData: FormData) {
@@ -39,7 +76,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
 
-    const name = formData.get("name") as string;
+    const name = readText(formData, "name", 160);
     const energy = optionalNumber(formData, "energy") || 0;
     const carbs = optionalNumber(formData, "carbs") || 0;
     const protein = optionalNumber(formData, "protein") || 0;
@@ -50,13 +87,14 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     const sodium = optionalNumber(formData, "sodium") || 0;
     const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
     const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
-    const ingredientsText = formData.get("ingredientsText") as string || null;
-    const allergensText = formData.get("allergensText") as string || null;
-    const glutenText = formData.get("glutenText") as string || null;
+    const ingredientsText = readText(formData, "ingredientsText", 20_000);
+    const allergensText = readText(formData, "allergensText", 10_000);
+    const glutenText = readText(formData, "glutenText", 10_000);
     const containsGlutenRaw = formData.get("containsGluten") as string;
     const containsGluten = containsGlutenRaw === "true" ? true : containsGlutenRaw === "false" ? false : null;
-    const customNutrientsRaw = formData.get("customNutrients") as string;
-    const customNutrients = customNutrientsRaw ? JSON.parse(customNutrientsRaw) : undefined;
+    const customNutrientsResult = parseCustomNutrients(formData.get("customNutrients"));
+    if (customNutrientsResult.error) return { error: "Nutrientes personalizados inválidos" };
+    const customNutrients = customNutrientsResult.value;
 
 
     // Micronutrients
@@ -121,6 +159,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 }
 
 export async function deleteCustomIngredient(id: string) {
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return { error: "Solicitação inválida" };
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 
@@ -143,6 +182,7 @@ export async function deleteCustomIngredient(id: string) {
 }
 
 export async function updateCustomIngredient(id: string, prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return { error: "Solicitação inválida" };
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 
@@ -151,7 +191,7 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
 
-    const name = formData.get("name") as string;
+    const name = readText(formData, "name", 160);
     const energy = optionalNumber(formData, "energy") || 0;
     const carbs = optionalNumber(formData, "carbs") || 0;
     const protein = optionalNumber(formData, "protein") || 0;
@@ -162,13 +202,14 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     const sodium = optionalNumber(formData, "sodium") || 0;
     const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
     const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
-    const ingredientsText = formData.get("ingredientsText") as string || null;
-    const allergensText = formData.get("allergensText") as string || null;
-    const glutenText = formData.get("glutenText") as string || null;
+    const ingredientsText = readText(formData, "ingredientsText", 20_000);
+    const allergensText = readText(formData, "allergensText", 10_000);
+    const glutenText = readText(formData, "glutenText", 10_000);
     const containsGlutenRaw = formData.get("containsGluten") as string;
     const containsGluten = containsGlutenRaw === "true" ? true : containsGlutenRaw === "false" ? false : null;
-    const customNutrientsRaw = formData.get("customNutrients") as string;
-    const customNutrients = customNutrientsRaw ? JSON.parse(customNutrientsRaw) : undefined;
+    const customNutrientsResult = parseCustomNutrients(formData.get("customNutrients"));
+    if (customNutrientsResult.error) return { error: "Nutrientes personalizados inválidos" };
+    const customNutrients = customNutrientsResult.value;
 
 
     // Micronutrients
@@ -235,17 +276,20 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 }
 
 export async function searchIngredients(query: string) {
+    if (typeof query !== "string" || query.length > 120 || /[\u0000-\u001f\u007f]/.test(query)) return [];
     const q = query.trim();
     const normalizedQuery = normalizeForSearch(q);
     const MAX_RESULTS = 30;
 
-    const session = await getServerSession(authOptions);
-    const user = session?.user?.email
-        ? await prisma.user.findUnique({
-            where: { email: session.user.email },
-            select: { id: true },
-        })
+    const context = await getCurrentSaaSContext();
+    if (!context || !contextHasModuleAccess(context, SAAS_MODULES.TABLES)) return [];
+    const canUseOpenFoodFacts = contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS);
+    const user = contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS)
+        ? { id: context.user.id }
         : null;
+    const officialIngredientScope: Prisma.IngredientWhereInput = canUseOpenFoodFacts
+        ? {}
+        : { NOT: [{ id: { startsWith: "off-" } }, { origin: "Open Food Facts" }] };
 
     if (!normalizedQuery) {
         const [customSuggestions, tacoSuggestions] = await Promise.all([
@@ -257,6 +301,7 @@ export async function searchIngredients(query: string) {
                 })
                 : Promise.resolve([]),
             prisma.ingredient.findMany({
+                where: officialIngredientScope,
                 orderBy: { name: 'asc' },
                 take: 18
             })
@@ -281,6 +326,7 @@ export async function searchIngredients(query: string) {
             : Promise.resolve([]),
         prisma.ingredient.findMany({
             where: {
+                ...officialIngredientScope,
                 name: {
                     contains: q,
                     mode: 'insensitive',
@@ -307,6 +353,7 @@ export async function searchIngredients(query: string) {
                 })
                 : Promise.resolve([]),
             prisma.ingredient.findMany({
+                where: officialIngredientScope,
                 orderBy: { name: 'asc' },
                 take: 900
             })

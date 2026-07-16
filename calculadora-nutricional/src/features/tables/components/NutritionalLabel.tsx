@@ -437,41 +437,15 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
 
     return (
         <div
+            data-i18n-skip
             className={cn(
+                "nutrition-label-scope",
                 "max-w-[64rem]",
                 isLinearPreview ? "inline-block w-[88mm] min-w-0 max-w-full" : "inline-block w-fit min-w-[22rem]"
             )}
             id={id}
             style={{ color: "#000000", fontFamily: "Arial, Helvetica, sans-serif" }}
         >
-            <style dangerouslySetInnerHTML={{ __html: `
-              #${id} td, #${id} th, #${id} p, #${id} span, #${id} div, #${id} h1, #${id} h2, #${id} h3 {
-                white-space: nowrap !important;
-                letter-spacing: normal !important;
-                word-spacing: normal !important;
-              }
-              #${id} td,
-              #${id} th {
-                vertical-align: middle !important;
-                line-height: 1.15 !important;
-                padding-top: 2px !important;
-                padding-bottom: 2px !important;
-              }
-              #${id} table th + th,
-              #${id} table td + td {
-                border-left: 1px solid #000000 !important;
-              }
-              #${id} .linear-preview-content {
-                white-space: normal !important;
-                overflow-wrap: anywhere !important;
-                word-break: break-word !important;
-              }
-              #${id} .nutrition-wrap-cell {
-                white-space: normal !important;
-                overflow-wrap: anywhere !important;
-                word-break: normal !important;
-              }
-            `}} />
             <div
                 className={cn(isLinearPreview ? "w-full border p-[4px]" : "border-2 p-4")}
                 style={{ backgroundColor: "#ffffff", borderColor: "#000000" }}

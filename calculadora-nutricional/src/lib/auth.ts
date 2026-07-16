@@ -16,6 +16,13 @@ import { decryptTotpSecret, verifyTotpCode } from "@/lib/security/totp";
 import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 
 const DUMMY_PASSWORD_HASH = "$2b$10$E/sb7/5hCDw.Gg9UVayjV.VQLXXbbHDTd8N9Ste5adR46HA8QUsKy";
+const authSecret = process.env.NEXTAUTH_SECRET;
+if (process.env.NODE_ENV === "production" && (!authSecret || authSecret.length < 32)) {
+    throw new Error("NEXTAUTH_SECRET deve ter pelo menos 32 caracteres em produção.");
+}
+const useSecureCookies = process.env.SESSION_COOKIE_SECURE
+    ? process.env.SESSION_COOKIE_SECURE === "true"
+    : process.env.NODE_ENV === "production";
 
 function normalizeEmail(value: string) {
     return value.trim().toLowerCase();
@@ -52,6 +59,18 @@ function configuredOAuthProviders() {
 }
 
 export const authOptions: NextAuthOptions = {
+    useSecureCookies,
+    cookies: {
+        sessionToken: {
+            name: useSecureCookies ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+            options: {
+                httpOnly: true,
+                sameSite: "lax",
+                path: "/",
+                secure: useSecureCookies,
+            },
+        },
+    },
     session: {
         strategy: "jwt",
         maxAge: 60 * 60 * 12,
@@ -60,7 +79,7 @@ export const authOptions: NextAuthOptions = {
     jwt: {
         maxAge: 60 * 60 * 12,
     },
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: authSecret,
     pages: {
         signIn: "/login",
         error: "/login",

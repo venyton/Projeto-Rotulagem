@@ -291,6 +291,7 @@ function LabelShell({ id, className, children }: { id?: string; className?: stri
     return (
         <div
             id={id}
+            data-i18n-skip
             className={cn("max-w-full overflow-hidden bg-white break-words [overflow-wrap:anywhere]", className)}
             style={{ letterSpacing: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}
         >

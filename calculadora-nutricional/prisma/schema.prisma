@@ -79,6 +79,7 @@ enum SaaSModuleKey {
   EXPORTS
   AI_IMPORT
   API_ACCESS
+  SETTINGS
 }
 
 model User {
@@ -104,6 +105,7 @@ model User {
   enterpriseLabelVersions   EnterpriseLabelVersion[]
   enterpriseApprovals       EnterpriseApproval[]
   enterpriseExports         EnterpriseExport[]
+  apiAccessTokens           ApiAccessToken[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
 }
@@ -120,6 +122,7 @@ model Organization {
   profiles          OrganizationProfile[]
   entitlements      OrganizationEntitlement[]
   securityAuditLogs SecurityAuditLog[]
+  apiAccessTokens   ApiAccessToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -222,6 +225,27 @@ model ParticipantModuleGrant {
   @@unique([organizationMemberId, moduleKey])
   @@index([moduleKey])
   @@index([enabled])
+}
+
+model ApiAccessToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  tokenHash      String       @unique
+  tokenPrefix    String
+  lastFour       String
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model SecurityAuditLog {

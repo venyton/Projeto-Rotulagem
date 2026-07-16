@@ -36,7 +36,7 @@ export function MagnifyingGlassLabel({
     // Assuming all images have same height (e.g. 50px-ish)?
 
     return (
-        <div id={id} className="inline-block max-w-full" style={{ backgroundColor: '#ffffff' }}>
+        <div id={id} data-i18n-skip className="inline-block max-w-full" style={{ backgroundColor: '#ffffff' }}>
             {layout === 'horizontal' ? (
                 <div className="flex flex-row items-start gap-[2px]">
                     <img src={headerImg} alt="Alto Em" className="h-[50px] object-contain block" />

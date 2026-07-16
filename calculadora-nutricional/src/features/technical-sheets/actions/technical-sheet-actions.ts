@@ -34,11 +34,16 @@ import {
 } from "@/features/technical-sheets/services/technical-sheet-ai-service";
 import {
   validateTechnicalSheetFile,
+  getMaxBatchFiles,
   TechnicalSheetFileError,
   type ValidatedTechnicalSheetFile,
 } from "@/features/technical-sheets/services/technical-sheet-file-service";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import {
+  isPersistentRateLimited,
+  recordPersistentRateLimitFailure,
+} from "@/lib/security/persistent-rate-limit";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -62,6 +67,15 @@ export async function importTechnicalSheet(
   if (!rawFiles || rawFiles.length === 0 || (rawFiles.length === 1 && rawFiles[0].size === 0)) {
     return { error: "Nenhum arquivo selecionado." };
   }
+  if (rawFiles.length > getMaxBatchFiles()) {
+    return { error: `Envie no máximo ${getMaxBatchFiles()} arquivos por lote.` };
+  }
+
+  const importScope = "technical_sheets.import";
+  if (await isPersistentRateLimited(importScope, context.user.id, 10)) {
+    return { error: "Limite temporário de importações atingido. Tente novamente mais tarde." };
+  }
+  await recordPersistentRateLimitFailure(importScope, context.user.id, 60 * 60 * 1000);
 
   const documentIds: string[] = [];
   const successfulDocumentIds: string[] = [];
@@ -202,12 +216,17 @@ async function processTechnicalSheetFile(
 /**
  * Lists all technical sheet documents for the user
  */
-export async function listTechnicalSheetDocuments(userId?: string): Promise<TechnicalSheetDocumentListItem[]> {
-  const resolvedUserId = userId ?? (await getCurrentUser())?.id;
-  if (!resolvedUserId) return [];
+export async function listTechnicalSheetDocuments(): Promise<TechnicalSheetDocumentListItem[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+  } catch {
+    return [];
+  }
 
   const docs = await prisma.technicalDocument.findMany({
-    where: { userId: resolvedUserId },
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -244,14 +263,19 @@ export async function listTechnicalSheetDocuments(userId?: string): Promise<Tech
 /**
  * Gets a specific extraction with full details for review using documentId
  */
-export async function getTechnicalSheetExtraction(documentId: string, userId?: string): Promise<TechnicalSheetReviewData | null> {
-  const resolvedUserId = userId ?? (await getCurrentUser())?.id;
-  if (!resolvedUserId) return null;
+export async function getTechnicalSheetExtraction(documentId: string): Promise<TechnicalSheetReviewData | null> {
+  const user = await getCurrentUser();
+  if (!user || !isSafeId(documentId)) return null;
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+  } catch {
+    return null;
+  }
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { 
       documentId,
-      userId: resolvedUserId
+      userId: user.id
     },
     include: {
       document: {
@@ -392,7 +416,12 @@ export async function getTechnicalSheetReviewData(
   extractionId: string
 ): Promise<TechnicalSheetReviewData | null> {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user || !isSafeId(extractionId)) return null;
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+  } catch {
+    return null;
+  }
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
@@ -553,7 +582,7 @@ export async function approveTechnicalSheetExtraction(
   formData: FormData
 ): Promise<TechnicalSheetActionState> {
   const user = await getCurrentUser();
-  if (!user) return { error: "Não autorizado" };
+  if (!user || !isSafeId(extractionId)) return { error: "Solicitação inválida." };
 
   try {
     await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
@@ -677,7 +706,12 @@ export async function approveTechnicalSheetExtraction(
 
 export async function rejectTechnicalSheetExtraction(extractionId: string) {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user || !isSafeId(extractionId)) return;
+  try {
+    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+  } catch {
+    return;
+  }
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
@@ -704,6 +738,10 @@ async function getCurrentUser() {
     where: { email: session.user.email },
     select: { id: true },
   });
+}
+
+function isSafeId(value: string) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
 }
 
 

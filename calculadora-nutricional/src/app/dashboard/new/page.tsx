@@ -14,7 +14,10 @@ export default async function NewTablePage() {
     return (
         <div className="app-page flex flex-col gap-6">
             <PageHeader eyebrow="Tabela" icon={FilePlus2} title="Nova tabela nutricional" description="Adicione ingredientes, revise os cálculos e exporte o rótulo final." />
-            <TableGenerator />
+            <TableGenerator
+                canUseOpenFoodFacts={contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS)}
+                canExport={contextHasModuleAccess(context, SAAS_MODULES.EXPORTS)}
+            />
         </div>
     );
 }

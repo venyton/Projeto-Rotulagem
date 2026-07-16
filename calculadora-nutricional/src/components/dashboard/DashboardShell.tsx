@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
     Globe2,
+    FileSearch,
     Home,
     LayoutGrid,
     LogOut,
@@ -68,8 +69,9 @@ const PRODUCT_NAV_ITEMS: Array<{
     { href: "/dashboard", label: "Início", copyKey: "home", icon: Home },
     { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid, moduleKey: SAAS_MODULES.TABLES },
     { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch, moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
+    { href: "/dashboard/ingredients/technical-sheets", label: "Fichas técnicas", icon: FileSearch, moduleKey: SAAS_MODULES.TECHNICAL_SHEETS },
     { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2, moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
-    { href: "/dashboard/settings", label: "Configurações", icon: Settings2, settingsOnly: true },
+    { href: "/dashboard/settings", label: "Configurações", icon: Settings2, moduleKey: SAAS_MODULES.SETTINGS, settingsOnly: true },
 ];
 
 function DashboardSidebarHeader() {
@@ -142,8 +144,9 @@ export function DashboardShell({
     const pathname = usePathname();
     const { copy } = useSiteLanguage();
     const accessibleModuleSet = new Set(accessibleModules);
+    const hasTables = accessibleModuleSet.has(SAAS_MODULES.TABLES);
     const navItems = PRODUCT_NAV_ITEMS.filter((item) => {
-        if (item.settingsOnly) return canManageSettings;
+        if (item.settingsOnly && !canManageSettings) return false;
         if (item.moduleKey) return accessibleModuleSet.has(item.moduleKey);
         return true;
     });
@@ -179,7 +182,7 @@ export function DashboardShell({
 
                                     return (
                                         <SidebarMenuItem key={item.href}>
-                                            <SidebarMenuButton asChild isActive={isNavActive(item.href)} tooltip={label} size="lg" className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
+                                            <SidebarMenuButton asChild isActive={currentItem?.href === item.href} tooltip={label} size="lg" className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
                                                 <Link href={item.href}>
                                                     <Icon aria-hidden="true" />
                                                     <span className="group-data-[collapsible=icon]:hidden">{label}</span>
@@ -200,7 +203,7 @@ export function DashboardShell({
                                         const Icon = item.icon;
                                         return (
                                             <SidebarMenuItem key={item.href}>
-                                    <SidebarMenuButton asChild isActive={isNavActive(item.href)} tooltip={item.label} className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
+                                    <SidebarMenuButton asChild isActive={currentItem?.href === item.href} tooltip={item.label} className="group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center">
                                         <Link href={item.href}>
                                             <Icon aria-hidden="true" />
                                             <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
@@ -253,12 +256,14 @@ export function DashboardShell({
                     </Breadcrumb>
 
                     <div className="ml-auto flex items-center gap-2">
-                        <Button asChild size="sm" className="hidden sm:inline-flex">
-                            <Link href="/dashboard/new">
-                                <Plus data-icon="inline-start" />
-                                Nova tabela
-                            </Link>
-                        </Button>
+                        {hasTables ? (
+                            <Button asChild size="sm" className="hidden sm:inline-flex">
+                                <Link href="/dashboard/new">
+                                    <Plus data-icon="inline-start" />
+                                    Nova tabela
+                                </Link>
+                            </Button>
+                        ) : null}
                         <LanguageSwitcher />
                         <ModeToggle />
                         <DropdownMenu>
@@ -281,12 +286,14 @@ export function DashboardShell({
                                             {copy.profileSecurity}
                                         </Link>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link href="/dashboard/tables">
-                                            <LayoutGrid aria-hidden="true" />
-                                            {copy.myTables}
-                                        </Link>
-                                    </DropdownMenuItem>
+                                    {hasTables ? (
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/dashboard/tables">
+                                                <LayoutGrid aria-hidden="true" />
+                                                {copy.myTables}
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    ) : null}
                                 </DropdownMenuGroup>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuGroup>

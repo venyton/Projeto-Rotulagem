@@ -12,11 +12,14 @@ import {
   ExternalLink,
   Factory,
   FileDown,
+  Globe2,
   Leaf,
   Users2,
 } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
+import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import {
   Accordion,
   AccordionContent,
@@ -107,6 +110,13 @@ const BENEFITS = [
   },
 ];
 
+const SUPPORTED_LANGUAGES = [
+  { code: "PT", label: "Português", flagSrc: "/images/flags/br.svg", flagAlt: "Bandeira do Brasil" },
+  { code: "EN", label: "English", flagSrc: "/images/flags/us.svg", flagAlt: "United States flag" },
+  { code: "ES", label: "Español", flagSrc: "/images/flags/mx.svg", flagAlt: "Bandera de México" },
+  { code: "FR", label: "Français", flagSrc: "/images/flags/ca.svg", flagAlt: "Drapeau du Canada" },
+];
+
 const AUDIENCE = [
   {
     icon: Factory,
@@ -166,11 +176,13 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 export default async function Home() {
   const session = await getServerSession(authOptions);
   const isLoggedIn = Boolean(session);
+  const context = isLoggedIn ? await getCurrentSaaSContext() : null;
+  const canUseTables = Boolean(context && contextHasModuleAccess(context, SAAS_MODULES.TABLES));
 
   const primaryHref = isLoggedIn ? "/dashboard" : "/register";
   const primaryLabel = isLoggedIn ? "Abrir meu painel" : "Criar minha conta";
-  const secondaryHref = isLoggedIn ? "/dashboard/new" : "/login";
-  const secondaryLabel = isLoggedIn ? "Nova tabela" : "Já tenho conta";
+  const secondaryHref = isLoggedIn && canUseTables ? "/dashboard/new" : isLoggedIn ? "/dashboard" : "/login";
+  const secondaryLabel = isLoggedIn && canUseTables ? "Nova tabela" : isLoggedIn ? "Voltar ao painel" : "Já tenho conta";
 
   return (
     <div className={`${bodyFont.className} bg-background text-foreground`}>
@@ -342,6 +354,47 @@ export default async function Home() {
         </section>
 
         <Separator />
+
+        <section className="overflow-hidden border-y border-slate-800 bg-slate-950 text-white">
+          <div className="mx-auto grid w-full max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:px-8 lg:py-28">
+            <div>
+              <Badge variant="outline" className="border-white/20 bg-white/5 text-white uppercase tracking-[0.16em]">
+                <Globe2 aria-hidden="true" />
+                Novos mercados
+              </Badge>
+              <h2 className={`${titleFont.className} mt-6 max-w-4xl text-balance text-4xl leading-tight sm:text-5xl lg:text-7xl`}>
+                O idioma deixa de ser uma barreira para crescer.
+              </h2>
+              <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+                Use a plataforma em português, inglês, espanhol ou francês para aproximar equipes, parceiros e clientes, explorar mercados antes distantes e preparar sua operação para novas oportunidades internacionais.
+              </p>
+            </div>
+
+            <div className="border-y border-white/15" data-i18n-skip>
+              {SUPPORTED_LANGUAGES.map((language) => (
+                <div
+                  key={language.code}
+                  className="group flex items-center gap-4 border-b border-white/15 py-5 last:border-b-0 sm:py-6"
+                >
+                  <Image
+                    src={language.flagSrc}
+                    alt={language.flagAlt}
+                    width={36}
+                    height={25}
+                    unoptimized
+                    className="h-auto w-9 rounded-[3px] object-cover shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
+                  />
+                  <span className="w-10 text-xs font-semibold tracking-[0.18em] text-slate-500 transition-colors group-hover:text-emerald-300">
+                    {language.code}
+                  </span>
+                  <span className={`${titleFont.className} text-3xl text-white sm:text-4xl`}>
+                    {language.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <section
           id="sobre-nos"

@@ -64,6 +64,8 @@ import type { SiteLanguage } from "@/features/i18n/domain/site-i18n";
 interface EnterpriseWorkspaceProps {
     tables: EnterpriseTable[];
     projects: EnterpriseLabelProjectSummary[];
+    canExport?: boolean;
+    canCreateTables?: boolean;
 }
 
 const STATUS_STYLES = {
@@ -388,7 +390,12 @@ const ENTERPRISE_COPY = {
     },
 } satisfies Record<SiteLanguage, Record<string, string>>;
 
-export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspaceProps) {
+export function EnterpriseWorkspace({
+    tables,
+    projects,
+    canExport = false,
+    canCreateTables = false,
+}: EnterpriseWorkspaceProps) {
     const { language } = useSiteLanguage();
     const copy = ENTERPRISE_COPY[language];
     const [isSaving, startSaving] = React.useTransition();
@@ -604,6 +611,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     };
 
     const downloadPassport = () => {
+        if (!canExport) return;
         if (!analysis || !workingTable) return;
         const fileName = `passaporte-digital-${workingTable.title || workingTable.id}.json`;
         const blob = new Blob([JSON.stringify(analysis.passport, null, 2)], {
@@ -621,6 +629,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     };
 
     const downloadLabelImage = async () => {
+        if (!canExport) return;
         const element = document.getElementById("international-label-preview");
         if (!element || !workingTable) return;
 
@@ -641,6 +650,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     };
 
     const downloadLabelVector = async () => {
+        if (!canExport) return;
         const element = document.getElementById("international-label-preview");
         if (!element || !workingTable) return;
 
@@ -656,6 +666,7 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
     };
 
     const copyGs1Link = async () => {
+        if (!canExport) return;
         if (!analysis) return;
         await navigator.clipboard.writeText(analysis.gs1Link);
         recordExport("GS1_DIGITAL_LINK", undefined, { url: analysis.gs1Link });
@@ -670,9 +681,11 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                     <p className="mt-2 text-sm text-muted-foreground">
                         {copy.subheading}
                     </p>
-                    <Button className="mt-5" asChild>
-                        <a href="/dashboard/new">{copy.newProduct}</a>
-                    </Button>
+                    {canCreateTables ? (
+                        <Button className="mt-5" asChild>
+                            <a href="/dashboard/new">{copy.newProduct}</a>
+                        </Button>
+                    ) : null}
                 </section>
             </div>
         );
@@ -699,24 +712,30 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:flex-nowrap">
-                        <Button asChild variant="secondary" className="gap-2">
-                            <a href="/dashboard/new">
-                                {copy.newProduct}
-                                <ArrowUpRight className="h-4 w-4" />
-                            </a>
-                        </Button>
-                        <Button onClick={downloadLabelImage} variant="secondary" className="gap-2">
-                            <Download className="h-4 w-4" />
-                            PNG
-                        </Button>
-                        <Button onClick={downloadLabelVector} variant="secondary" className="gap-2">
-                            <Download className="h-4 w-4" />
-                            SVG editável
-                        </Button>
-                        <Button onClick={downloadPassport} variant="default" className="gap-2">
-                            <FileJson className="h-4 w-4" />
-                            JSON
-                        </Button>
+                        {canCreateTables ? (
+                            <Button asChild variant="secondary" className="gap-2">
+                                <a href="/dashboard/new">
+                                    {copy.newProduct}
+                                    <ArrowUpRight className="h-4 w-4" />
+                                </a>
+                            </Button>
+                        ) : null}
+                        {canExport ? (
+                            <>
+                                <Button onClick={downloadLabelImage} variant="secondary" className="gap-2">
+                                    <Download className="h-4 w-4" />
+                                    PNG
+                                </Button>
+                                <Button onClick={downloadLabelVector} variant="secondary" className="gap-2">
+                                    <Download className="h-4 w-4" />
+                                    SVG editável
+                                </Button>
+                                <Button onClick={downloadPassport} variant="default" className="gap-2">
+                                    <FileJson className="h-4 w-4" />
+                                    JSON
+                                </Button>
+                            </>
+                        ) : null}
                         <Button onClick={saveCurrentVersion} variant="default" className="gap-2" disabled={isSaving}>
                             <Save className="h-4 w-4" />
                             {isSaving ? copy.saving : copy.saveVersion}
@@ -1145,10 +1164,12 @@ export function EnterpriseWorkspace({ tables, projects }: EnterpriseWorkspacePro
                             <Field label={copy.lot}>
                                 <Input className={ENTERPRISE_INPUT_CLASS} value={lot} onChange={(event) => setLot(event.target.value)} placeholder="L2401" />
                             </Field>
-                            <Button variant="outline" className="gap-2" onClick={copyGs1Link}>
-                                <Link2 className="h-4 w-4" />
-                                {copy.copy}
-                            </Button>
+                            {canExport ? (
+                                <Button variant="outline" className="gap-2" onClick={copyGs1Link}>
+                                    <Link2 className="h-4 w-4" />
+                                    {copy.copy}
+                                </Button>
+                            ) : null}
                             <div className="mt-2 md:col-span-3">
                                 <div className="break-all rounded-lg border border-border/50 bg-background p-4 font-mono text-xs text-foreground shadow-inner">
                                     {analysis.gs1Link}

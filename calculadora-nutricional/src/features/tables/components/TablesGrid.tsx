@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { DeleteTableButton } from "@/features/tables/components/DeleteTableButton";
+import { useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
 
 type TableType = {
     id: string;
@@ -21,13 +22,14 @@ type TableType = {
 
 export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], hasEnterprise: boolean }) {
     const [searchQuery, setSearchQuery] = useState("");
+    const { language } = useSiteLanguage();
 
     const filteredTables = tables.filter((table) =>
         table.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const formatDateBR = (value: string) =>
-        new Date(value).toLocaleDateString("pt-BR", {
+    const formatDate = (value: string) =>
+        new Date(value).toLocaleDateString(language, {
             timeZone: "America/Sao_Paulo",
         });
 
@@ -78,7 +80,7 @@ export function TablesGrid({ tables, hasEnterprise }: { tables: TableType[], has
                             <CardContent className="flex flex-col gap-1.5 p-4 text-xs text-muted-foreground *:break-words *:[overflow-wrap:anywhere]">
                                 <span>Porção: {table.portion}{table.uom}</span>
                                 <span>Grupo: {table.popGroup}</span>
-                                <span>Criado em {formatDateBR(table.createdAt)}</span>
+                                <span>Criado em {formatDate(table.createdAt)}</span>
                             </CardContent>
                             <CardFooter className="grid grid-cols-2 gap-2 border-t bg-muted/25 p-3">
                                 <Button variant="outline" size="sm" className="w-full" asChild>

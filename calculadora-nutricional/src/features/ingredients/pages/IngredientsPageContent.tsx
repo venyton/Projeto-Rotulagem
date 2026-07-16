@@ -3,7 +3,6 @@ import { FileSearch, PackageSearch } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { AddIngredientForm } from '@/features/ingredients/components/AddIngredientForm';
-import { DatabaseFixButton } from '@/features/ingredients/components/DatabaseFixButton';
 import { IngredientsTable, type IngredientTableRow } from '@/features/ingredients/components/IngredientsTable';
 import { getUserIngredients } from '@/features/ingredients/actions/import-ingredient-actions';
 import { TechnicalSheetImportDialog } from '@/features/technical-sheets/components/TechnicalSheetImportDialog';
@@ -14,12 +13,18 @@ type IngredientsPageContentProps = {
   title: string;
   description: string;
   showAddButton?: boolean;
+  canUseTechnicalSheets?: boolean;
+  canUseAiImport?: boolean;
+  canExport?: boolean;
 };
 
 export async function IngredientsPageContent({
   title,
   description,
   showAddButton = false,
+  canUseTechnicalSheets = false,
+  canUseAiImport = false,
+  canExport = false,
 }: IngredientsPageContentProps) {
   let ingredients: IngredientTableRow[] = [];
   let error: string | null = null;
@@ -43,7 +48,6 @@ export async function IngredientsPageContent({
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar ingredientes</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
-          <DatabaseFixButton />
         </Alert>
       </div>
     );
@@ -58,18 +62,20 @@ export async function IngredientsPageContent({
         description={description}
         actions={showAddButton ? (
           <>
-              <TechnicalSheetImportDialog />
-              <Button asChild variant="outline">
-                <Link href="/dashboard/ingredients/technical-sheets">
-                  <FileSearch data-icon="inline-start" />
-                  Fichas técnicas
-                </Link>
-              </Button>
+              {canUseTechnicalSheets && canUseAiImport ? <TechnicalSheetImportDialog /> : null}
+              {canUseTechnicalSheets ? (
+                <Button asChild variant="outline">
+                  <Link href="/dashboard/ingredients/technical-sheets">
+                    <FileSearch data-icon="inline-start" />
+                    Fichas técnicas
+                  </Link>
+                </Button>
+              ) : null}
               <AddIngredientForm />
           </>
         ) : undefined}
       />
-      <IngredientsTable ingredients={ingredients} />
+      <IngredientsTable ingredients={ingredients} canExport={canExport} />
     </div>
   );
 }

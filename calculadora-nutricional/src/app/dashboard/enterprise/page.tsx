@@ -115,7 +115,14 @@ export default async function EnterprisePage() {
         })),
     }));
 
-    return <EnterpriseWorkspace tables={payload} projects={projects.map(mapEnterpriseProject)} />;
+    return (
+        <EnterpriseWorkspace
+            tables={payload}
+            projects={projects.map(mapEnterpriseProject)}
+            canExport={contextHasModuleAccess(context, SAAS_MODULES.EXPORTS)}
+            canCreateTables={contextHasModuleAccess(context, SAAS_MODULES.TABLES)}
+        />
+    );
 }
 
 function mapEnterpriseProject(project: {

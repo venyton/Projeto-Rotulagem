@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -29,6 +30,7 @@ const PRODUCT_FIELDS = [
 const SEARCH_FIELDS = PRODUCT_FIELDS.split(",");
 
 const USER_AGENT = process.env.OPEN_FOOD_FACTS_USER_AGENT || "SoIZI/0.1.1 (contato@soizi.app)";
+export const dynamic = "force-dynamic";
 
 function isBarcode(value: string) {
     return /^\d{8,14}$/.test(value);
@@ -101,10 +103,14 @@ async function cacheProductByCode(code: string) {
 
     if (!product) return null;
 
+    const customNutrients = product.ingredient.customNutrients === null
+        ? Prisma.DbNull
+        : product.ingredient.customNutrients as Prisma.InputJsonValue;
+
     const ingredient = await prisma.ingredient.upsert({
         where: { id: product.ingredient.id },
-        create: product.ingredient as any,
-        update: ingredientToCacheData(product.ingredient) as any,
+        create: { ...product.ingredient, customNutrients },
+        update: { ...ingredientToCacheData(product.ingredient), customNutrients },
     });
 
     return {
@@ -130,7 +136,7 @@ export async function GET(request: NextRequest) {
 
     const query = request.nextUrl.searchParams.get("query")?.trim() || "";
 
-    if (query.length < 3) {
+    if (query.length < 3 || query.length > 120 || /[\u0000-\u001f\u007f]/.test(query)) {
         return NextResponse.json({ products: [], error: "Digite ao menos 3 caracteres." }, { status: 400 });
     }
 

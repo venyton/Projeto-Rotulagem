@@ -8,9 +8,10 @@ import { HelpTip } from "@/components/ui/help-tip";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { OpenFoodFactsProduct } from "@/features/open-food-facts/domain/open-food-facts";
+import { toast } from "sonner";
 
 type OpenFoodFactsImporterProps = {
-    onSelect: (ingredient: Ingredient) => void;
+    onSelect?: (ingredient: Ingredient) => void;
 };
 
 type SearchResponse = {
@@ -90,7 +91,11 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
             });
             const data = (await response.json()) as CacheResponse;
             if (!response.ok) throw new Error(data.error || "Produto indisponivel.");
-            onSelect((data.product || product).ingredient);
+            const importedProduct = data.product || product;
+            onSelect?.(importedProduct.ingredient);
+            if (!onSelect) {
+                toast.success("Produto disponibilizado na base de ingredientes.");
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Produto indisponivel.");
         } finally {
@@ -191,7 +196,11 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                                         className="h-8"
                                     >
                                         <PackagePlus className="h-4 w-4" />
-                                        {selectingCode === product.code ? "Importando..." : "Usar como ingrediente"}
+                                        {selectingCode === product.code
+                                            ? "Importando..."
+                                            : onSelect
+                                                ? "Usar como ingrediente"
+                                                : "Disponibilizar produto"}
                                     </Button>
                                     <Button type="button" variant="ghost" size="sm" asChild className="h-8">
                                         <a href={product.sourceUrl} target="_blank" rel="noreferrer">
