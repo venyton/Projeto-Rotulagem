@@ -81,11 +81,53 @@ const APPROVAL_OWNER: Record<ApprovalStatus, string> = {
     approved: "Gestor",
 };
 
+const LEGAL_DATA_KEYS = new Set<keyof LegalLabelData>([
+    "legalName", "category", "language", "intendedClaims", "adjustmentNotes", "ingredientsStatement",
+    "allergenStatement", "netQuantity", "drainedWeight", "lotCode", "dateMarking", "responsibleName",
+    "responsibleAddress", "importerName", "importerAddress", "countryOfOrigin", "storageInstructions",
+    "preparationInstructions", "packageDisplayArea", "referenceAmount", "mandatoryMicronutrients",
+    "claimsEvidence", "childMarketingElements", "caffeineAdded", "sweetenersAdded", "addedCriticalNutrients",
+    "memberState", "quidStatement", "alcoholVolume", "organicOrSpecialSeals", "frontSymbolSize",
+]);
+
+function isSafeId(value: unknown): value is string {
+    return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+}
+
+function hasSafeJsonSize(value: unknown, maxBytes: number) {
+    try {
+        return Buffer.byteLength(JSON.stringify(value), "utf8") <= maxBytes;
+    } catch {
+        return false;
+    }
+}
+
+function isSafeEnterpriseTable(table: unknown): table is EnterpriseTable {
+    if (!table || typeof table !== "object" || Array.isArray(table)) return false;
+    const value = table as EnterpriseTable;
+    if (!isSafeId(value.id) || typeof value.title !== "string" || value.title.trim().length < 1 || value.title.length > 160) return false;
+    if (!Number.isFinite(value.portion) || value.portion <= 0 || value.portion > 10_000_000) return false;
+    if (typeof value.uom !== "string" || value.uom.length > 20) return false;
+    if (typeof value.householdMeasure !== "string" || value.householdMeasure.length > 160) return false;
+    if (!Array.isArray(value.items) || value.items.length > 200) return false;
+    return value.items.every((item) =>
+        item && typeof item.name === "string" && item.name.length <= 160 &&
+        [item.quantity, item.energy, item.carbs, item.protein, item.fatTotal, item.fatSat, item.fatTrans, item.fiber, item.sodium]
+            .every((number) => typeof number === "number" && Number.isFinite(number) && number >= 0 && number <= 1_000_000_000)
+    );
+}
+
 export async function saveEnterpriseLabelProject(
     input: SaveEnterpriseLabelProjectInput
 ): Promise<SaveEnterpriseLabelProjectResult> {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+    if (!input || typeof input !== "object" || !isSafeId(input.baseTableId) || !isSafeEnterpriseTable(input.table)) {
+        return { error: "Dados do projeto inválidos." };
+    }
+    if (!hasSafeJsonSize(input, 1_000_000) || (input.notes?.length ?? 0) > 5_000) {
+        return { error: "Dados do projeto excedem o limite permitido." };
+    }
 
     try {
         await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
@@ -208,6 +250,13 @@ export async function saveEnterpriseLabelProject(
 export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportInput) {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+    if (!input || !isSafeId(input.projectId) || !EXPORT_TO_DB[input.exportType]) {
+        return { error: "Dados da exportação inválidos." };
+    }
+    if (input.versionId && !isSafeId(input.versionId)) return { error: "Versão inválida." };
+    if ((input.fileName?.length ?? 0) > 180 || !hasSafeJsonSize(input.payload, 250_000)) {
+        return { error: "Metadados da exportação excedem o limite permitido." };
+    }
 
     try {
         await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
@@ -223,6 +272,14 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
     });
 
     if (!project) return { error: "Projeto Enterprise não encontrado." };
+
+    if (input.versionId) {
+        const version = await prisma.enterpriseLabelVersion.findFirst({
+            where: { id: input.versionId, projectId: project.id, userId: user.id },
+            select: { id: true },
+        });
+        if (!version) return { error: "Versão Enterprise inválida." };
+    }
 
     await prisma.enterpriseExport.create({
         data: {
@@ -289,7 +346,9 @@ function mapEnterpriseProject(project: {
 
 function sanitizeLegalData(data: LegalLabelData): LegalLabelData {
     return Object.fromEntries(
-        Object.entries(data).filter(([, value]) => typeof value === "string" && value.trim().length > 0)
+        Object.entries(data)
+            .filter(([key, value]) => LEGAL_DATA_KEYS.has(key as keyof LegalLabelData) && typeof value === "string" && value.trim().length > 0)
+            .map(([key, value]) => [key, (value as string).trim().slice(0, 10_000)])
     ) as LegalLabelData;
 }
 

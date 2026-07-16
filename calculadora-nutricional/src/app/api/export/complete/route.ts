@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { getCanonicalAppOrigin } from "@/lib/security/app-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 
@@ -95,6 +96,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 25 * 1024 * 1024) {
+      return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
+    }
+
     try {
       await requireModuleAccess(SAAS_MODULES.EXPORTS);
     } catch (error) {
@@ -125,14 +131,22 @@ export async function POST(req: NextRequest) {
       showDailyValue: body.showDailyValue !== false,
     };
 
-    const excelResponse = await fetch(`${req.nextUrl.origin}/api/export/excel`, {
+    const appOrigin = getCanonicalAppOrigin();
+    if (!appOrigin) {
+      return NextResponse.json({ error: "Origem da aplicação não configurada." }, { status: 503 });
+    }
+
+    const excelResponse = await fetch(new URL("/api/export/excel", appOrigin), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Cookie: req.headers.get("cookie") ?? "",
+        Origin: appOrigin,
       },
       body: JSON.stringify(excelPayload),
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!excelResponse.ok) {
@@ -156,7 +170,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    const selectedModels = Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes : [];
+    const selectedModels = Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes.slice(0, 12) : [];
     const imagesFromMap = body.imageDataUrls && typeof body.imageDataUrls === "object" ? body.imageDataUrls : null;
 
     const safeTitle = sanitizeFileName(body.title || "tabela-nutricional") || "tabela-nutricional";

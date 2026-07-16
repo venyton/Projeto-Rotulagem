@@ -526,6 +526,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 2 * 1024 * 1024) {
+      return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
+    }
+
     try {
       await requireModuleAccess(SAAS_MODULES.EXPORTS);
     } catch (error) {
