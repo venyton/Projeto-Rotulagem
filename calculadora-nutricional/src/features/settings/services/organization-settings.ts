@@ -1,8 +1,8 @@
 import { OrganizationRole, Prisma, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
-import type { SaaSContext } from "@/features/saas/services/entitlements";
+import { ALL_SAAS_MODULES, SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
+import { contextHasModuleAccess, type SaaSContext } from "@/features/saas/services/entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 
 const DEFAULT_PROFILES = [
@@ -39,14 +39,20 @@ const DEFAULT_PROFILES = [
 const DEFAULT_PROFILE_KEYS = DEFAULT_PROFILES.map((profile) => profile.systemKey);
 
 export function canManageOrganizationSettings(context: NonNullable<SaaSContext>) {
-    return (
-        context.member.role === OrganizationRole.OWNER ||
-        context.member.role === OrganizationRole.ADMIN ||
-        context.member.profile?.systemKey === "ADMIN"
-    );
+    return contextHasModuleAccess(context, SAAS_MODULES.SETTINGS);
 }
 
 export async function ensureOrganizationProfiles(organizationId: string) {
+    await prisma.organizationEntitlement.createMany({
+        data: ALL_SAAS_MODULES.map((moduleKey) => ({
+            organizationId,
+            moduleKey: moduleKey as PrismaSaaSModuleKey,
+            enabled: true,
+            source: "SYSTEM_DEFAULT",
+        })),
+        skipDuplicates: true,
+    });
+
     const [profiles, memberWithoutProfile] = await Promise.all([
         prisma.organizationProfile.findMany({
             where: {
@@ -57,7 +63,7 @@ export async function ensureOrganizationProfiles(organizationId: string) {
                 systemKey: true,
                 description: true,
                 permissions: {
-                    select: { moduleKey: true },
+                    select: { moduleKey: true, enabled: true },
                 },
             },
         }),
@@ -75,8 +81,13 @@ export async function ensureOrganizationProfiles(organizationId: string) {
         DEFAULT_PROFILES.every((profileDefinition) => {
             const profile = profilesByKey.get(profileDefinition.systemKey);
             if (!profile || profile.description !== profileDefinition.description) return false;
-            const modules = new Set(profile.permissions.map((permission) => permission.moduleKey));
-            return PROFILE_PERMISSION_MODULES.every((moduleKey) => modules.has(moduleKey as PrismaSaaSModuleKey));
+            const permissions = new Map(
+                profile.permissions.map((permission) => [permission.moduleKey, permission.enabled]),
+            );
+            return PROFILE_PERMISSION_MODULES.every((moduleKey) => {
+                const enabled = permissions.get(moduleKey as PrismaSaaSModuleKey);
+                return enabled !== undefined && (profile.systemKey !== "ADMIN" || enabled);
+            });
         });
 
     if (defaultsReady) return;
@@ -116,6 +127,18 @@ export async function ensureOrganizationProfiles(organizationId: string) {
                 })),
                 skipDuplicates: true,
             });
+
+            if (profileDefinition.systemKey === "ADMIN") {
+                await tx.organizationProfilePermission.updateMany({
+                    where: {
+                        organizationProfileId: profile.id,
+                        moduleKey: {
+                            in: PROFILE_PERMISSION_MODULES.map((moduleKey) => moduleKey as PrismaSaaSModuleKey),
+                        },
+                    },
+                    data: { enabled: true },
+                });
+            }
         }
 
         if (adminProfileId) {

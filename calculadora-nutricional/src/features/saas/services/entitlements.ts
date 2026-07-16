@@ -4,10 +4,11 @@ import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
+import { ALL_SAAS_MODULES, type SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
 import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 import { getCurrentInternalMaster } from "@/features/master/services/master-access";
 import { isProfilePermissionModule } from "@/features/settings/domain/profile-permissions";
+import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
 
 export class ModuleAccessError extends Error {
   status = 403;
@@ -15,10 +16,6 @@ export class ModuleAccessError extends Error {
   constructor(public moduleKey: AppModuleKey) {
     super("Módulo não liberado para este participante.");
   }
-}
-
-function isActiveWindow(expiresAt?: Date | null) {
-  return !expiresAt || expiresAt.getTime() > Date.now();
 }
 
 function canRoleUseOrganizationModule(role: OrganizationRole) {
@@ -93,6 +90,21 @@ async function loadCurrentSaaSContext() {
     return loadCurrentSaaSContext();
   }
 
+  const entitlementKeys = new Set(member.organization.entitlements.map((item) => item.moduleKey));
+  const missingEntitlements = ALL_SAAS_MODULES.filter((moduleKey) => !entitlementKeys.has(moduleKey));
+  if (missingEntitlements.length > 0) {
+    await prisma.organizationEntitlement.createMany({
+      data: missingEntitlements.map((moduleKey) => ({
+        organizationId: member.organization.id,
+        moduleKey: moduleKey as SaaSModuleKey,
+        enabled: true,
+        source: "SYSTEM_DEFAULT",
+      })),
+      skipDuplicates: true,
+    });
+    return loadCurrentSaaSContext();
+  }
+
   return {
     user: member.user,
     member,
@@ -105,25 +117,15 @@ export const getCurrentSaaSContext = cache(loadCurrentSaaSContext);
 export type SaaSContext = Awaited<ReturnType<typeof loadCurrentSaaSContext>>;
 
 export function contextHasModuleAccess(context: NonNullable<SaaSContext>, moduleKey: AppModuleKey) {
-  const entitlement = context.organization.entitlements.find(
-    (item) => item.moduleKey === moduleKey && item.enabled && isActiveWindow(item.expiresAt),
-  );
-
-  if (!entitlement) return false;
-
-  const profilePermission = context.member.profile?.permissions.find(
-    (permission) => permission.moduleKey === moduleKey,
-  );
-
-  if (profilePermission) return profilePermission.enabled;
-  if (context.member.profileId && isProfilePermissionModule(moduleKey)) return false;
-  if (canRoleUseOrganizationModule(context.member.role)) return true;
-
-  const memberGrant = context.member.moduleGrants.find(
-    (grant) => grant.moduleKey === moduleKey && isActiveWindow(grant.expiresAt),
-  );
-
-  return Boolean(memberGrant?.enabled);
+  return hasEffectiveModuleAccess({
+    moduleKey,
+    organizationEntitlements: context.organization.entitlements,
+    profilePermissions: context.member.profile?.permissions,
+    hasProfile: Boolean(context.member.profileId),
+    role: context.member.role,
+    memberGrants: context.member.moduleGrants,
+    profileControlledModules: isProfilePermissionModule(moduleKey) ? [moduleKey] : [],
+  });
 }
 
 export async function requireModuleAccess(moduleKey: AppModuleKey) {
