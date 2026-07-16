@@ -87,7 +87,7 @@ export function LanguageSwitcher() {
                     <span className="hidden sm:inline">{activeLanguage.shortLabel}</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56" data-i18n-skip>
                 <DropdownMenuLabel>{copy.language}</DropdownMenuLabel>
                 <DropdownMenuGroup>
                   {SITE_LANGUAGES.map((item) => (
