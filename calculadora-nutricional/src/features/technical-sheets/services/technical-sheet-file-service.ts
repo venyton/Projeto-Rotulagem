@@ -1,3 +1,5 @@
+import { getRuntimeRequestBodyLimitMb } from "@/lib/security/request-body-limit";
+
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
@@ -7,6 +9,7 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const DEFAULT_MAX_FILE_SIZE_MB = 20;
 const DEFAULT_MAX_BATCH_FILES = 5;
+const DEFAULT_MAX_BATCH_SIZE_MB = 80;
 
 export type ValidatedTechnicalSheetFile = {
   buffer: Buffer;
@@ -54,12 +57,19 @@ export async function validateTechnicalSheetFile(file: File | null): Promise<Val
 
 export function getMaxFileSizeMb() {
   const raw = Number(process.env.TECHNICAL_SHEET_MAX_FILE_SIZE_MB);
-  return Number.isFinite(raw) && raw >= 1 && raw <= 25 ? raw : DEFAULT_MAX_FILE_SIZE_MB;
+  const configured = Number.isFinite(raw) && raw >= 1 && raw <= 25 ? raw : DEFAULT_MAX_FILE_SIZE_MB;
+  return Math.min(configured, getRuntimeRequestBodyLimitMb(DEFAULT_MAX_FILE_SIZE_MB));
 }
 
 export function getMaxBatchFiles() {
   const raw = Number(process.env.TECHNICAL_SHEET_MAX_BATCH_FILES);
   return Number.isFinite(raw) && raw >= 1 && raw <= 5 ? Math.floor(raw) : DEFAULT_MAX_BATCH_FILES;
+}
+
+export function getMaxBatchSizeMb() {
+  const raw = Number(process.env.TECHNICAL_SHEET_MAX_BATCH_SIZE_MB);
+  const configured = Number.isFinite(raw) && raw >= 1 && raw <= 100 ? raw : DEFAULT_MAX_BATCH_SIZE_MB;
+  return Math.min(configured, getRuntimeRequestBodyLimitMb(DEFAULT_MAX_BATCH_SIZE_MB));
 }
 
 function matchesDeclaredFileType(buffer: Buffer, mimeType: string) {

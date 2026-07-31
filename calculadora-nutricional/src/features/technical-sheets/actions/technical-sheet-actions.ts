@@ -35,15 +35,19 @@ import {
 import {
   validateTechnicalSheetFile,
   getMaxBatchFiles,
+  getMaxBatchSizeMb,
   TechnicalSheetFileError,
   type ValidatedTechnicalSheetFile,
 } from "@/features/technical-sheets/services/technical-sheet-file-service";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import {
-  isPersistentRateLimited,
-  recordPersistentRateLimitFailure,
+  consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
+import {
+  consumeRequestRateLimit,
+  getRequestRateLimit,
+} from "@/lib/security/request-rate-limit";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -70,12 +74,20 @@ export async function importTechnicalSheet(
   if (rawFiles.length > getMaxBatchFiles()) {
     return { error: `Envie no máximo ${getMaxBatchFiles()} arquivos por lote.` };
   }
+  const batchSize = rawFiles.reduce((total, file) => total + (file?.size || 0), 0);
+  const maxBatchSize = getMaxBatchSizeMb() * 1024 * 1024;
+  if (batchSize > maxBatchSize) {
+    return { error: `O lote excede o limite de ${getMaxBatchSizeMb()} MB.` };
+  }
 
   const importScope = "technical_sheets.import";
-  if (await isPersistentRateLimited(importScope, context.user.id, 10)) {
+  const importLimit = await consumePersistentRateLimit(importScope, context.user.id, {
+    maxAttempts: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!importLimit.allowed) {
     return { error: "Limite temporário de importações atingido. Tente novamente mais tarde." };
   }
-  await recordPersistentRateLimitFailure(importScope, context.user.id, 60 * 60 * 1000);
 
   const documentIds: string[] = [];
   const successfulDocumentIds: string[] = [];
@@ -144,7 +156,7 @@ async function processTechnicalSheetFile(
   });
 
   try {
-    const aiJson = await extractTechnicalSheetWithGemini(file);
+    const aiJson = await extractTechnicalSheetWithGemini(file, userId);
     const normalized = normalizeTechnicalSheetExtraction(aiJson);
     const fieldsForReview = new Set(normalized.fieldsForReview);
 
@@ -216,48 +228,70 @@ async function processTechnicalSheetFile(
 /**
  * Lists all technical sheet documents for the user
  */
-export async function listTechnicalSheetDocuments(): Promise<TechnicalSheetDocumentListItem[]> {
+const TECHNICAL_SHEET_PAGE_SIZE = 30;
+const MAX_TECHNICAL_SHEET_PAGE = 10_000;
+
+export async function listTechnicalSheetDocuments(page = 1): Promise<{
+  documents: TechnicalSheetDocumentListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}> {
   const user = await getCurrentUser();
-  if (!user) return [];
+  if (!user) return { documents: [], page, pageSize: TECHNICAL_SHEET_PAGE_SIZE, total: 0 };
   try {
     await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
   } catch {
-    return [];
+    return { documents: [], page, pageSize: TECHNICAL_SHEET_PAGE_SIZE, total: 0 };
   }
 
-  const docs = await prisma.technicalDocument.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      fileName: true,
-      mimeType: true,
-      documentType: true,
-      status: true,
-      confidence: true,
-      errorMessage: true,
-      createdAt: true,
-      extraction: {
-        select: {
-          productName: true,
-          reviewStatus: true,
+  const safePage = Number.isSafeInteger(page) && page > 0
+    ? Math.min(page, MAX_TECHNICAL_SHEET_PAGE)
+    : 1;
+  const where = { userId: user.id };
+  const [docs, total] = await Promise.all([
+    prisma.technicalDocument.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (safePage - 1) * TECHNICAL_SHEET_PAGE_SIZE,
+      take: TECHNICAL_SHEET_PAGE_SIZE,
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        documentType: true,
+        status: true,
+        confidence: true,
+        errorMessage: true,
+        createdAt: true,
+        extraction: {
+          select: {
+            productName: true,
+            reviewStatus: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.technicalDocument.count({ where }),
+  ]);
 
-  return docs.map((doc) => ({
-    id: doc.id,
-    fileName: doc.fileName,
-    mimeType: doc.mimeType,
-    documentType: doc.documentType || "Pendente",
-    status: doc.status,
-    confidence: doc.confidence,
-    errorMessage: doc.errorMessage,
-    createdAt: doc.createdAt.toISOString(),
-    productName: doc.extraction?.productName || null,
-    reviewStatus: doc.extraction?.reviewStatus ?? null,
-  }));
+  return {
+    documents: docs.map((doc) => ({
+      id: doc.id,
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      documentType: doc.documentType || "Pendente",
+      status: doc.status,
+      confidence: doc.confidence,
+      errorMessage: doc.errorMessage,
+      createdAt: doc.createdAt.toISOString(),
+      productName: doc.extraction?.productName || null,
+      reviewStatus: doc.extraction?.reviewStatus ?? null,
+    })),
+    page: safePage,
+    pageSize: TECHNICAL_SHEET_PAGE_SIZE,
+    total,
+  };
 }
 
 /**
@@ -592,6 +626,15 @@ export async function approveTechnicalSheetExtraction(
     throw error;
   }
 
+  const rateLimit = await consumeRequestRateLimit(
+    "technical-sheet-review",
+    user.id,
+    getRequestRateLimit("technicalSheetReviews"),
+  );
+  if (!rateLimit.allowed) {
+    return { error: "Muitas revisões em pouco tempo. Aguarde um minuto e tente novamente." };
+  }
+
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },
     include: {
@@ -712,6 +755,13 @@ export async function rejectTechnicalSheetExtraction(extractionId: string) {
   } catch {
     return;
   }
+
+  const rateLimit = await consumeRequestRateLimit(
+    "technical-sheet-review",
+    user.id,
+    getRequestRateLimit("technicalSheetReviews"),
+  );
+  if (!rateLimit.allowed) return;
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { id: extractionId, userId: user.id },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, Clock3, XCircle } from "lucide-react";
 
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { TechnicalSheetDocumentListItem } from "@/features/technical-sheets/domain/technical-sheet-types";
 
@@ -59,11 +61,20 @@ function statusVariant(status: string) {
 export function TechnicalSheetExtractionList({
   documents,
   selectedDocumentId,
+  page,
+  pageSize,
+  total,
 }: {
   documents: TechnicalSheetDocumentListItem[];
   selectedDocumentId?: string;
+  page: number;
+  pageSize: number;
+  total: number;
 }) {
   const router = useRouter();
+  const openDocument = (documentId: string) => {
+    router.push(`/dashboard/ingredients/technical-sheets?documentId=${encodeURIComponent(documentId)}`);
+  };
 
   return (
     <Card className="overflow-hidden py-0">
@@ -96,9 +107,17 @@ export function TechnicalSheetExtractionList({
                 <TableRow
                   key={document.id}
                   className={`cursor-pointer transition-colors hover:bg-muted/30 ${active ? "bg-primary/[0.06] ring-1 ring-inset ring-primary/20" : ""}`}
-                  onClick={() =>
-                    router.push(`/dashboard/ingredients/technical-sheets?documentId=${document.id}`)
-                  }
+                  role="link"
+                  tabIndex={0}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={`Abrir ${document.productName || document.fileName}`}
+                  onClick={() => openDocument(document.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openDocument(document.id);
+                    }
+                  }}
                 >
                   <TableCell>
                     <div className="font-medium">{document.productName || document.fileName}</div>
@@ -127,6 +146,25 @@ export function TechnicalSheetExtractionList({
           )}
         </TableBody>
       </Table>
+      {total > pageSize ? (
+        <div className="flex items-center justify-between gap-3 border-t p-3 text-sm text-muted-foreground">
+          <span>Mostrando {Math.min((page - 1) * pageSize + 1, total)}–{Math.min(page * pageSize, total)} de {total}</span>
+          <div className="flex gap-2">
+            {page > 1 ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/ingredients/technical-sheets?page=${page - 1}`}>Anterior</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>Anterior</Button>
+            )}
+            {page * pageSize < total ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/ingredients/technical-sheets?page=${page + 1}`}>Próxima</Link>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }
