@@ -1,6 +1,6 @@
 # Estrutura do Projeto
 
-Atualizado em: 14/05/2026.
+Atualizado em: 30/07/2026.
 
 ## 1. Visao do produto
 
@@ -43,6 +43,7 @@ docs/README.md                         Indice da documentacao
 docs/system/                           Documentacao geral do sistema
 docs/architecture/                     Estrutura e decisoes de organizacao
 docs/operations/                       Deploy, importadores e guias operacionais
+docs/operations/EXPORTACOES.md         Contrato dos documentos PDF e XLSX exportados
 docs/database/sql/                     SQL manual organizado por ordem de execucao
 docs/references/                       Materiais de referencia e documentos anexos
 docs/reports/                          Relatorios locais gerados por validacoes
@@ -114,6 +115,7 @@ Protegidas:
 /api/auth/[...nextauth]             Autenticacao NextAuth
 /api/export/excel                   Exportacao Excel
 /api/export/complete                Pacote ZIP completo
+/api/export/memorial                Memorial de calculo e Ficha tecnica em PDF/XLSX
 /api/open-food-facts/products       Busca no Open Food Facts
 ```
 

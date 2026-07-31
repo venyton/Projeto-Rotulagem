@@ -1,6 +1,6 @@
 # Indice da documentacao
 
-Atualizado em: 14/05/2026.
+Atualizado em: 30/07/2026.
 
 ## Leitura principal
 
@@ -11,6 +11,9 @@ Atualizado em: 14/05/2026.
 ## Operacao
 
 - `operations/DEPLOY.md`: publicacao e variaveis principais.
+- `operations/EXPORTACOES.md`: documentos técnicos, formatos, endpoint e validação local.
+- `operations/LOCAL_DATABASE.md`: banco PostgreSQL local isolado e comandos de runtime.
+- `operations/MELHORIAS-APLICADAS-2026-07-30.md`: registro desta rodada de hardening, testes e operacao.
 - `operations/IMPORTADOR_FICHAS_TECNICAS_IA.md`: uso e configuracao do importador por IA.
 - `operations/PERSISTENCIA_UI_TABELA_BANCO_2026-04-30.md`: persistencia do estado completo da tela de tabela.
 
@@ -20,6 +23,7 @@ Atualizado em: 14/05/2026.
 - `database/sql/001_technical_sheet_imports.sql`
 - `database/sql/002_technical_sheet_technical_fields.sql`
 - `database/sql/003_enterprise_label_projects.sql`
+- `database/sql/902_table_item_source.sql`
 - `database/sql/900_generated_table_ui_state_dynamic_schema.sql`
 - `database/sql/901_generated_table_ui_state_fixed_schema.sql`
 
