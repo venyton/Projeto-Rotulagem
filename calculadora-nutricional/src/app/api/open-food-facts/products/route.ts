@@ -1,91 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logEvent } from "@/lib/observability/logger";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import {
     ingredientToCacheData,
-    normalizeOpenFoodFactsProduct,
     productFromCachedIngredient,
 } from "@/features/open-food-facts/domain/open-food-facts";
+import {
+    fetchOpenFoodFactsProduct,
+    OpenFoodFactsRateLimitError,
+    searchOpenFoodFacts,
+} from "@/features/open-food-facts/services/open-food-facts-cache";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import {
+    consumeRequestRateLimit,
+    getRequestRateLimit,
+    rateLimitResponse,
+} from "@/lib/security/request-rate-limit";
 
-const PRODUCT_FIELDS = [
-    "code",
-    "product_name",
-    "product_name_pt",
-    "product_name_en",
-    "generic_name",
-    "brands",
-    "quantity",
-    "serving_size",
-    "image_front_url",
-    "image_url",
-    "nutriments",
-].join(",");
-
-const SEARCH_FIELDS = PRODUCT_FIELDS.split(",");
-
-const USER_AGENT = process.env.OPEN_FOOD_FACTS_USER_AGENT || "SoIZI/0.1.1 (contato@soizi.app)";
 export const dynamic = "force-dynamic";
+const importBodySchema = z.object({ code: z.string().trim().regex(/^\d{8,14}$/) }).strict();
+
+function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
+    return NextResponse.json(body, {
+        status,
+        headers: { "Cache-Control": "private, no-store", ...headers },
+    });
+}
 
 function isBarcode(value: string) {
     return /^\d{8,14}$/.test(value);
-}
-
-async function fetchOpenFoodFacts(url: string) {
-    const response = await fetch(url, {
-        headers: {
-            Accept: "application/json",
-            "User-Agent": USER_AGENT,
-        },
-        next: { revalidate: 60 * 60 * 24 },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Open Food Facts respondeu ${response.status}`);
-    }
-
-    return response.json();
-}
-
-async function searchByName(query: string) {
-    const response = await fetch("https://search.openfoodfacts.org/search", {
-        method: "POST",
-        headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": USER_AGENT,
-        },
-        body: JSON.stringify({
-            q: query,
-            page: 1,
-            page_size: 8,
-            langs: ["pt", "en"],
-            fields: SEARCH_FIELDS,
-        }),
-        next: { revalidate: 60 * 60 * 24 },
-    });
-
-    if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data.hits)) return data.hits;
-    }
-
-    const searchParams = new URLSearchParams({
-        search_terms: query,
-        search_simple: "1",
-        action: "process",
-        json: "1",
-        page_size: "8",
-        fields: PRODUCT_FIELDS,
-    });
-
-    const fallbackData = await fetchOpenFoodFacts(`https://world.openfoodfacts.org/cgi/search.pl?${searchParams.toString()}`);
-    return Array.isArray(fallbackData.products) ? fallbackData.products : [];
 }
 
 async function findCachedProduct(code: string) {
@@ -97,9 +47,7 @@ async function findCachedProduct(code: string) {
 }
 
 async function cacheProductByCode(code: string) {
-    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${PRODUCT_FIELDS}`;
-    const data = await fetchOpenFoodFacts(url);
-    const product = normalizeOpenFoodFactsProduct(data.product || {});
+    const product = await fetchOpenFoodFactsProduct(code);
 
     if (!product) return null;
 
@@ -122,14 +70,15 @@ async function cacheProductByCode(code: string) {
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session) {
-        return NextResponse.json({ products: [], error: "Não autorizado" }, { status: 401 });
+        return json({ products: [], error: "Não autorizado" }, 401);
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
+        context = await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
     } catch (error) {
         if (error instanceof ModuleAccessError) {
-            return NextResponse.json({ products: [], error: error.message }, { status: error.status });
+            return json({ products: [], error: error.message }, error.status);
         }
         throw error;
     }
@@ -137,26 +86,54 @@ export async function GET(request: NextRequest) {
     const query = request.nextUrl.searchParams.get("query")?.trim() || "";
 
     if (query.length < 3 || query.length > 120 || /[\u0000-\u001f\u007f]/.test(query)) {
-        return NextResponse.json({ products: [], error: "Digite ao menos 3 caracteres." }, { status: 400 });
+        return json({ products: [], error: "Digite ao menos 3 caracteres." }, 400);
+    }
+
+    const userLimit = await consumeRequestRateLimit(
+        "open_food_facts.user",
+        context.user.id,
+        getRequestRateLimit("openFoodFactsUser"),
+    );
+    if (!userLimit.allowed) {
+        return rateLimitResponse(userLimit, { products: [], error: "Muitas buscas. Tente novamente mais tarde." });
+    }
+
+    const providerPolicy = getRequestRateLimit(isBarcode(query) ? "openFoodFactsProduct" : "openFoodFactsSearch");
+    const providerLimit = await consumeRequestRateLimit(
+        isBarcode(query) ? "open_food_facts.provider.product" : "open_food_facts.provider.search",
+        "application",
+        providerPolicy,
+    );
+    if (!providerLimit.allowed) {
+        return rateLimitResponse(providerLimit, { products: [], error: "Limite temporário da busca externa atingido." });
     }
 
     try {
         if (isBarcode(query)) {
-            const product = (await findCachedProduct(query)) || (await cacheProductByCode(query));
-            return NextResponse.json({ products: product ? [product] : [] });
+            // GET remains read-only; persistence happens only when the user
+            // explicitly imports the selected product through POST.
+            const product = (await findCachedProduct(query)) || (await fetchOpenFoodFactsProduct(query));
+            return json({ products: product ? [product] : [] });
         }
 
-        const rawProducts = await searchByName(query);
-        const products = rawProducts
-            .map(normalizeOpenFoodFactsProduct)
-            .filter(Boolean)
-            .slice(0, 8);
+        const products = await searchOpenFoodFacts(query);
 
-        return NextResponse.json({ products });
-    } catch {
-        return NextResponse.json(
+        return json({ products });
+    } catch (error) {
+        if (error instanceof OpenFoodFactsRateLimitError) {
+            return json(
+                { products: [], error: "Limite temporário do Open Food Facts atingido." },
+                429,
+                { "Retry-After": String(error.retryAfterSeconds) },
+            );
+        }
+        logEvent("warn", "open_food_facts.request_failed", {
+            error: error instanceof Error ? error.name : "unknown",
+            queryType: isBarcode(query) ? "barcode" : "search",
+        });
+        return json(
             { products: [], error: "Não foi possível buscar no Open Food Facts agora." },
-            { status: 502 },
+            502,
         );
     }
 }
@@ -167,38 +144,71 @@ export async function POST(request: NextRequest) {
 
     const session = await getServerSession(authOptions);
     if (!session) {
-        return NextResponse.json({ product: null, error: "Não autorizado" }, { status: 401 });
+        return json({ product: null, error: "Não autorizado" }, 401);
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
+        context = await requireModuleAccess(SAAS_MODULES.OPEN_FOOD_FACTS);
     } catch (error) {
         if (error instanceof ModuleAccessError) {
-            return NextResponse.json({ product: null, error: error.message }, { status: error.status });
+            return json({ product: null, error: error.message }, error.status);
         }
         throw error;
     }
 
-    const body = await request.json().catch(() => null) as { code?: unknown } | null;
-    const code = typeof body?.code === "string" ? body.code.trim() : "";
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 4096) {
+        return json({ product: null, error: "Solicitação inválida." }, 413);
+    }
 
-    if (!isBarcode(code)) {
-        return NextResponse.json({ product: null, error: "Codigo de barras invalido." }, { status: 400 });
+    const parsedBody = importBodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsedBody.success) {
+        return json({ product: null, error: "Código de barras inválido." }, 400);
+    }
+    const code = parsedBody.data.code;
+
+    const userLimit = await consumeRequestRateLimit(
+        "open_food_facts.user",
+        context.user.id,
+        getRequestRateLimit("openFoodFactsUser"),
+    );
+    if (!userLimit.allowed) {
+        return rateLimitResponse(userLimit, { product: null, error: "Muitas importações. Tente novamente mais tarde." });
+    }
+
+    const providerLimit = await consumeRequestRateLimit(
+        "open_food_facts.provider.product",
+        "application",
+        getRequestRateLimit("openFoodFactsProduct"),
+    );
+    if (!providerLimit.allowed) {
+        return rateLimitResponse(providerLimit, { product: null, error: "Limite temporário da busca externa atingido." });
     }
 
     try {
         const product = await cacheProductByCode(code);
-        if (product) return NextResponse.json({ product });
+        if (product) return json({ product });
 
         const cached = await findCachedProduct(code);
-        return NextResponse.json({ product: cached });
-    } catch {
+        return json({ product: cached });
+    } catch (error) {
+        if (error instanceof OpenFoodFactsRateLimitError) {
+            return json(
+                { product: null, error: "Limite temporário do Open Food Facts atingido." },
+                429,
+                { "Retry-After": String(error.retryAfterSeconds) },
+            );
+        }
+        logEvent("warn", "open_food_facts.import_failed", {
+            error: error instanceof Error ? error.name : "unknown",
+        });
         const cached = await findCachedProduct(code);
-        if (cached) return NextResponse.json({ product: cached });
+        if (cached) return json({ product: cached });
 
-        return NextResponse.json(
+        return json(
             { product: null, error: "Nao foi possivel importar o produto agora." },
-            { status: 502 },
+            502,
         );
     }
 }

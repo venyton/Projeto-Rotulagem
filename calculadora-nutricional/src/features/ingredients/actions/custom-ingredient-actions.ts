@@ -12,7 +12,9 @@ import {
     requireModuleAccess,
 } from "@/features/saas/services/entitlements";
 import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
+import { normalizeIngredientSearchText } from "@/features/ingredients/domain/ingredient-search";
 import type { Prisma } from "@prisma/client";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 async function requireCustomIngredientsModule() {
     try {
@@ -137,11 +139,21 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 
     if (!name) return { error: "Nome é obrigatório" };
 
+    const requestLimit = await consumeRequestRateLimit(
+        "ingredient_writes",
+        user.id,
+        getRequestRateLimit("ingredientWrites"),
+    );
+    if (!requestLimit.allowed) return { error: "Limite temporário de alterações atingido. Tente novamente mais tarde." };
+
+    const persistedName = `[Meu] ${name}`;
+
     try {
         await prisma.customIngredient.create({
             data: {
                 userId: user.id,
-                name: `[Meu] ${name}`, // Prefix as requested
+                name: persistedName,
+                searchName: normalizeIngredientSearchText(persistedName),
                 energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
@@ -167,6 +179,13 @@ export async function deleteCustomIngredient(id: string) {
     if (!user) return { error: "Usuário não encontrado" };
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
+
+    const requestLimit = await consumeRequestRateLimit(
+        "ingredient_writes",
+        user.id,
+        getRequestRateLimit("ingredientWrites"),
+    );
+    if (!requestLimit.allowed) return { error: "Limite temporário de alterações atingido. Tente novamente mais tarde." };
 
     try {
         // Ensure ownership
@@ -252,6 +271,13 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
     if (!name) return { error: "Nome é obrigatório" };
 
+    const requestLimit = await consumeRequestRateLimit(
+        "ingredient_writes",
+        user.id,
+        getRequestRateLimit("ingredientWrites"),
+    );
+    if (!requestLimit.allowed) return { error: "Limite temporário de alterações atingido. Tente novamente mais tarde." };
+
     try {
         const ing = await prisma.customIngredient.findUnique({ where: { id } });
         if (!ing || ing.userId !== user.id) return { error: "Não encontrado ou sem permissão" };
@@ -259,7 +285,7 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
         await prisma.customIngredient.update({
             where: { id },
             data: {
-                name, energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
+                name, searchName: normalizeIngredientSearchText(name), energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
                 fatMono, fatPoly, omega6, omega3, cholesterol,
                 vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
                 calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
@@ -283,6 +309,12 @@ export async function searchIngredients(query: string) {
 
     const context = await getCurrentSaaSContext();
     if (!context || !contextHasModuleAccess(context, SAAS_MODULES.TABLES)) return [];
+    const requestLimit = await consumeRequestRateLimit(
+        "ingredient_search",
+        context.user.id,
+        getRequestRateLimit("ingredientSearch"),
+    );
+    if (!requestLimit.allowed) return [];
     const canUseOpenFoodFacts = contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS);
     const user = contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS)
         ? { id: context.user.id }
@@ -313,92 +345,47 @@ export async function searchIngredients(query: string) {
         ]).slice(0, MAX_RESULTS);
     }
 
+    const searchNameFilter = {
+        AND: normalizedQuery
+            .split(" ")
+            .filter(Boolean)
+            .map((token) => ({ searchName: { contains: token } })),
+    };
+
     const [customDirect, tacoDirect] = await Promise.all([
         user
             ? prisma.customIngredient.findMany({
-                where: {
-                    userId: user.id,
-                    name: { contains: q, mode: 'insensitive' }
-                },
+                where: { userId: user.id, ...searchNameFilter },
                 orderBy: { createdAt: 'desc' },
                 take: 16
             })
             : Promise.resolve([]),
         prisma.ingredient.findMany({
-            where: {
-                ...officialIngredientScope,
-                name: {
-                    contains: q,
-                    mode: 'insensitive',
-                },
-            },
+            where: { ...officialIngredientScope, ...searchNameFilter },
             orderBy: { name: 'asc' },
             take: 36
         })
     ]);
 
-    let combined = dedupeSearchResults([
+    const combined = dedupeSearchResults([
         ...customDirect.map((c) => ({ ...c, origin: "CUSTOM" })),
         ...tacoDirect
-    ]);
+    ]).sort((a, b) => {
+        const rankA = matchRank(a.name, normalizedQuery);
+        const rankB = matchRank(b.name, normalizedQuery);
+        if (rankA !== rankB) return rankA - rankB;
 
-    // Fallback com normalização para cobrir busca com/sem acento.
-    if (combined.length < MAX_RESULTS) {
-        const [customPool, tacoPool] = await Promise.all([
-            user
-                ? prisma.customIngredient.findMany({
-                    where: { userId: user.id },
-                    orderBy: { createdAt: 'desc' },
-                    take: 200
-                })
-                : Promise.resolve([]),
-            prisma.ingredient.findMany({
-                where: officialIngredientScope,
-                orderBy: { name: 'asc' },
-                take: 900
-            })
-        ]);
+        const aCustom = isCustomLike(a);
+        const bCustom = isCustomLike(b);
+        if (aCustom !== bCustom) return aCustom ? -1 : 1;
 
-        const normalizedMatches = [
-            ...customPool.map((c) => ({ ...c, origin: "CUSTOM" as const })),
-            ...tacoPool
-        ]
-            .filter((item) => matchesNormalized(item.name, normalizedQuery))
-            .sort((a, b) => {
-                const rankA = matchRank(a.name, normalizedQuery);
-                const rankB = matchRank(b.name, normalizedQuery);
-                if (rankA !== rankB) return rankA - rankB;
-
-                const aCustom = isCustomLike(a);
-                const bCustom = isCustomLike(b);
-                if (aCustom !== bCustom) return aCustom ? -1 : 1;
-
-                return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
-            });
-
-        combined = dedupeSearchResults([...combined, ...normalizedMatches]);
-    }
+        return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+    });
 
     return combined.slice(0, MAX_RESULTS);
 }
 
-function normalizeForSearch(value: string) {
-    return value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, " ");
-}
-
-function matchesNormalized(name: string, normalizedQuery: string) {
-    const normalizedName = normalizeForSearch(name);
-    if (normalizedName.includes(normalizedQuery)) return true;
-
-    const tokens = normalizedQuery.split(" ").filter(Boolean);
-    if (tokens.length <= 1) return false;
-    return tokens.every((token) => normalizedName.includes(token));
-}
+const normalizeForSearch = normalizeIngredientSearchText;
 
 function matchRank(name: string, normalizedQuery: string) {
     const normalizedName = normalizeForSearch(name);

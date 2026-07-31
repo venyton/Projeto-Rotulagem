@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button"
 import { Search } from "lucide-react"
 import { Download, Edit2, Trash2 } from "lucide-react"
 import { ImportIngredientsDialog } from "./ImportIngredientsDialog"
-import ExcelJS from "exceljs";
 import { InspectIngredientDialog } from "./InspectIngredientDialog";
 import { AddIngredientForm } from "./AddIngredientForm";
 import { deleteCustomIngredient } from "@/features/ingredients/actions/custom-ingredient-actions";
@@ -78,6 +77,7 @@ export function IngredientsTable({
         }));
 
         try {
+            const { default: ExcelJS } = await import("exceljs");
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet("Meus Ingredientes");
             const headers = Object.keys(data[0] ?? {
