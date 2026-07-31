@@ -8,6 +8,7 @@ import { OrganizationRole, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/
 
 import { prisma } from "@/lib/prisma";
 import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isSaaSModuleKey } from "@/features/saas/domain/modules";
 import { getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
@@ -23,8 +24,16 @@ async function requireSettingsContext() {
         throw new Error("Sem permissão para alterar configurações.");
     }
 
-    await ensureOrganizationProfiles(context.organization.id);
     return context;
+}
+
+async function canWriteSettings(userId: string) {
+    const rateLimit = await consumeRequestRateLimit(
+        "settings-write",
+        userId,
+        getRequestRateLimit("workspaceWrites"),
+    );
+    return rateLimit.allowed;
 }
 
 function normalizeEmail(value: string) {
@@ -35,8 +44,14 @@ function redirectUserError(error: string): never {
     redirect(`/dashboard/settings?tab=users&userError=${error}`);
 }
 
+function redirectSettingsError(tab: "users" | "profiles", error: string): never {
+    redirect(`/dashboard/settings?tab=${tab}&settingsError=${error}`);
+}
+
 export async function createOrganizationUser(formData: FormData) {
     const context = await requireSettingsContext();
+    if (!await canWriteSettings(context.user.id)) redirectUserError("rate_limit");
+    await ensureOrganizationProfiles(context.organization.id);
     const name = String(formData.get("name") || "").trim();
     const email = normalizeEmail(String(formData.get("email") || ""));
     const password = String(formData.get("password") || "");
@@ -105,6 +120,8 @@ export async function createOrganizationUser(formData: FormData) {
 
 export async function updateMemberProfile(formData: FormData) {
     const context = await requireSettingsContext();
+    if (!await canWriteSettings(context.user.id)) redirectSettingsError("users", "rate_limit");
+    await ensureOrganizationProfiles(context.organization.id);
     const memberId = String(formData.get("memberId") || "");
     const profileId = String(formData.get("profileId") || "");
 
@@ -159,6 +176,8 @@ export async function updateMemberProfile(formData: FormData) {
 
 export async function createOrganizationProfile(formData: FormData) {
     const context = await requireSettingsContext();
+    if (!await canWriteSettings(context.user.id)) redirectSettingsError("profiles", "rate_limit");
+    await ensureOrganizationProfiles(context.organization.id);
     const name = String(formData.get("name") || "").trim();
     const description = String(formData.get("description") || "").trim();
 
@@ -211,6 +230,8 @@ export async function createOrganizationProfile(formData: FormData) {
 
 export async function updateOrganizationProfile(formData: FormData) {
     const context = await requireSettingsContext();
+    if (!await canWriteSettings(context.user.id)) redirectSettingsError("profiles", "rate_limit");
+    await ensureOrganizationProfiles(context.organization.id);
     const profileId = String(formData.get("profileId") || "");
     const name = String(formData.get("name") || "").trim();
     const description = String(formData.get("description") || "").trim();
