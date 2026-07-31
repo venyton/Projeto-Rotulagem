@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_WORKSPACE_MODULES } from "@/features/saas/domain/modules";
+import { ALL_SAAS_MODULES, DEFAULT_WORKSPACE_MODULES } from "@/features/saas/domain/modules";
 
 type WorkspaceUser = {
   id: string;
@@ -41,7 +41,7 @@ async function createUniqueSlug(seed: string) {
   return `${base}-${Date.now().toString(36)}`;
 }
 
-function defaultEntitlements(organizationId: string, modules: SaaSModuleKey[], source: string) {
+function defaultEntitlements(organizationId: string, modules: readonly SaaSModuleKey[], source: string) {
   return modules.map((moduleKey) => ({
     organizationId,
     moduleKey: moduleKey as SaaSModuleKey,
@@ -101,6 +101,27 @@ export async function ensureDefaultWorkspaceForUser(user: WorkspaceUser, options
 
     return organization;
   });
+}
+
+/**
+ * Provisiona entitlements ausentes no login, fora do caminho de leitura das páginas.
+ * A consulta de contexto permanece sem efeitos colaterais e continua usando um
+ * fallback em memória para sessões já abertas durante a migração.
+ */
+export async function ensureOrganizationEntitlementsForUser(userId: string) {
+  const memberships = await prisma.organizationMember.findMany({
+    where: { userId, active: true, organization: { status: "ACTIVE" } },
+    select: { organizationId: true },
+  });
+
+  await Promise.all(
+    memberships.map((membership) =>
+      prisma.organizationEntitlement.createMany({
+        data: defaultEntitlements(membership.organizationId, ALL_SAAS_MODULES, "SYSTEM_DEFAULT"),
+        skipDuplicates: true,
+      })
+    )
+  );
 }
 
 export async function createSecurityAuditLog(
