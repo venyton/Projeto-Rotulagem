@@ -13,6 +13,7 @@ import { isSaaSModuleKey } from "@/features/saas/domain/modules";
 import { getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import {
+    canManageAllOrganizationUsers,
     canManageOrganizationSettings,
     ensureOrganizationProfiles,
     settingsAuditMetadata,
@@ -121,35 +122,45 @@ export async function createOrganizationUser(formData: FormData) {
 export async function updateMemberProfile(formData: FormData) {
     const context = await requireSettingsContext();
     if (!await canWriteSettings(context.user.id)) redirectSettingsError("users", "rate_limit");
-    await ensureOrganizationProfiles(context.organization.id);
     const memberId = String(formData.get("memberId") || "");
     const profileId = String(formData.get("profileId") || "");
+    const canManageAllUsers = canManageAllOrganizationUsers(context);
 
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(memberId) || !/^[A-Za-z0-9_-]{1,100}$/.test(profileId)) return;
 
-    const [targetMember, targetProfile] = await Promise.all([
-        prisma.organizationMember.findFirst({
-            where: {
-                id: memberId,
-                organizationId: context.organization.id,
-            },
-            select: {
-                id: true,
-                role: true,
-                userId: true,
-            },
-        }),
-        prisma.organizationProfile.findFirst({
-            where: {
-                id: profileId,
-                organizationId: context.organization.id,
-            },
-            select: { id: true, name: true },
-        }),
-    ]);
+    const targetMember = await prisma.organizationMember.findFirst({
+        where: {
+            id: memberId,
+            ...(canManageAllUsers
+                ? { organization: { status: "ACTIVE" } }
+                : { organizationId: context.organization.id }),
+        },
+        select: {
+            id: true,
+            role: true,
+            userId: true,
+            organizationId: true,
+        },
+    });
+
+    if (!targetMember) return;
+
+    await ensureOrganizationProfiles(targetMember.organizationId);
+
+    const targetProfile = await prisma.organizationProfile.findFirst({
+        where: {
+            id: profileId,
+            organizationId: targetMember.organizationId,
+        },
+        select: { id: true, name: true },
+    });
 
     if (!targetMember || !targetProfile) return;
-    if (targetMember.role === OrganizationRole.OWNER && context.member.id !== targetMember.id) return;
+    if (
+        targetMember.role === OrganizationRole.OWNER &&
+        context.member.id !== targetMember.id &&
+        !canManageAllUsers
+    ) return;
 
     await prisma.organizationMember.update({
         where: { id: targetMember.id },
@@ -158,13 +169,14 @@ export async function updateMemberProfile(formData: FormData) {
 
     await prisma.securityAuditLog.create({
         data: {
-            organizationId: context.organization.id,
+            organizationId: targetMember.organizationId,
             userId: context.user.id,
             action: "settings.member_profile.updated",
             riskLevel: "INFO",
             metadata: settingsAuditMetadata({
                 organizationMemberId: targetMember.id,
                 targetUserId: targetMember.userId,
+                managingOrganizationId: context.organization.id,
                 profileId: targetProfile.id,
                 profileName: targetProfile.name,
             }),
