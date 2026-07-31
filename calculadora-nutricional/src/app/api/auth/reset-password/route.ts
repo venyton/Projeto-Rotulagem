@@ -4,17 +4,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
-import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
+import {
+  MAX_PASSWORD_LENGTH,
+  PASSWORD_HASH_ROUNDS,
+  validatePasswordStrength,
+} from "@/lib/security/password";
 import {
   clearPersistentRateLimit,
-  isPersistentRateLimited,
-  recordPersistentRateLimitFailure,
+  consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { getClientAddress, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
 
 const requestSchema = z.object({
   token: z.string().regex(/^[a-f0-9]{64}$/),
-  password: z.string().min(1).max(256),
+  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 }).strict();
 
 function json(body: object, status = 200) {
@@ -40,7 +44,20 @@ export async function POST(request: NextRequest) {
   const scope = "auth.password_reset.consume";
 
   try {
-    if (await isPersistentRateLimited(scope, hashedToken, 8)) {
+    const ipLimit = await consumePersistentRateLimit(
+      "auth.password_reset.consume.ip",
+      getClientAddress(request),
+      getRequestRateLimit("loginIp"),
+    );
+    if (!ipLimit.allowed) {
+      return rateLimitResponse(ipLimit, { error: "Muitas tentativas. Tente novamente mais tarde." });
+    }
+
+    const rateLimit = await consumePersistentRateLimit(scope, hashedToken, {
+      maxAttempts: 8,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
       return json({ error: "Token inválido ou expirado." }, 400);
     }
 
@@ -53,7 +70,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      await recordPersistentRateLimitFailure(scope, hashedToken, 15 * 60 * 1000);
       return json({ error: "Token inválido ou expirado." }, 400);
     }
 

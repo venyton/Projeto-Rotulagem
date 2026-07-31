@@ -15,8 +15,7 @@ import {
 } from "@/lib/security/totp";
 import {
     clearPersistentRateLimit,
-    isPersistentRateLimited,
-    recordPersistentRateLimitFailure,
+    consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
 
 type ProfileResult = { error?: string; success?: string; requireRelogin?: boolean };
@@ -53,11 +52,11 @@ async function getCurrentUser() {
 type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
 
 async function isSensitiveActionBlocked(scope: string, userId: string) {
-    return isPersistentRateLimited(`profile.${scope}`, userId, 8);
-}
-
-async function recordSensitiveFailure(scope: string, userId: string) {
-    await recordPersistentRateLimitFailure(`profile.${scope}`, userId, 15 * 60 * 1000);
+    const result = await consumePersistentRateLimit(`profile.${scope}`, userId, {
+        maxAttempts: 8,
+        windowMs: 15 * 60 * 1000,
+    });
+    return !result.allowed;
 }
 
 async function clearSensitiveFailures(scope: string, userId: string) {
@@ -101,6 +100,11 @@ export async function getProfileInfo(): Promise<ProfileInfo | null> {
 export async function updateProfileInfo(prevState: unknown, formData: FormData): Promise<ProfileResult> {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
+    const profileLimit = await consumePersistentRateLimit("profile.update", user.id, {
+        maxAttempts: 10,
+        windowMs: 15 * 60 * 1000,
+    });
+    if (!profileLimit.allowed) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const name = (formData.get("name") as string | null)?.trim() ?? "";
     const email = (formData.get("email") as string | null)?.trim().toLowerCase() ?? "";
@@ -137,6 +141,8 @@ export async function updateProfileInfo(prevState: unknown, formData: FormData):
         },
     });
 
+    await clearPersistentRateLimit("profile.update", user.id);
+
     return {
         success: emailChanged
             ? "Dados atualizados. Por segurança, faça login novamente para continuar."
@@ -165,13 +171,11 @@ export async function changePassword(prevState: unknown, formData: FormData): Pr
 
     const currentPasswordError = await validateCurrentPassword(user, currentPassword);
     if (currentPasswordError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: currentPasswordError };
     }
 
     const twoFactorError = await validateUserTwoFactorCode(user, twoFactorCode);
     if (twoFactorError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: twoFactorError };
     }
 
@@ -203,7 +207,6 @@ export async function startTwoFactorSetup(
     const currentPassword = getFormValue(formData, "currentPassword");
     const passwordError = await validateCurrentPassword(user, currentPassword);
     if (passwordError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: passwordError };
     }
 
@@ -244,7 +247,6 @@ export async function confirmTwoFactorSetup(
 
     const passwordError = await validateCurrentPassword(user, currentPassword);
     if (passwordError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: passwordError };
     }
     if (!user.twoFactorPendingSecret) return { error: "Gere um QR Code antes de confirmar." };
@@ -252,7 +254,6 @@ export async function confirmTwoFactorSetup(
     try {
         const secret = decryptTotpSecret(user.twoFactorPendingSecret);
         if (!(await verifyTotpCode(secret, code))) {
-            await recordSensitiveFailure(scope, user.id);
             return { error: "Código 2FA inválido." };
         }
 
@@ -289,13 +290,11 @@ export async function disableTwoFactor(
 
     const passwordError = await validateCurrentPassword(user, currentPassword);
     if (passwordError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: passwordError };
     }
 
     const twoFactorError = await validateUserTwoFactorCode(user, code);
     if (twoFactorError) {
-        await recordSensitiveFailure(scope, user.id);
         return { error: twoFactorError };
     }
 
