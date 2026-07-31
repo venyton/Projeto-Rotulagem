@@ -94,15 +94,12 @@ export default async function DashboardHomePage() {
     const firstName = context.user.name?.split(" ")[0] ?? "por aqui";
 
     return (
-        <div className="app-page-loose flex flex-col gap-12">
+        <div className="app-page app-page-loose flex flex-col gap-12">
             <section className="app-enter grid gap-8 border-b pb-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-end">
                 <div className="max-w-3xl">
                     <h1 className="text-balance text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">
                         Olá, {firstName}. O que vamos rotular hoje?
                     </h1>
-                    <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                        Organize ingredientes, calcule a informação nutricional e prepare os arquivos finais em um único fluxo.
-                    </p>
                     {hasTables ? (
                         <div className="mt-7 flex flex-wrap gap-3">
                             <Button size="lg" asChild>

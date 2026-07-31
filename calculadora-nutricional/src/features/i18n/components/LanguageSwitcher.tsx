@@ -79,8 +79,8 @@ export function LanguageSwitcher() {
                     <Image
                         src={activeLanguage.flagSrc}
                         alt={activeLanguage.flagAlt}
-                        width={22}
-                        height={16}
+                        width={30}
+                        height={20}
                         unoptimized
                         className="h-auto w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
                     />
@@ -96,8 +96,8 @@ export function LanguageSwitcher() {
                             <Image
                                 src={item.flagSrc}
                                 alt={item.flagAlt}
-                                width={22}
-                                height={16}
+                                width={30}
+                                height={20}
                                 unoptimized
                                 className="h-auto w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
                             />

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Settings2, ShieldCheck, UsersRound } from "lucide-react";
+import { Plus, ShieldCheck, UsersRound } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +39,7 @@ import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage"
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 
 type SettingsPageProps = {
-    searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string }>;
+    searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string; settingsError?: string }>;
 };
 
 const tabs = [
@@ -52,6 +52,11 @@ const userErrorMessages: Record<string, string> = {
     password: "A senha deve ter pelo menos 10 caracteres e não pode conter nome ou email.",
     exists: "Já existe um usuário com este email.",
     profile: "Selecione um perfil válido.",
+    rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+};
+
+const settingsErrorMessages: Record<string, string> = {
+    rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
 };
 
 function TabLink({ tab }: { tab: (typeof tabs)[number] }) {
@@ -101,7 +106,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
     return (
         <div className="app-page flex flex-col gap-6">
-            <PageHeader eyebrow="Configuração" icon={Settings2} title="Usuários e perfis" description="Gerencie participantes, perfis e acessos por funcionalidade." />
+            <PageHeader title="Usuários e perfis" description="Gerencie participantes, perfis e acessos por funcionalidade." />
 
             <Tabs value={activeTab}>
               <TabsList>
@@ -110,6 +115,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 ))}
               </TabsList>
             </Tabs>
+
+            {params?.settingsError ? (
+                <Alert variant="destructive"><AlertDescription>{settingsErrorMessages[params.settingsError] || "Não foi possível salvar a alteração."}</AlertDescription></Alert>
+            ) : null}
 
             {activeTab === "users" ? (
                 <div className="grid min-w-0 gap-4">

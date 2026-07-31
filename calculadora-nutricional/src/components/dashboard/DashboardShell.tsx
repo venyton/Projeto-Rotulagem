@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
+    Check,
+    ChevronsUpDown,
     Globe2,
     FileSearch,
     Home,
@@ -15,6 +17,8 @@ import {
     Settings2,
     UserCircle2,
 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import {
     Breadcrumb,
@@ -84,8 +88,9 @@ function DashboardSidebarHeader() {
             style={isCollapsed ? { padding: "4px" } : undefined}
         >
             <Link
-                href="/dashboard"
-                className={`flex items-center overflow-hidden rounded-lg outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 ${isCollapsed ? "justify-center" : "min-h-8 px-2"}`}
+                href="/"
+                aria-label="Ir para a tela inicial"
+                className={`flex w-fit items-center overflow-hidden rounded-lg outline-none ring-sidebar-ring focus-visible:ring-2 ${isCollapsed ? "self-center justify-center" : "self-start min-h-8 px-2"}`}
                 style={isCollapsed ? { minHeight: "40px", paddingInline: 0 } : undefined}
             >
                 {isCollapsed ? (
@@ -136,13 +141,19 @@ export function DashboardShell({
     children,
     accessibleModules = [],
     canManageSettings = false,
+    organizations = [],
+    activeOrganizationId = null,
 }: {
     children: React.ReactNode;
     accessibleModules?: SaaSModuleKey[];
     canManageSettings?: boolean;
+    organizations?: Array<{ id: string; name: string; slug: string; role: string }>;
+    activeOrganizationId?: string | null;
 }) {
     const pathname = usePathname();
+    const router = useRouter();
     const { copy } = useSiteLanguage();
+    const [switchingOrganizationId, setSwitchingOrganizationId] = useState<string | null>(null);
     const accessibleModuleSet = new Set(accessibleModules);
     const hasTables = accessibleModuleSet.has(SAAS_MODULES.TABLES);
     const navItems = PRODUCT_NAV_ITEMS.filter((item) => {
@@ -163,6 +174,25 @@ export function DashboardShell({
             : currentItem?.label ?? "Workspace";
     const workspaceItems = navItems.filter((item) => !item.settingsOnly);
     const managementItems = navItems.filter((item) => item.settingsOnly);
+    const currentOrganization = organizations?.find((organization) => organization.id === activeOrganizationId);
+
+    async function switchOrganization(organizationId: string) {
+        if (organizationId === activeOrganizationId || switchingOrganizationId) return;
+        setSwitchingOrganizationId(organizationId);
+        try {
+            const response = await fetch("/api/saas/workspace", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ organizationId }),
+            });
+            if (!response.ok) throw new Error("Não foi possível trocar de workspace.");
+            router.refresh();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível trocar de workspace.");
+        } finally {
+            setSwitchingOrganizationId(null);
+        }
+    }
 
     return (
         <SidebarProvider>
@@ -235,7 +265,7 @@ export function DashboardShell({
                 <SidebarRail />
             </Sidebar>
 
-            <SidebarInset className="min-w-0 overflow-x-clip">
+            <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                 <header className="app-topbar sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl sm:px-6">
                     <SidebarTrigger aria-label="Abrir ou recolher navegação" />
                     <Separator orientation="vertical" className="mr-1 h-4" />
@@ -256,6 +286,33 @@ export function DashboardShell({
                     </Breadcrumb>
 
                     <div className="ml-auto flex items-center gap-2">
+                        {organizations && organizations.length > 1 ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="hidden max-w-56 items-center gap-2 md:inline-flex">
+                                        <span className="truncate">{currentOrganization?.name ?? "Workspace"}</span>
+                                        <ChevronsUpDown aria-hidden="true" className="size-3.5 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-64">
+                                    <DropdownMenuLabel>Workspace atual</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {organizations.map((organization) => (
+                                        <DropdownMenuItem
+                                            key={organization.id}
+                                            disabled={Boolean(switchingOrganizationId)}
+                                            onSelect={() => void switchOrganization(organization.id)}
+                                        >
+                                            <Check
+                                                aria-hidden="true"
+                                                className={organization.id === activeOrganizationId ? "opacity-100" : "opacity-0"}
+                                            />
+                                            <span className="truncate">{organization.name}</span>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : null}
                         {hasTables ? (
                             <Button asChild size="sm" className="hidden sm:inline-flex">
                                 <Link href="/dashboard/new">
@@ -279,6 +336,27 @@ export function DashboardShell({
                             <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuLabel>{copy.myAccount}</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
+                                {organizations && organizations.length > 1 ? (
+                                    <>
+                                        <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                                        <DropdownMenuGroup>
+                                            {organizations.map((organization) => (
+                                                <DropdownMenuItem
+                                                    key={organization.id}
+                                                    disabled={Boolean(switchingOrganizationId)}
+                                                    onSelect={() => void switchOrganization(organization.id)}
+                                                >
+                                                    <Check
+                                                        aria-hidden="true"
+                                                        className={organization.id === activeOrganizationId ? "opacity-100" : "opacity-0"}
+                                                    />
+                                                    <span className="truncate">{organization.name}</span>
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuGroup>
+                                        <DropdownMenuSeparator />
+                                    </>
+                                ) : null}
                                 <DropdownMenuGroup>
                                     <DropdownMenuItem asChild>
                                         <Link href="/dashboard/profile">
@@ -312,7 +390,7 @@ export function DashboardShell({
                         </DropdownMenu>
                     </div>
                 </header>
-                <div className="min-w-0 flex-1">{children}</div>
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
                 <footer className="app-footer flex flex-col gap-2 border-t px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
                     <p>SoIZI · Rotulagem nutricional</p>
                     <div className="flex items-center gap-4">

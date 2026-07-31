@@ -379,8 +379,8 @@ export default async function Home() {
                   <Image
                     src={language.flagSrc}
                     alt={language.flagAlt}
-                    width={36}
-                    height={25}
+                    width={30}
+                    height={20}
                     unoptimized
                     className="h-auto w-9 rounded-[3px] object-cover shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
                   />
