@@ -14,37 +14,19 @@ import {
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
+import { EXPORT_SHEET_TYPES, ExportBodyInput, exportBodySchema } from "@/features/tables/domain/export-schema";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import {
+  consumeRequestRateLimit,
+  getRequestRateLimit,
+  rateLimitResponse,
+} from "@/lib/security/request-rate-limit";
+import { getRuntimeRequestBodyLimitBytes, getRuntimeResponseBodyLimitBytes } from "@/lib/security/request-body-limit";
 
-type SheetType =
-  | "VERT"
-  | "HORIZ"
-  | "VERT-QUEB"
-  | "HORIZ-QUEB"
-  | "LINEAR"
-  | "AGREGADO"
-  | "SIMPLIF"
-  | "B2B"
-  | "ADICAO"
-  | "100"
-  | "SUPLEM"
-  | "SUPLEM-POP";
+type SheetType = (typeof EXPORT_SHEET_TYPES)[number];
 
-const ALL_SHEET_TYPES: SheetType[] = [
-  "VERT",
-  "HORIZ",
-  "VERT-QUEB",
-  "HORIZ-QUEB",
-  "LINEAR",
-  "AGREGADO",
-  "SIMPLIF",
-  "B2B",
-  "ADICAO",
-  "100",
-  "SUPLEM",
-  "SUPLEM-POP",
-];
+const ALL_SHEET_TYPES: SheetType[] = [...EXPORT_SHEET_TYPES];
 
 const SUPPLEMENT_SHEET_TYPES: SheetType[] = ["SUPLEM", "SUPLEM-POP"];
 const DEFAULT_VD_SUGAR_ADDED = 50;
@@ -62,24 +44,7 @@ const ANNEX_IV_KEYS: AnnexIvNutrientKey[] = [
   "sodium",
 ];
 
-type ExportBody = {
-  title?: string;
-  per100g: CalculatedNutrients;
-  perPortion: CalculatedNutrients;
-  portionSize: number;
-  householdMeasure: string;
-  popGroup: PopGroup;
-  isSupplement?: boolean;
-  servingsPerPackage?: string;
-  selectedNutrients?: string[];
-  selectedTableTypes?: SheetType[];
-  extraConstituents?: Array<{
-    name?: string;
-    amount?: string;
-    unit?: string;
-  }>;
-  showDailyValue?: boolean;
-};
+type ExportBody = ExportBodyInput;
 
 type Metric = {
   per100: string;
@@ -160,8 +125,8 @@ function getAnnexIvValues(source: Partial<Record<keyof CalculatedNutrients, unkn
 }
 
 function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackVdr>): NutrientMap {
-  const per100 = (body.per100g ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
-  const perPortion = (body.perPortion ?? {}) as Partial<Record<keyof CalculatedNutrients, unknown>>;
+  const per100 = body.per100g;
+  const perPortion = body.perPortion;
   const annexIvValues = {
     per100g: getAnnexIvValues(per100),
     perPortion: getAnnexIvValues(perPortion),
@@ -197,9 +162,9 @@ function buildNutrientMap(body: ExportBody, vdr: ReturnType<typeof withFallbackV
 }
 
 function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFallbackVdr>): SelectedMicroRow[] {
-  const selected = new Set(Array.isArray(body.selectedNutrients) ? body.selectedNutrients : []);
-  const per100Values = (body.per100g ?? {}) as unknown as Record<string, number>;
-  const portionValues = (body.perPortion ?? {}) as unknown as Record<string, number>;
+  const selected = new Set(body.selectedNutrients);
+  const per100Values = body.per100g as unknown as Record<string, number>;
+  const portionValues = body.perPortion as unknown as Record<string, number>;
   const vdrValues = vdr as Record<string, number | null | undefined>;
 
   const micros = MICRONUTRIENTS.filter((micro) => selected.has(micro.name)).map((micro) => {
@@ -217,15 +182,18 @@ function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFal
   });
 
   const extras = Array.isArray(body.extraConstituents)
-    ? body.extraConstituents
-        .filter((item) => item.name?.trim() && item.amount?.trim())
-        .map((item) => ({
-          label: item.name!.trim(),
-          per100: "-",
-          portion: `${item.amount!.trim()}${item.unit?.trim() ? ` ${item.unit.trim()}` : ""}`,
-          vd100: "",
-          vdPortion: "",
-        }))
+      ? body.extraConstituents
+        .filter((item) => item.name?.trim() && item.amount !== undefined)
+        .map((item) => {
+          const amount = typeof item.amount === "number" ? String(item.amount) : item.amount?.trim();
+          return {
+            label: item.name!.trim(),
+            per100: "-",
+            portion: `${amount}${item.unit?.trim() ? ` ${item.unit.trim()}` : ""}`,
+            vd100: "",
+            vdPortion: "",
+          };
+        })
     : [];
 
   return [...micros, ...extras];
@@ -516,6 +484,72 @@ function sanitizeSelectedTableTypes(selected: SheetType[] | undefined, isSupplem
   return nonSupplement.length > 0 ? nonSupplement : defaultNonSupplement;
 }
 
+export async function generateExcelBuffer(exportBody: ExportBody) {
+  const selectedTables = sanitizeSelectedTableTypes(exportBody.selectedTableTypes, exportBody.isSupplement);
+
+  const vdr = withFallbackVdr(exportBody.popGroup);
+  const nutrients = buildNutrientMap(exportBody, vdr);
+  const nutrientsAdults = buildNutrientMap(exportBody, withFallbackVdr(POPULATION_GROUPS.ADULTS));
+  const selectedMicros = buildSelectedMicroRows(exportBody, vdr);
+
+  const cellsBySheet: Partial<Record<SheetType, CellValueMap>> = {};
+  const setSheetCells = (sheet: SheetType, fill: (cells: CellValueMap) => void) => {
+    const cells: CellValueMap = {};
+    fill(cells);
+    cellsBySheet[sheet] = cells;
+  };
+
+  setSheetCells("VERT", (cells) => fillVertical(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("HORIZ", (cells) => fillHorizontal(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("VERT-QUEB", (cells) => fillVerticalQuebrado(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("HORIZ-QUEB", (cells) => fillHorizontalQuebrado(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("LINEAR", (cells) => fillLinear(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("AGREGADO", (cells) => fillAgregado(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("SIMPLIF", (cells) => fillSimplificado(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("B2B", (cells) => fillB2B(cells, nutrients, selectedMicros));
+  setSheetCells("ADICAO", (cells) => fillAdicao(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("100", (cells) => fill100(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("SUPLEM", (cells) => fillSuplemento(cells, exportBody, nutrients, selectedMicros));
+  setSheetCells("SUPLEM-POP", (cells) =>
+    fillSuplementoPopulacional(cells, exportBody, nutrients, nutrientsAdults, selectedMicros)
+  );
+
+  const templatePath = await resolveTemplatePath();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(templatePath);
+
+  for (const [sheetName, cellValues] of Object.entries(cellsBySheet)) {
+    const sheet = workbook.getWorksheet(sheetName);
+    if (!sheet) continue;
+
+    for (const [ref, value] of Object.entries(cellValues)) {
+      sheet.getCell(ref).value = value;
+    }
+  }
+
+  workbook.eachSheet((sheet) => {
+    const name = sheet.name as SheetType;
+    if (ALL_SHEET_TYPES.includes(name)) {
+      sheet.state = selectedTables.includes(name) ? "visible" : "hidden";
+    }
+  });
+
+  const firstVisible = workbook.worksheets.find((sheet) => sheet.state === "visible");
+  if (firstVisible) {
+    workbook.views = [{
+      x: 0,
+      y: 0,
+      width: 10000,
+      height: 20000,
+      firstSheet: 0,
+      activeTab: firstVisible.id - 1,
+      visibility: "visible",
+    }];
+  }
+
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 export async function POST(req: NextRequest) {
   try {
     const originError = rejectCrossOriginRequest(req);
@@ -527,12 +561,13 @@ export async function POST(req: NextRequest) {
     }
 
     const contentLength = Number(req.headers.get("content-length") || 0);
-    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 2 * 1024 * 1024) {
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > getRuntimeRequestBodyLimitBytes(2)) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-      await requireModuleAccess(SAAS_MODULES.EXPORTS);
+      context = await requireModuleAccess(SAAS_MODULES.EXPORTS);
     } catch (error) {
       if (error instanceof ModuleAccessError) {
         return NextResponse.json({ error: error.message }, { status: error.status });
@@ -540,111 +575,35 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const body = (await req.json()) as Partial<ExportBody>;
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+    const parsedBody = exportBodySchema.safeParse(await req.json().catch(() => null));
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 400 });
     }
-
-    const exportBody: ExportBody = {
-      title: typeof body.title === "string" ? body.title : "",
-      per100g: (body.per100g ?? {}) as CalculatedNutrients,
-      perPortion: (body.perPortion ?? {}) as CalculatedNutrients,
-      portionSize: Number.isFinite(Number(body.portionSize)) ? Number(body.portionSize) : 0,
-      householdMeasure:
-        typeof body.householdMeasure === "string" && body.householdMeasure.trim().length > 0
-          ? body.householdMeasure
-          : "medida caseira",
-      popGroup: (body.popGroup as PopGroup) ?? POPULATION_GROUPS.ADULTS,
-      isSupplement: Boolean(body.isSupplement),
-      servingsPerPackage: typeof body.servingsPerPackage === "string" ? body.servingsPerPackage : undefined,
-      selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
-      selectedTableTypes: Array.isArray(body.selectedTableTypes) ? (body.selectedTableTypes as SheetType[]) : [],
-      extraConstituents: Array.isArray(body.extraConstituents) ? body.extraConstituents : [],
-      showDailyValue: body.showDailyValue !== false,
-    };
-
-    const selectedTables = sanitizeSelectedTableTypes(exportBody.selectedTableTypes, exportBody.isSupplement);
-
-    const vdr = withFallbackVdr(exportBody.popGroup);
-    const nutrients = buildNutrientMap(exportBody, vdr);
-    const nutrientsAdults = buildNutrientMap(exportBody, withFallbackVdr(POPULATION_GROUPS.ADULTS));
-    const selectedMicros = buildSelectedMicroRows(exportBody, vdr);
-
-    const cellsBySheet: Partial<Record<SheetType, CellValueMap>> = {};
-    const setSheetCells = (sheet: SheetType, fill: (cells: CellValueMap) => void) => {
-      const cells: CellValueMap = {};
-      fill(cells);
-      cellsBySheet[sheet] = cells;
-    };
-
-    setSheetCells("VERT", (cells) => fillVertical(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("HORIZ", (cells) => fillHorizontal(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("VERT-QUEB", (cells) => fillVerticalQuebrado(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("HORIZ-QUEB", (cells) => fillHorizontalQuebrado(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("LINEAR", (cells) => fillLinear(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("AGREGADO", (cells) => fillAgregado(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("SIMPLIF", (cells) => fillSimplificado(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("B2B", (cells) => fillB2B(cells, nutrients, selectedMicros));
-    setSheetCells("ADICAO", (cells) => fillAdicao(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("100", (cells) => fill100(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("SUPLEM", (cells) => fillSuplemento(cells, exportBody, nutrients, selectedMicros));
-    setSheetCells("SUPLEM-POP", (cells) =>
-      fillSuplementoPopulacional(cells, exportBody, nutrients, nutrientsAdults, selectedMicros)
+    const requestLimit = await consumeRequestRateLimit(
+      "exports",
+      context.user.id,
+      getRequestRateLimit("exports"),
     );
-
-    const templatePath = await resolveTemplatePath();
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(templatePath);
-
-    // Apply cell values to each sheet
-    for (const [sheetName, cellValues] of Object.entries(cellsBySheet)) {
-      const sheet = workbook.getWorksheet(sheetName);
-      if (!sheet) continue;
-
-      for (const [ref, value] of Object.entries(cellValues)) {
-        const cell = sheet.getCell(ref);
-        cell.value = value;
-      }
+    if (!requestLimit.allowed) {
+      return rateLimitResponse(requestLimit, { error: "Limite temporário de exportações atingido." });
     }
-
-    // Hide unselected sheets
-    workbook.eachSheet((sheet) => {
-      const name = sheet.name as SheetType;
-      if (ALL_SHEET_TYPES.includes(name)) {
-        const isSelected = selectedTables.includes(name);
-        sheet.state = isSelected ? "visible" : "hidden";
-      }
-    });
-
-    // Set the first visible sheet as active
-    const firstVisible = workbook.worksheets.find((s) => s.state === "visible");
-    if (firstVisible) {
-      workbook.views = [
-        {
-          x: 0,
-          y: 0,
-          width: 10000,
-          height: 20000,
-          firstSheet: 0,
-          activeTab: firstVisible.id - 1,
-          visibility: "visible",
-        },
-      ];
+    const exportBody = parsedBody.data;
+    const buffer = await generateExcelBuffer(exportBody);
+    if (buffer.byteLength > getRuntimeResponseBodyLimitBytes(25)) {
+      return NextResponse.json({ error: "Arquivo de exportação excede o limite suportado pelo ambiente." }, { status: 413 });
     }
-
     const safeTitle =
-      (exportBody.title || "nutricional")
+      exportBody.title
         .trim()
         .replace(/\s+/g, "_")
         .replace(/[^a-zA-Z0-9_-]/g, "") || "nutricional";
-
-    const buffer = await workbook.xlsx.writeBuffer();
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="tabela-${safeTitle}.xlsx"`,
+        "Cache-Control": "private, no-store",
       },
     });
   } catch {

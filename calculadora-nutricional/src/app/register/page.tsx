@@ -37,7 +37,7 @@ export default function RegisterPage() {
                     <Field>
                         <FieldLabel htmlFor="password">Senha</FieldLabel>
                         <InputGroup>
-                            <InputGroupInput id="password" name="password" type={showPassword ? "text" : "password"} required />
+                        <InputGroupInput id="password" name="password" type={showPassword ? "text" : "password"} required minLength={10} maxLength={256} />
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton size="icon-xs" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}>
                                     {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
@@ -46,7 +46,7 @@ export default function RegisterPage() {
                         </InputGroup>
                         <FieldDescription>Use pelo menos 10 caracteres.</FieldDescription>
                     </Field>
-                    <Field><FieldLabel htmlFor="confirmPassword">Confirmar senha</FieldLabel><Input id="confirmPassword" name="confirmPassword" type={showPassword ? "text" : "password"} required /></Field>
+                    <Field><FieldLabel htmlFor="confirmPassword">Confirmar senha</FieldLabel><Input id="confirmPassword" name="confirmPassword" type={showPassword ? "text" : "password"} required minLength={10} maxLength={256} /></Field>
                     {state?.error ? <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert> : null}
                     <Button type="submit" className="w-full" disabled={pending}>
                         {pending ? <Spinner data-icon="inline-start" /> : null}{pending ? "Criando..." : "Criar conta"}

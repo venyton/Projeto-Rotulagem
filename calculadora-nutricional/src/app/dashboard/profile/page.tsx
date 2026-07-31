@@ -152,7 +152,7 @@ export default function ProfilePage() {
 
     return (
         <div className="app-page flex max-w-5xl flex-col gap-6">
-            <PageHeader eyebrow="Conta" icon={ShieldCheck} title="Perfil e segurança" description="Atualize seus dados de acesso, preferências e proteção da conta." />
+            <PageHeader title="Perfil e segurança" description="Atualize seus dados de acesso, preferências e proteção da conta." />
 
             <Card className="mb-6 border-border/70">
                 <CardHeader>

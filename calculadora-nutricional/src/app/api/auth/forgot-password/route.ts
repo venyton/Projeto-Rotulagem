@@ -4,9 +4,9 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import {
-  isPersistentRateLimited,
-  recordPersistentRateLimitFailure,
+  consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
+import { getClientAddress, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { sendPasswordResetEmail } from "@/lib/security/password-reset-email";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 
@@ -33,8 +33,23 @@ export async function POST(request: NextRequest) {
   const scope = "auth.password_reset.request";
 
   try {
-    if (await isPersistentRateLimited(scope, email, 5)) return successResponse();
-    await recordPersistentRateLimitFailure(scope, email, 60 * 60 * 1000);
+    const globalLimit = await consumePersistentRateLimit(
+      "auth.password_reset.global",
+      "application",
+      getRequestRateLimit("passwordResetGlobal"),
+    );
+    const ipLimit = await consumePersistentRateLimit(
+      "auth.password_reset.ip",
+      getClientAddress(request),
+      getRequestRateLimit("passwordResetGlobal"),
+    );
+    if (!globalLimit.allowed || !ipLimit.allowed) return successResponse();
+
+    const rateLimit = await consumePersistentRateLimit(scope, email, {
+      maxAttempts: 5,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) return successResponse();
 
     const user = await prisma.user.findUnique({
       where: { email },

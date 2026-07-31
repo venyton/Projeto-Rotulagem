@@ -68,8 +68,8 @@ export function InspectIngredientDialog({ ingredient }: { ingredient: Ingredient
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" title="Inspecionar">
-                    <Search className="h-4 w-4" />
+                <Button variant="ghost" size="icon" title="Inspecionar" aria-label="Inspecionar ingrediente">
+                    <Search className="h-4 w-4" aria-hidden="true" />
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

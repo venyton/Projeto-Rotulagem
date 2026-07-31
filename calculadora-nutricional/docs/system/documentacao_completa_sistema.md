@@ -1,6 +1,6 @@
 # Documentacao completa do sistema
 
-Atualizado em: 14/05/2026.
+Atualizado em: 30/07/2026.
 
 ## 1. Visao geral
 
@@ -530,7 +530,45 @@ tabela_<modelo>.png
 selo_fop.png
 ```
 
-### 3.18 Persistencia completa da UI
+### 3.18 Documentos técnicos
+
+O gerador possui quatro downloads técnicos independentes:
+
+```text
+Memorial de cálculo  PDF e XLSX
+Ficha técnica        PDF e XLSX
+```
+
+O Memorial reúne identificação, parâmetros, formulação, contribuição por
+componente, micronutrientes, resultados consolidados e verificações. O XLSX
+entregue ao usuário contém somente a aba `Memorial de Cálculo`.
+
+A Ficha técnica reúne identificação do produto, características
+físico-químicas, microbiológicas, contaminantes, matérias estranhas,
+informação nutricional, apresentação, logística, revisões e aprovações. Seu
+XLSX contém as abas `Ficha Técnica` e `Dados do Sistema`.
+
+Endpoint protegido:
+
+```text
+GET /api/export/memorial?tableId=<id>&document=memorial|technical&format=pdf|xlsx
+```
+
+Os documentos usam os cálculos existentes, exportam valores materializados e
+mantêm campos obrigatórios mesmo quando não há informação cadastrada. Nesses
+casos, o arquivo informa `Não informado no cadastro`. Fórmulas, fatores
+internos, referências de células e estrutura interna do banco não são expostos.
+
+Arquivos principais:
+
+```text
+src/app/api/export/memorial/route.ts
+src/lib/export/memorial-pdf.ts
+src/lib/export/memorial-xlsx.ts
+src/lib/export/technical-sheet-xlsx.ts
+```
+
+### 3.19 Persistencia completa da UI
 
 O sistema salva a tabela gerada e tambem o estado de configuracao da interface.
 
@@ -571,7 +609,7 @@ frases obrigatorias
 
 Isso permite reabrir uma tabela salva com as configuracoes voltando para a tela.
 
-### 3.19 Perfil de conformidade
+### 3.20 Perfil de conformidade
 
 O sistema inclui um bloco de conformidade com:
 
@@ -595,7 +633,7 @@ Farinha de trigo/milho enriquecida
 Categoria com vedacao de lupa
 ```
 
-### 3.20 Importador de fichas tecnicas por IA
+### 3.21 Importador de fichas tecnicas por IA
 
 O importador recebe PDFs ou imagens de fichas tecnicas, envia o conteudo para Gemini no servidor e grava uma extracao revisavel antes de criar ingrediente.
 
@@ -631,7 +669,7 @@ src/features/technical-sheets/services/technical-sheet-file-service.ts
 src/app/dashboard/ingredients/technical-sheets/page.tsx
 ```
 
-### 3.21 Workspace enterprise
+### 3.22 Workspace enterprise
 
 O modulo enterprise permite criar projetos de rotulo a partir de uma tabela base e acompanhar versoes, mercado internacional e aprovacao.
 
@@ -667,7 +705,7 @@ src/features/enterprise/actions/enterprise-label-actions.ts
 src/app/dashboard/enterprise/page.tsx
 ```
 
-### 3.22 Idioma global da interface
+### 3.23 Idioma global da interface
 
 O idioma global fica em `src/features/i18n`. O padrao e `pt-BR`; a selecao de mercado enterprise nao muda automaticamente o idioma global da aplicacao.
 
@@ -710,6 +748,7 @@ Protegidas:
 /api/auth/[...nextauth]    Autenticacao NextAuth
 /api/export/excel         Exportacao Excel
 /api/export/complete      Exportacao ZIP completo
+/api/export/memorial      Memorial e Ficha técnica em PDF/XLSX
 /api/open-food-facts/products Busca segura no Open Food Facts
 ```
 
@@ -818,7 +857,9 @@ TECHNICAL_SHEET_MAX_BATCH_FILES
 
 O codigo de autenticacao tambem possui fallback para `DATABASE_URL` em diagnostico, mas o schema Prisma usa `POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`.
 
-`OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar a aplicacao nas chamadas ao Open Food Facts. A busca externa deve ser tratada como apoio operacional: o usuario precisa revisar os valores antes de usar no rotulo. Produtos importados ficam cacheados na tabela `Ingredient` com id `off-{codigo_de_barras}` e `origin = Open Food Facts`.
+`OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar a aplicacao nas chamadas ao Open Food Facts. A busca externa deve ser tratada como apoio operacional: o usuario precisa revisar os valores antes de usar no rotulo. Produtos importados ficam cacheados na tabela `Ingredient` com id `off-{codigo_de_barras}` e `origin = Open Food Facts`; as consultas externas normalizadas usam o Data Cache do Next com TTL de 10 minutos para nome e 24 horas para codigo de barras.
+
+Ingredientes mantem o campo normalizado `searchName` para busca sem acentos. Ele e preenchido nas escritas da aplicacao e indexado com `pg_trgm`; a migration correspondente tambem faz o backfill dos registros existentes.
 
 `GEMINI_API_KEY` habilita o importador de fichas tecnicas. `GEMINI_MODEL`, `TECHNICAL_SHEET_MAX_FILE_SIZE_MB` e `TECHNICAL_SHEET_MAX_BATCH_FILES` permitem ajustar modelo, tamanho maximo e lote de upload sem alterar o codigo.
 
@@ -906,6 +947,8 @@ O sistema hoje faz:
 - pre-visualizacao de modelos oficiais;
 - exportacao de imagens;
 - exportacao Excel;
+- exportacao de Memorial de calculo em PDF e XLSX;
+- exportacao de Ficha tecnica em PDF e XLSX;
 - pacote ZIP completo;
 - persistencia de tabelas e estado completo da UI.
 

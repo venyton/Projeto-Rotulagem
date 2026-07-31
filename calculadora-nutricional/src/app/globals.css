@@ -263,15 +263,20 @@
   }
 
   .app-page {
-    width: min(100%, 88rem);
-    margin-inline: auto;
-    padding: 1.5rem 1rem;
+    width: 100%;
+    margin-inline: 0;
+    min-height: 0;
+    height: 100%;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1.5rem max(1rem, calc((100% - 88rem) / 2 + 1rem));
   }
 
   .app-page-loose {
-    width: min(100%, 88rem);
-    margin-inline: auto;
-    padding: 2.5rem 1rem;
+    width: 100%;
+    margin-inline: 0;
+    padding: 2.5rem max(1rem, calc((100% - 88rem) / 2 + 1rem));
   }
 
   .app-enter {
@@ -440,7 +445,7 @@
   @media (min-width: 768px) {
     .app-page,
     .app-page-loose {
-      padding-inline: 1.5rem;
+      padding-inline: max(1.5rem, calc((100% - 88rem) / 2 + 1.5rem));
     }
 
     .app-feature-panel {

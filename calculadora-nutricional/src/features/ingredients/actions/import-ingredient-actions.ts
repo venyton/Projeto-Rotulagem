@@ -6,6 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { normalizeIngredientSearchText } from "@/features/ingredients/domain/ingredient-search";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 export type IngredientData = {
     name: string;
@@ -111,7 +113,8 @@ export async function getUserIngredients() {
 
     return await prisma.customIngredient.findMany({
         where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: 200,
     });
 }
 
@@ -140,9 +143,17 @@ export async function importIngredients(ingredients: IngredientData[]) {
         const safeIngredients = sanitizeImportedIngredients(ingredients);
         if (!safeIngredients) return { error: "Dados de importação inválidos." };
 
+        const requestLimit = await consumeRequestRateLimit(
+            "ingredient_writes",
+            user.id,
+            getRequestRateLimit("ingredientWrites"),
+        );
+        if (!requestLimit.allowed) return { error: "Limite temporário de importações atingido. Tente novamente mais tarde." };
+
         await prisma.customIngredient.createMany({
             data: safeIngredients.map(ing => ({
                 ...ing,
+                searchName: normalizeIngredientSearchText(ing.name),
                 userId: user.id
             }))
         });

@@ -13,17 +13,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importIngredients, IngredientData } from '@/features/ingredients/actions/import-ingredient-actions';
-import ExcelJS from 'exceljs';
+import type ExcelJSModule from 'exceljs';
 import { toast } from "sonner";
 import { Loader2, Upload } from 'lucide-react';
 
-function normalizeCellValue(value: ExcelJS.CellValue): unknown {
+const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 1000;
+
+function normalizeCellValue(value: ExcelJSModule.CellValue): unknown {
     if (value === null || value === undefined) return "";
     if (value instanceof Date) return value.toISOString();
     if (typeof value !== "object") return value;
 
     if ("result" in value) {
-        return normalizeCellValue(value.result as ExcelJS.CellValue);
+        return normalizeCellValue(value.result as ExcelJSModule.CellValue);
     }
 
     if ("text" in value && typeof value.text === "string") {
@@ -38,6 +41,7 @@ function normalizeCellValue(value: ExcelJS.CellValue): unknown {
 }
 
 async function readRowsFromExcel(data: ArrayBuffer) {
+    const { default: ExcelJS } = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(data);
 
@@ -52,6 +56,9 @@ async function readRowsFromExcel(data: ArrayBuffer) {
     const rows: Record<string, unknown>[] = [];
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
+        if (rowNumber > MAX_IMPORT_ROWS + 1) {
+            throw new Error(`O arquivo pode conter no máximo ${MAX_IMPORT_ROWS} ingredientes.`);
+        }
 
         const item: Record<string, unknown> = {};
         headers.forEach((header, colNumber) => {
@@ -85,6 +92,17 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith(".xlsx")) {
+            toast.error("Use um arquivo Excel .xlsx.");
+            e.target.value = '';
+            return;
+        }
+        if (file.size <= 0 || file.size > MAX_IMPORT_FILE_SIZE) {
+            toast.error("O arquivo deve ter entre 1 byte e 10 MB.");
+            e.target.value = '';
+            return;
+        }
 
         setLoading(true);
 
@@ -162,8 +180,8 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
                 onImportSuccess?.();
             }
 
-        } catch {
-            toast.error("Erro ao processar o arquivo. Verifique o formato.");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Erro ao processar o arquivo. Verifique o formato.");
         } finally {
             setLoading(false);
         }
@@ -181,23 +199,23 @@ export function ImportIngredientsDialog({ onImportSuccess }: { onImportSuccess?:
                 <DialogHeader>
                     <DialogTitle>Importar Ingredientes</DialogTitle>
                     <DialogDescription>
-                        Envie um arquivo Excel (.xlsx) com as colunas: Nome, Energia, Proteína, Carboidratos, etc.
+                        Envie um arquivo Excel (.xlsx), com até 1.000 linhas, contendo colunas como Nome, Energia, Proteína e Carboidratos.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">Selecione o arquivo</Label>
+                        <Label htmlFor="ingredients-file">Selecione o arquivo</Label>
                         <Input
-                            id="file"
+                            id="ingredients-file"
                             type="file"
-                            accept=".xlsx, .xls"
+                            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={handleFileUpload}
                             disabled={loading}
                             ref={fileInputRef}
                         />
                     </div>
                     {loading && (
-                        <div className="flex items-center justify-center py-2">
+                        <div className="flex items-center justify-center py-2" role="status" aria-live="polite">
                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
                             <span className="ml-2 text-sm text-muted-foreground">Processando...</span>
                         </div>

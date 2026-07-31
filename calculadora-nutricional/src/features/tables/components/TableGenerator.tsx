@@ -9,7 +9,11 @@ import {
     calculateRecipe,
     calculatePreparedProduct,
     CalculatedNutrients,
+    applyManualMicronutrientOverrides,
     isLikelyAddedSugarIngredient,
+    normalizeManualMicronutrients,
+    parseManualMicronutrientValue,
+    type ManualMicronutrientValues,
 } from "@/features/tables/domain/nutrients";
 import { NutritionalLabel } from "@/features/tables/components/NutritionalLabel";
 import { MagnifyingGlassLabel } from "@/features/tables/components/MagnifyingGlassLabel";
@@ -48,11 +52,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Download, Save, ChevronDown } from "lucide-react";
+import { Trash2, Download, Save, ChevronDown, FileSpreadsheet, FileText, Image as ImageIcon } from "lucide-react";
 import { saveTable } from "@/features/tables/actions/table-actions";
 import { toast } from "sonner";
 import { toCanvas } from "html-to-image";
-import { MICRONUTRIENTS_A_TO_Z } from "@/features/tables/domain/micronutrients";
+import { MICRONUTRIENTS_A_TO_Z, type MicronutrientKey } from "@/features/tables/domain/micronutrients";
 import { FOOD_GROUPS } from "@/features/tables/domain/food-groups";
 import {
     HOUSEHOLD_MEASURE_CODES,
@@ -117,6 +121,7 @@ type ExportFile = {
     blob: Blob;
 };
 type TableUiState = {
+    productDescription?: string;
     selectedGroup?: string;
     selectedProduct?: string;
     packageContent?: number;
@@ -130,6 +135,7 @@ type TableUiState = {
     isSupplement?: boolean;
     extraConstituents?: ExtraConstituent[];
     selectedNutrients?: string[];
+    manualMicronutrients?: ManualMicronutrientValues;
     selectedTableTypes?: ExcelTableType[];
     selectedImageFormats?: ImageExportFormat[];
     includeFopSealOnImageExport?: boolean;
@@ -380,6 +386,7 @@ export function TableGenerator({
     const savedUiState: TableUiState = toTableUiState(initialData?.uiState);
     const [tableId, setTableId] = useState(initialData?.id || "");
     const [title, setTitle] = useState(initialData?.title || "");
+    const [productDescription, setProductDescription] = useState(savedUiState.productDescription || "");
     const [ingredients, setIngredients] = useState<SelectedIngredient[]>(initialData?.ingredients || []);
     const [portionSize, setPortionSize] = useState<number>(initialData?.portionSize || 0);
     const [householdMeasureCode, setHouseholdMeasureCode] = useState<HouseholdMeasureCode>(
@@ -431,6 +438,9 @@ export function TableGenerator({
         )
     );
     const [selectedNutrients, setSelectedNutrients] = useState<string[]>(savedUiState.selectedNutrients || []);
+    const [manualMicronutrients, setManualMicronutrients] = useState<ManualMicronutrientValues>(() =>
+        normalizeManualMicronutrients(savedUiState.manualMicronutrients)
+    );
     const [selectedTableTypes, setSelectedTableTypes] = useState<ExcelTableType[]>(
         savedUiState.selectedTableTypes && savedUiState.selectedTableTypes.length > 0
             ? savedUiState.selectedTableTypes
@@ -818,12 +828,27 @@ export function TableGenerator({
         toast.success(`Medida ajustada para ${suggestion.label}.`);
     };
 
-    const toggleNutrient = (name: string) => {
+    const toggleNutrient = (name: MicronutrientKey) => {
         setSelectedNutrients(prev =>
             prev.includes(name)
                 ? prev.filter(n => n !== name)
                 : [...prev, name]
         );
+        setManualMicronutrients((previous) => {
+            if (!(name in previous)) return previous;
+            const next = { ...previous };
+            delete next[name];
+            return next;
+        });
+    };
+
+    const updateManualMicronutrient = (name: MicronutrientKey, value: string) => {
+        setManualMicronutrients((previous) => {
+            const next = { ...previous };
+            if (value.trim()) next[name] = value;
+            else delete next[name];
+            return next;
+        });
     };
 
     const toggleTableType = (type: ExcelTableType) => {
@@ -997,6 +1022,7 @@ export function TableGenerator({
     const clearSelectedMicronutrients = () => {
         if (selectedNutrients.length === 0) return;
         setSelectedNutrients([]);
+        setManualMicronutrients({});
         toast.success("Micronutrientes desmarcados.");
     };
 
@@ -1065,7 +1091,7 @@ export function TableGenerator({
                 preparationInstructions,
                 extraConstituents,
             });
-            setResult(res);
+            setResult(applyManualMicronutrientOverrides(res, manualMicronutrients, portionSize));
             if (powderPortion > 0 && Math.abs(portionSize - powderPortion) > 0.0001) {
                 setPortionSize(powderPortion);
             }
@@ -1076,7 +1102,7 @@ export function TableGenerator({
         }
 
         const res = calculateRecipe(ingredients, portionSize, extraConstituents);
-        setResult(res);
+        setResult(applyManualMicronutrientOverrides(res, manualMicronutrients, portionSize));
     }, [
         enablePreparationSimulator,
         extraConstituents,
@@ -1089,6 +1115,7 @@ export function TableGenerator({
         preparationPowderPortion,
         preparationReadyPortion,
         preparationYield,
+        manualMicronutrients,
     ]);
 
     useEffect(() => {
@@ -1101,6 +1128,7 @@ export function TableGenerator({
 
             if (typeof persisted.selectedGroup === "string") setSelectedGroup(persisted.selectedGroup);
             if (typeof persisted.selectedProduct === "string") setSelectedProduct(persisted.selectedProduct);
+            if (typeof persisted.productDescription === "string") setProductDescription(persisted.productDescription);
             if (typeof persisted.packageContent === "number" && Number.isFinite(persisted.packageContent)) {
                 setPackageContent(persisted.packageContent);
             }
@@ -1133,6 +1161,7 @@ export function TableGenerator({
             }
 
             if (Array.isArray(persisted.selectedNutrients)) setSelectedNutrients(persisted.selectedNutrients);
+            if (persisted.manualMicronutrients) setManualMicronutrients(normalizeManualMicronutrients(persisted.manualMicronutrients));
             if (Array.isArray(persisted.selectedTableTypes) && persisted.selectedTableTypes.length > 0) {
                 setSelectedTableTypes(persisted.selectedTableTypes);
             }
@@ -1229,6 +1258,11 @@ export function TableGenerator({
     const handleSave = async () => {
         setSaving(true);
         try {
+            if (Object.values(manualMicronutrients).some((value) => parseManualMicronutrientValue(value) === null)) {
+                toast.error("Informe valores manuais válidos, iguais ou maiores que zero.");
+                return;
+            }
+            const normalizedManualMicronutrients = normalizeManualMicronutrients(manualMicronutrients);
             const response = await saveTable({
                 id: tableId || undefined,
                 title,
@@ -1242,6 +1276,7 @@ export function TableGenerator({
                 suggestedFoodGroup: selectedGroup || undefined,
                 suggestedProduct: selectedProduct || undefined,
                 uiState: {
+                    productDescription,
                     selectedGroup,
                     selectedProduct,
                     packageContent,
@@ -1263,6 +1298,7 @@ export function TableGenerator({
                     preparationFinalYield,
                     preparationIngredients,
                     selectedNutrients,
+                    manualMicronutrients: normalizedManualMicronutrients,
                     selectedTableTypes,
                     selectedImageFormats,
                     includeFopSealOnImageExport,
@@ -1299,6 +1335,7 @@ export function TableGenerator({
             const storageKey = savedId ? `table-generator-ui:${savedId}` : tableUiStorageKey;
             if (storageKey) {
                 const persisted: TableUiState = {
+                    productDescription,
                     selectedGroup,
                     selectedProduct,
                     packageContent,
@@ -1320,6 +1357,7 @@ export function TableGenerator({
                     preparationFinalYield,
                     preparationIngredients,
                     selectedNutrients,
+                    manualMicronutrients: normalizedManualMicronutrients,
                     selectedTableTypes,
                     selectedImageFormats,
                     includeFopSealOnImageExport,
@@ -1711,6 +1749,20 @@ export function TableGenerator({
         }
     };
 
+    const handleDownloadDocument = (documentType: "memorial" | "technical", format: "pdf" | "xlsx") => {
+        if (!tableId) {
+            toast.info("Salve o projeto antes de baixar os documentos técnicos.");
+            return;
+        }
+
+        const link = document.createElement("a");
+        link.href = `/api/export/memorial?tableId=${encodeURIComponent(tableId)}&document=${documentType}&format=${format}`;
+        link.download = `${documentType === "technical" ? "ficha_tecnica" : "memorial_de_calculo"}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="space-y-5">
             <div className="app-panel px-4 py-4 sm:px-5">
@@ -1823,6 +1875,18 @@ export function TableGenerator({
                                 rows={2}
                                 className="min-h-12 resize-y leading-relaxed"
                             />
+                            <div className="space-y-2 pt-2">
+                                <Label htmlFor="product-description">Descrição do produto (opcional)</Label>
+                                <Textarea
+                                    id="product-description"
+                                    value={productDescription}
+                                    onChange={(e) => setProductDescription(e.target.value)}
+                                    placeholder="Descreva brevemente o produto ou sua apresentação."
+                                    rows={2}
+                                    maxLength={500}
+                                    className="resize-y leading-relaxed"
+                                />
+                            </div>
                         </div>
 
                         <div className={`${PANEL_CLASS} grid grid-cols-1 gap-4 p-4 md:grid-cols-2`}>
@@ -2775,7 +2839,7 @@ export function TableGenerator({
                                 </Button>
                                 <CardTitle className="inline-flex min-w-0 items-center gap-1.5 break-words text-base [overflow-wrap:anywhere]">
                                     Micronutrientes Opcionais
-                                    <HelpTip>Marque apenas os micronutrientes que precisam aparecer na tabela. Os valores vêm dos ingredientes cadastrados.</HelpTip>
+                                    <HelpTip>Marque o que deve aparecer na tabela. Deixe o valor manual em branco para usar o cálculo dos ingredientes; quando informado, ele vale por 100 g/ml e a porção é calculada automaticamente.</HelpTip>
                                 </CardTitle>
                             </div>
                             <Button
@@ -2791,23 +2855,42 @@ export function TableGenerator({
                         </div>
                     </CardHeader>
                     {micronutrientsSectionOpen && (
-                    <CardContent className="h-64 overflow-y-auto bg-muted/20 pt-3">
+                    <CardContent className="max-h-96 overflow-y-auto bg-muted/20 pt-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {MICRONUTRIENTS_A_TO_Z.map(m => (
-                                <div key={m.name} className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id={`micro-${m.name}`}
-                                        checked={selectedNutrients.includes(m.name)}
-                                        onCheckedChange={() => toggleNutrient(m.name)}
-                                    />
-                                    <label
-                                        htmlFor={`micro-${m.name}`}
-                                        className="text-sm font-medium leading-none cursor-pointer text-muted-foreground"
-                                    >
-                                        {m.label} <span className="text-xs text-muted-foreground/80">({m.unit})</span>
-                                    </label>
+                            {MICRONUTRIENTS_A_TO_Z.map(m => {
+                                const isSelected = selectedNutrients.includes(m.name);
+                                return (
+                                <div key={m.name} className={`rounded-md px-2 py-1.5 transition-colors ${isSelected ? "bg-background shadow-sm" : ""}`}>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`micro-${m.name}`}
+                                            checked={isSelected}
+                                            onCheckedChange={() => toggleNutrient(m.name)}
+                                        />
+                                        <label
+                                            htmlFor={`micro-${m.name}`}
+                                            className="cursor-pointer text-sm font-medium leading-none text-muted-foreground"
+                                        >
+                                            {m.label} <span className="text-xs text-muted-foreground/80">({m.unit})</span>
+                                        </label>
+                                    </div>
+                                    {isSelected && (
+                                        <div className="ml-6 mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                                            <Input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={manualMicronutrients[m.name] || ""}
+                                                onChange={(event) => updateManualMicronutrient(m.name, event.target.value)}
+                                                placeholder="Calculado pelos ingredientes"
+                                                aria-label={`Valor manual de ${m.label} por 100 g ou ml`}
+                                                className="h-8 text-sm"
+                                            />
+                                            <span className="text-[11px] whitespace-nowrap text-muted-foreground">por 100 g/ml</span>
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                     )}
@@ -3038,171 +3121,254 @@ export function TableGenerator({
                     )}
 
                     {result && canExport && (
-                        <div className="shrink-0 space-y-4 border-t bg-card p-4 sm:p-5">
-                            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2">
-                                <DropdownMenu>
-                                    <ButtonGroup className="w-full">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => handleExportImage()}
-                                            className="min-w-0 flex-1"
-                                        >
-                                            <Download data-icon="inline-start" />
-                                            <span>Exportar Só Imagem</span>
-                                        </Button>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                aria-label="Opções de exportação de imagem"
-                                            >
-                                                <ChevronDown aria-hidden="true" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                    </ButtonGroup>
-                                    <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-y-auto">
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuLabel>Modelos para Imagem</DropdownMenuLabel>
-                                        {availableTableOptions.map((item) => (
-                                            <DropdownMenuCheckboxItem
-                                                key={`img-type-${item.value}`}
-                                                checked={selectedTableTypes.includes(item.value)}
-                                                onSelect={(e) => e.preventDefault()}
-                                                onCheckedChange={() => toggleTableType(item.value)}
-                                            >
-                                                {item.label}
-                                            </DropdownMenuCheckboxItem>
-                                        ))}
-                                      </DropdownMenuGroup>
-                                        <DropdownMenuSeparator />
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuLabel>Formato da Imagem</DropdownMenuLabel>
-                                        {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
-                                            <DropdownMenuCheckboxItem
-                                                key={`img-format-${item.value}`}
-                                                checked={selectedImageFormats.includes(item.value)}
-                                                onSelect={(e) => e.preventDefault()}
-                                                onCheckedChange={() => toggleImageFormat(item.value)}
-                                            >
-                                                {item.label}
-                                            </DropdownMenuCheckboxItem>
-                                        ))}
-                                      </DropdownMenuGroup>
-                                        <DropdownMenuSeparator />
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuCheckboxItem
-                                            checked={effectiveHasFopSeal}
-                                            onSelect={(e) => e.preventDefault()}
-                                            disabled
-                                        >
-                                            Modelos de lupa ANVISA no ZIP
-                                        </DropdownMenuCheckboxItem>
-                                      </DropdownMenuGroup>
-                                        <DropdownMenuSeparator />
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuItem
-                                            onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}
-                                        >
-                                            Selecionar todas as tabelas
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setSelectedTableTypes([previewTableType])}>
-                                            Usar só modelo da prévia
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setSelectedImageFormats([])}>
-                                            Limpar formatos
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setSelectedImageFormats(DEFAULT_IMAGE_EXPORT_FORMATS)}>
-                                            Restaurar padrão (PNG)
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExportImage(selectedImageFormats)}>
-                                            Exportar agora ({selectedImageTableCount} tabela(s))
-                                        </DropdownMenuItem>
-                                      </DropdownMenuGroup>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                        <div className="shrink-0 border-t bg-card p-4 sm:p-5">
+                            <div className="space-y-5">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p className={PANEL_EYEBROW_CLASS}>Central de exportação</p>
+                                        <h2 className="mt-1 text-base font-semibold text-foreground">Baixar arquivos</h2>
+                                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                                            Escolha uma saída rápida ou baixe os documentos técnicos completos do projeto.
+                                        </p>
+                                    </div>
+                                    <Badge variant="secondary" className="w-fit shrink-0">
+                                        4 arquivos técnicos
+                                    </Badge>
+                                </div>
 
-                                <DropdownMenu>
-                                    <ButtonGroup className="w-full">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={handleExportCompleteZip}
-                                            className="min-w-0 flex-1"
-                                        >
-                                            <Download data-icon="inline-start" />
-                                            <span>Exportar Imagem + Excel</span>
-                                        </Button>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                aria-label="Opções de exportação completa"
-                                            >
-                                                <ChevronDown aria-hidden="true" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                    </ButtonGroup>
-                                    <DropdownMenuContent align="end" className="w-72 max-h-[70vh] overflow-y-auto">
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuLabel>Modelos para o Excel</DropdownMenuLabel>
-                                        {availableTableOptions.map((item) => (
-                                            <DropdownMenuCheckboxItem
-                                                key={item.value}
-                                                checked={selectedTableTypes.includes(item.value)}
-                                                onSelect={(e) => e.preventDefault()}
-                                                onCheckedChange={() => toggleTableType(item.value)}
-                                            >
-                                                {item.label}
-                                            </DropdownMenuCheckboxItem>
-                                        ))}
-                                      </DropdownMenuGroup>
-                                        <DropdownMenuSeparator />
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuLabel>Formato da imagem no ZIP</DropdownMenuLabel>
-                                        {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
-                                            <DropdownMenuCheckboxItem
-                                                key={`zip-img-format-${item.value}`}
-                                                checked={selectedImageFormats.includes(item.value)}
-                                                onSelect={(e) => e.preventDefault()}
-                                                onCheckedChange={() => toggleImageFormat(item.value)}
-                                            >
-                                                {item.label}
-                                            </DropdownMenuCheckboxItem>
-                                        ))}
-                                      </DropdownMenuGroup>
-                                        <DropdownMenuSeparator />
-                                      <DropdownMenuGroup>
-                                        <DropdownMenuItem
-                                            onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}
-                                        >
-                                            Selecionar todas
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => setSelectedTableTypes([])}>
-                                            Limpar seleção
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={handleExportCompleteZip}>
-                                            Exportar ZIP (Excel + imagem) ({selectedTableTypes.length})
-                                        </DropdownMenuItem>
-                                      </DropdownMenuGroup>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                <section className="space-y-3" aria-labelledby="label-export-heading">
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                            <ImageIcon className="size-4" aria-hidden="true" />
+                                        </div>
+                                        <div>
+                                            <h3 id="label-export-heading" className="text-sm font-semibold text-foreground">Rótulo nutricional</h3>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">Imagens para uso rápido ou pacote com Excel.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        <DropdownMenu>
+                                            <ButtonGroup className="w-full">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => handleExportImage()}
+                                                    className="min-w-0 flex-1 justify-start"
+                                                >
+                                                    <Download data-icon="inline-start" />
+                                                    <span className="truncate">Exportar imagem</span>
+                                                </Button>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        aria-label="Opções de exportação de imagem"
+                                                    >
+                                                        <ChevronDown aria-hidden="true" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                            </ButtonGroup>
+                                            <DropdownMenuContent align="end" className="max-h-[70vh] w-64 overflow-y-auto">
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuLabel>Modelos para imagem</DropdownMenuLabel>
+                                                    {availableTableOptions.map((item) => (
+                                                        <DropdownMenuCheckboxItem
+                                                            key={`img-type-${item.value}`}
+                                                            checked={selectedTableTypes.includes(item.value)}
+                                                            onSelect={(e) => e.preventDefault()}
+                                                            onCheckedChange={() => toggleTableType(item.value)}
+                                                        >
+                                                            {item.label}
+                                                        </DropdownMenuCheckboxItem>
+                                                    ))}
+                                                </DropdownMenuGroup>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuLabel>Formato da imagem</DropdownMenuLabel>
+                                                    {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
+                                                        <DropdownMenuCheckboxItem
+                                                            key={`img-format-${item.value}`}
+                                                            checked={selectedImageFormats.includes(item.value)}
+                                                            onSelect={(e) => e.preventDefault()}
+                                                            onCheckedChange={() => toggleImageFormat(item.value)}
+                                                        >
+                                                            {item.label}
+                                                        </DropdownMenuCheckboxItem>
+                                                    ))}
+                                                </DropdownMenuGroup>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuCheckboxItem
+                                                        checked={effectiveHasFopSeal}
+                                                        onSelect={(e) => e.preventDefault()}
+                                                        disabled
+                                                    >
+                                                        Modelos de lupa ANVISA no ZIP
+                                                    </DropdownMenuCheckboxItem>
+                                                </DropdownMenuGroup>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuItem onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}>
+                                                        Selecionar todas as tabelas
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setSelectedTableTypes([previewTableType])}>
+                                                        Usar só modelo da prévia
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setSelectedImageFormats([])}>
+                                                        Limpar formatos
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setSelectedImageFormats(DEFAULT_IMAGE_EXPORT_FORMATS)}>
+                                                        Restaurar padrão (PNG)
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleExportImage(selectedImageFormats)}>
+                                                        Exportar agora ({selectedImageTableCount} tabela(s))
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuGroup>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+
+                                        <DropdownMenu>
+                                            <ButtonGroup className="w-full">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={handleExportCompleteZip}
+                                                    className="min-w-0 flex-1 justify-start"
+                                                >
+                                                    <Download data-icon="inline-start" />
+                                                    <span className="truncate">Pacote: imagem + Excel</span>
+                                                </Button>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        aria-label="Opções de exportação do pacote"
+                                                    >
+                                                        <ChevronDown aria-hidden="true" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                            </ButtonGroup>
+                                            <DropdownMenuContent align="end" className="max-h-[70vh] w-72 overflow-y-auto">
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuLabel>Modelos para o Excel</DropdownMenuLabel>
+                                                    {availableTableOptions.map((item) => (
+                                                        <DropdownMenuCheckboxItem
+                                                            key={item.value}
+                                                            checked={selectedTableTypes.includes(item.value)}
+                                                            onSelect={(e) => e.preventDefault()}
+                                                            onCheckedChange={() => toggleTableType(item.value)}
+                                                        >
+                                                            {item.label}
+                                                        </DropdownMenuCheckboxItem>
+                                                    ))}
+                                                </DropdownMenuGroup>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuLabel>Formato da imagem no pacote</DropdownMenuLabel>
+                                                    {IMAGE_EXPORT_FORMAT_OPTIONS.map((item) => (
+                                                        <DropdownMenuCheckboxItem
+                                                            key={`zip-img-format-${item.value}`}
+                                                            checked={selectedImageFormats.includes(item.value)}
+                                                            onSelect={(e) => e.preventDefault()}
+                                                            onCheckedChange={() => toggleImageFormat(item.value)}
+                                                        >
+                                                            {item.label}
+                                                        </DropdownMenuCheckboxItem>
+                                                    ))}
+                                                </DropdownMenuGroup>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuGroup>
+                                                    <DropdownMenuItem onClick={() => setSelectedTableTypes(availableTableOptions.map((item) => item.value))}>
+                                                        Selecionar todas
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setSelectedTableTypes([])}>
+                                                        Limpar seleção
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={handleExportCompleteZip}>
+                                                        Exportar pacote ({selectedTableTypes.length})
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuGroup>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </section>
+
+                                <section className="space-y-3 border-t border-border/60 pt-4" aria-labelledby="technical-export-heading">
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                            <FileText className="size-4" aria-hidden="true" />
+                                        </div>
+                                        <div>
+                                            <h3 id="technical-export-heading" className="text-sm font-semibold text-foreground">Documentos técnicos</h3>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">Arquivos completos para consulta, revisão e compartilhamento.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="divide-y overflow-hidden rounded-lg border border-border/70 bg-muted/20">
+                                        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex min-w-0 items-start gap-3">
+                                                <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-medium text-foreground">Memorial de cálculo</h4>
+                                                    <p className="mt-0.5 text-xs text-muted-foreground">Rastreabilidade, composição e valores consolidados.</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                                                <Button type="button" variant="outline" size="sm" onClick={() => handleDownloadDocument("memorial", "pdf")}>
+                                                    <FileText aria-hidden="true" />
+                                                    PDF
+                                                </Button>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => handleDownloadDocument("memorial", "xlsx")}>
+                                                    <FileSpreadsheet aria-hidden="true" />
+                                                    XLSX
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex min-w-0 items-start gap-3">
+                                                <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-medium text-foreground">Ficha técnica</h4>
+                                                    <p className="mt-0.5 text-xs text-muted-foreground">Características do produto, nutrição e logística.</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                                                <Button type="button" variant="outline" size="sm" onClick={() => handleDownloadDocument("technical", "pdf")}>
+                                                    <FileText aria-hidden="true" />
+                                                    PDF
+                                                </Button>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => handleDownloadDocument("technical", "xlsx")}>
+                                                    <FileSpreadsheet aria-hidden="true" />
+                                                    XLSX
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-foreground">Mais formatos</p>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">SVG editável para ajustes fora do sistema.</p>
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => handleExportImage(["svg"])} className="justify-start sm:justify-center">
+                                        <Download data-icon="inline-start" />
+                                        Exportar SVG editável
+                                    </Button>
+                                </div>
+
+                                <Button onClick={handleSave} disabled={saving} className="h-10 w-full">
+                                    {saving ? "Salvando..." : (
+                                        <>
+                                            <Save data-icon="inline-start" />
+                                            <span>Salvar projeto</span>
+                                        </>
+                                    )}
+                                </Button>
                             </div>
-                            <Button type="button" variant="outline" onClick={() => handleExportImage(["svg"])} className="w-full">
-                                <Download data-icon="inline-start" />
-                                <span>Exportar SVG editável</span>
-                            </Button>
-                            <Button onClick={handleSave} disabled={saving} className="w-full">
-                                {saving ? "Salvando..." : (
-                                    <>
-                                        <Save data-icon="inline-start" />
-                                        <span>Salvar Projeto</span>
-                                    </>
-                                )}
-                            </Button>
-
                         </div>
                     )}
                 </Card>

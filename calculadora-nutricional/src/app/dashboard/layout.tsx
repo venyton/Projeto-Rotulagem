@@ -1,6 +1,10 @@
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { ALL_SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
-import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
+import {
+    contextHasModuleAccess,
+    getCurrentSaaSContext,
+    listAvailableSaaSOrganizations,
+} from "@/features/saas/services/entitlements";
 import { canManageOrganizationSettings } from "@/features/settings/services/organization-settings";
 
 export default async function DashboardLayout({
@@ -15,9 +19,15 @@ export default async function DashboardLayout({
         )
         : [];
     const canManageSettings = Boolean(context && canManageOrganizationSettings(context));
+    const organizations = await listAvailableSaaSOrganizations();
 
     return (
-        <DashboardShell accessibleModules={accessibleModules} canManageSettings={canManageSettings}>
+        <DashboardShell
+            accessibleModules={accessibleModules}
+            canManageSettings={canManageSettings}
+            organizations={organizations}
+            activeOrganizationId={context?.organization.id ?? null}
+        >
             {children}
         </DashboardShell>
     );

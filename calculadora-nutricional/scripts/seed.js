@@ -12,6 +12,10 @@ const prisma = new PrismaClient({
     }
 });
 
+function normalizeIngredientSearchText(value) {
+    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, " ");
+}
+
 const filePath = path.join(__dirname, '../Dataset/runtime', 'tabela-taco.xlsx');
 
 async function main() {
@@ -141,6 +145,7 @@ async function main() {
         await prisma.ingredient.create({
             data: {
                 name,
+                searchName: normalizeIngredientSearchText(name),
                 energy,
                 protein,
                 carbs,

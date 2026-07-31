@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { API_TOKEN_PREFIX, hashApiToken } from "@/features/api-access/services/api-token-auth";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 export type ApiTokenActionState = {
   error?: string;
@@ -33,6 +34,13 @@ export async function createApiAccessToken(
   if (name.length < 2 || name.length > 80 || !EXPIRATION_DAYS.has(expirationDays)) {
     return { error: "Informe um nome e uma validade válidos." };
   }
+
+  const requestLimit = await consumeRequestRateLimit(
+    "workspace_writes",
+    context.user.id,
+    getRequestRateLimit("workspaceWrites"),
+  );
+  if (!requestLimit.allowed) return { error: "Limite temporário de alterações atingido. Tente novamente mais tarde." };
 
   const rawToken = `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
   const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000);
@@ -74,6 +82,13 @@ export async function revokeApiAccessToken(formData: FormData) {
   } catch {
     return;
   }
+
+  const requestLimit = await consumeRequestRateLimit(
+    "workspace_writes",
+    context.user.id,
+    getRequestRateLimit("workspaceWrites"),
+  );
+  if (!requestLimit.allowed) return;
 
   const result = await prisma.apiAccessToken.updateMany({
     where: {

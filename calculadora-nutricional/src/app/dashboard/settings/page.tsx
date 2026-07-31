@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Settings2, ShieldCheck, UsersRound } from "lucide-react";
+import { Plus, ShieldCheck, UsersRound } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { getProfilePermissionDefinition, PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import {
+    canManageAllOrganizationUsers,
     canManageOrganizationSettings,
     getOrganizationSettingsData,
     profilePermissionEnabled,
@@ -39,7 +40,7 @@ import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage"
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 
 type SettingsPageProps = {
-    searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string }>;
+    searchParams?: Promise<{ tab?: string; profile?: string; userError?: string; userCreated?: string; settingsError?: string }>;
 };
 
 const tabs = [
@@ -52,6 +53,11 @@ const userErrorMessages: Record<string, string> = {
     password: "A senha deve ter pelo menos 10 caracteres e não pode conter nome ou email.",
     exists: "Já existe um usuário com este email.",
     profile: "Selecione um perfil válido.",
+    rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+};
+
+const settingsErrorMessages: Record<string, string> = {
+    rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
 };
 
 function TabLink({ tab }: { tab: (typeof tabs)[number] }) {
@@ -80,7 +86,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         return <ModuleGateMessage moduleKey={SAAS_MODULES.SETTINGS} />;
     }
 
-    const data = await getOrganizationSettingsData(context.organization.id);
+    const canManageAllUsers = canManageAllOrganizationUsers(context);
+    const data = await getOrganizationSettingsData(context.organization.id, {
+        includeAllUsers: canManageAllUsers,
+    });
 
     if (!data) {
         redirect("/dashboard");
@@ -98,10 +107,28 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         : [];
     const isAdministratorProfile = selectedProfile?.systemKey === "ADMIN";
     const defaultNewUserProfile = data.profiles.find((profile) => profile.systemKey === "MEMBER") ?? selectedProfile;
+    const managedMembers = canManageAllUsers
+        ? data.allUsers.flatMap((user) => user.organizationMemberships.map((member) => ({ ...member, user })))
+        : data.members.map((member) => ({
+            ...member,
+            organization: {
+                id: context.organization.id,
+                name: "",
+                slug: "",
+                profiles: data.profiles.map((profile) => ({
+                    id: profile.id,
+                    name: profile.name,
+                    systemKey: profile.systemKey,
+                })),
+            },
+        }));
+    const usersWithoutWorkspace = canManageAllUsers
+        ? data.allUsers.filter((user) => user.organizationMemberships.length === 0)
+        : [];
 
     return (
         <div className="app-page flex flex-col gap-6">
-            <PageHeader eyebrow="Configuração" icon={Settings2} title="Usuários e perfis" description="Gerencie participantes, perfis e acessos por funcionalidade." />
+            <PageHeader title="Usuários e perfis" description="Gerencie participantes, perfis e acessos por funcionalidade." />
 
             <Tabs value={activeTab}>
               <TabsList>
@@ -110,6 +137,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 ))}
               </TabsList>
             </Tabs>
+
+            {params?.settingsError ? (
+                <Alert variant="destructive"><AlertDescription>{settingsErrorMessages[params.settingsError] || "Não foi possível salvar a alteração."}</AlertDescription></Alert>
+            ) : null}
+
+            {canManageAllUsers ? (
+                <Alert>
+                    <AlertDescription>
+                        Perfil Administrador: esta lista mostra todos os usuários cadastrados e permite alterar o perfil em cada workspace ativo.
+                    </AlertDescription>
+                </Alert>
+            ) : null}
 
             {activeTab === "users" ? (
                 <div className="grid min-w-0 gap-4">
@@ -179,25 +218,36 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                     <Card className="min-w-0">
                         <CardHeader>
                             <CardTitle>Controle de usuários</CardTitle>
-                            <CardDescription>Usuários ativos e perfil atribuído.</CardDescription>
+                            <CardDescription>
+                                {canManageAllUsers
+                                    ? "Todos os usuários cadastrados, incluindo usuários inativos e de outros workspaces."
+                                    : "Usuários ativos e perfil atribuído."}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="min-w-0">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Usuário</TableHead>
+                                        {canManageAllUsers ? <TableHead>Workspace</TableHead> : null}
                                         <TableHead>Perfil atual</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="w-[22rem]">Alterar perfil</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {data.members.map((member) => (
+                                    {managedMembers.map((member) => (
                                         <TableRow key={member.id}>
                                             <TableCell>
                                                 <div className="font-medium">{member.user.name || member.user.email}</div>
                                                 <div className="text-xs text-muted-foreground">{member.user.email}</div>
                                             </TableCell>
+                                            {canManageAllUsers ? (
+                                                <TableCell>
+                                                    <div className="font-medium">{member.organization.name}</div>
+                                                    <div className="text-xs text-muted-foreground">{member.organization.slug}</div>
+                                                </TableCell>
+                                            ) : null}
                                             <TableCell>{member.profile?.name || member.role}</TableCell>
                                             <TableCell>
                                                 <Badge variant={member.active ? "success" : "secondary"}>
@@ -211,7 +261,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                         name="profileId"
                                                         defaultValue={member.profileId || ""}
                                                     >
-                                                        {data.profiles.map((profile) => (
+                                                        {member.organization.profiles.map((profile) => (
                                                             <NativeSelectOption key={profile.id} value={profile.id}>
                                                                 {profile.name}
                                                             </NativeSelectOption>
@@ -222,6 +272,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                     </Button>
                                                 </form>
                                             </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {usersWithoutWorkspace.map((user) => (
+                                        <TableRow key={`user-${user.id}`}>
+                                            <TableCell>
+                                                <div className="font-medium">{user.name || user.email}</div>
+                                                <div className="text-xs text-muted-foreground">{user.email}</div>
+                                            </TableCell>
+                                            <TableCell>—</TableCell>
+                                            <TableCell>Sem perfil atribuído</TableCell>
+                                            <TableCell><Badge variant="warning">Sem workspace ativo</Badge></TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">Não há associação para alterar.</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

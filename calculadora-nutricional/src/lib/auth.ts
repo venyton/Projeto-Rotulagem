@@ -9,11 +9,16 @@ import { prisma } from "@/lib/prisma";
 import { clearLoginFailures, getLoginRateLimitKey, isLoginRateLimited, recordLoginFailure } from "@/lib/security/rate-limit";
 import {
     clearPersistentRateLimit,
-    isPersistentRateLimited,
-    recordPersistentRateLimitFailure,
+    consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
+import { getClientAddress, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { decryptTotpSecret, verifyTotpCode } from "@/lib/security/totp";
-import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
+import { MAX_PASSWORD_LENGTH } from "@/lib/security/password";
+import {
+    ensureDefaultWorkspaceForUser,
+    ensureOrganizationEntitlementsForUser,
+} from "@/features/saas/services/workspaces";
+import { logEvent } from "@/lib/observability/logger";
 
 const DUMMY_PASSWORD_HASH = "$2b$10$E/sb7/5hCDw.Gg9UVayjV.VQLXXbbHDTd8N9Ste5adR46HA8QUsKy";
 const authSecret = process.env.NEXTAUTH_SECRET;
@@ -92,7 +97,7 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Password", type: "password" },
                 twoFactorCode: { label: "2FA", type: "text" },
             },
-            async authorize(credentials) {
+            async authorize(credentials, request) {
                 try {
                     if (!credentials?.email || !credentials.password) {
                         return null;
@@ -102,13 +107,25 @@ export const authOptions: NextAuthOptions = {
                     const password = credentials.password;
                     const twoFactorCode = credentials.twoFactorCode ?? "";
 
-                    if (email.length > 254 || password.length > 256 || twoFactorCode.length > 20) {
+                    if (email.length > 254 || password.length > MAX_PASSWORD_LENGTH || twoFactorCode.length > 20) {
                         return null;
                     }
 
                     const rateLimitKey = getLoginRateLimitKey(email);
-                    const persistentLimited = await isPersistentRateLimited("auth.login", rateLimitKey);
-                    if (isLoginRateLimited(rateLimitKey) || persistentLimited) {
+                    const ipLimit = await consumePersistentRateLimit(
+                        "auth.login.ip",
+                        getClientAddress(request),
+                        getRequestRateLimit("loginIp"),
+                    );
+                    if (!ipLimit.allowed) {
+                        await compare(password, DUMMY_PASSWORD_HASH);
+                        return null;
+                    }
+                    const persistentLimit = await consumePersistentRateLimit("auth.login", rateLimitKey, {
+                        maxAttempts: 8,
+                        windowMs: 15 * 60 * 1000,
+                    });
+                    if (isLoginRateLimited(rateLimitKey) || !persistentLimit.allowed) {
                         await compare(password, DUMMY_PASSWORD_HASH);
                         return null;
                     }
@@ -122,13 +139,11 @@ export const authOptions: NextAuthOptions = {
                     if (!user) {
                         await compare(password, DUMMY_PASSWORD_HASH);
                         recordLoginFailure(rateLimitKey);
-                        await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
                         return null;
                     }
 
                     if (!user.password) {
                         recordLoginFailure(rateLimitKey);
-                        await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
                         return null;
                     }
 
@@ -139,7 +154,6 @@ export const authOptions: NextAuthOptions = {
 
                     if (!isPasswordValid) {
                         recordLoginFailure(rateLimitKey);
-                        await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
                         return null;
                     }
 
@@ -150,7 +164,6 @@ export const authOptions: NextAuthOptions = {
                         
                         if (!user.twoFactorSecret) {
                             recordLoginFailure(rateLimitKey);
-                            await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
                             return null;
                         }
 
@@ -159,7 +172,6 @@ export const authOptions: NextAuthOptions = {
 
                         if (!isTwoFactorValid) {
                             recordLoginFailure(rateLimitKey);
-                            await recordPersistentRateLimitFailure("auth.login", rateLimitKey);
                             throw new Error("2FA_INVALID");
                         }
 
@@ -177,6 +189,7 @@ export const authOptions: NextAuthOptions = {
                     }
 
                     await ensureDefaultWorkspaceForUser(user);
+                    await ensureOrganizationEntitlementsForUser(user.id);
 
                     return {
                         id: user.id + "",
@@ -184,8 +197,13 @@ export const authOptions: NextAuthOptions = {
                         name: user.name,
                     };
                 } catch (error) {
+                    if (error instanceof Error && (error.message === "2FA_REQUIRED" || error.message === "2FA_INVALID")) {
+                        throw error;
+                    }
                     if (process.env.NODE_ENV !== "production") {
-                        console.error("Falha no login por credenciais.", error);
+                        logEvent("warn", "auth.credentials_login_failed", {
+                            error: error instanceof Error ? error.name : "unknown",
+                        });
                     }
                     return null;
                 }
@@ -214,6 +232,7 @@ export const authOptions: NextAuthOptions = {
             });
 
             await ensureDefaultWorkspaceForUser(dbUser);
+            await ensureOrganizationEntitlementsForUser(dbUser.id);
 
             user.id = dbUser.id;
             user.email = dbUser.email;

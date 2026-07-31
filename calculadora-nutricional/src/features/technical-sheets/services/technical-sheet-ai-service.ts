@@ -15,6 +15,7 @@ import {
   buildTechnicalSheetExtractionPrompt,
   TECHNICAL_SHEET_SYSTEM_PROMPT,
 } from "@/features/technical-sheets/domain/technical-sheet-prompts";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const INLINE_FALLBACK_MAX_BYTES = 5 * 1024 * 1024;
@@ -42,7 +43,8 @@ export class TechnicalSheetAiError extends Error {
 }
 
 export async function extractTechnicalSheetWithGemini(
-  input: ExtractTechnicalSheetInput
+  input: ExtractTechnicalSheetInput,
+  userId?: string,
 ): Promise<TechnicalSheetAiExtraction> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -56,19 +58,43 @@ export async function extractTechnicalSheetWithGemini(
   const model = getGeminiModel();
   const prompt = buildTechnicalSheetExtractionPrompt(input.fileName);
   const responseJsonSchema = getTechnicalSheetResponseJsonSchema();
+  const projectLimit = await consumeRequestRateLimit(
+    "gemini.project",
+    "application",
+    getRequestRateLimit("geminiProject"),
+  );
+  if (!projectLimit.allowed) {
+    throw new TechnicalSheetAiError(
+      "QUOTA",
+      "Limite temporário da IA atingido. Tente novamente mais tarde.",
+    );
+  }
+  if (userId) {
+    const userLimit = await consumeRequestRateLimit(
+      "gemini.user",
+      userId,
+      getRequestRateLimit("geminiUser"),
+    );
+    if (!userLimit.allowed) {
+      throw new TechnicalSheetAiError(
+        "QUOTA",
+        "Limite temporário de importações por usuário atingido. Tente novamente mais tarde.",
+      );
+    }
+  }
   const filePart = await buildGeminiFilePart(ai, input);
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: [prompt, filePart],
-      config: {
-        systemInstruction: TECHNICAL_SHEET_SYSTEM_PROMPT,
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseJsonSchema,
-      },
-    });
+    const response = await retryTransientGeminiRequest(() => ai.models.generateContent({
+        model,
+        contents: [prompt, filePart],
+        config: {
+          systemInstruction: TECHNICAL_SHEET_SYSTEM_PROMPT,
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseJsonSchema,
+        },
+      }));
 
     const parsed = parseGeminiJsonResponse(response.text);
     return technicalSheetExtractionSchema.parse(parsed);
@@ -97,6 +123,26 @@ export async function extractTechnicalSheetWithGemini(
 
 export function getGeminiModel() {
   return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+}
+
+function isTransientGeminiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /429|resource_exhausted|rate.?limit|503|unavailable|timeout/i.test(message);
+}
+
+async function retryTransientGeminiRequest<T>(operation: () => Promise<T>) {
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isTransientGeminiError(error) || attempt === maxRetries) throw error;
+      const backoffMs = 1_000 * (2 ** attempt) + Math.floor(Math.random() * 250);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw new Error("Gemini request retry exhausted.");
 }
 
 async function buildGeminiFilePart(

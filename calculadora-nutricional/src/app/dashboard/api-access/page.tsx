@@ -1,5 +1,3 @@
-import { Braces } from "lucide-react";
-
 import { PageHeader } from "@/components/layout/page-header";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
@@ -16,6 +14,7 @@ export default async function ApiAccessPage() {
   const tokens = await prisma.apiAccessToken.findMany({
     where: { organizationId: context.organization.id, userId: context.user.id },
     orderBy: { createdAt: "desc" },
+    take: 50,
     select: {
       id: true,
       name: true,
@@ -31,8 +30,6 @@ export default async function ApiAccessPage() {
   return (
     <div className="app-page flex flex-col gap-6">
       <PageHeader
-        eyebrow="Integrações"
-        icon={Braces}
         title="API externa"
         description="Crie credenciais para automações e consulte as tabelas nutricionais da conta."
       />

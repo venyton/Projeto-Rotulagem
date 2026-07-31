@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { FileSearch, PackageSearch } from 'lucide-react';
+import { FileSearch } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { AddIngredientForm } from '@/features/ingredients/components/AddIngredientForm';
@@ -56,8 +56,6 @@ export async function IngredientsPageContent({
   return (
     <div className="app-page flex flex-col gap-8">
       <PageHeader
-        eyebrow="Biblioteca"
-        icon={PackageSearch}
         title={title}
         description={description}
         actions={showAddButton ? (

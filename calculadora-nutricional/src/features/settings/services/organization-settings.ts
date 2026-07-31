@@ -42,6 +42,10 @@ export function canManageOrganizationSettings(context: NonNullable<SaaSContext>)
     return contextHasModuleAccess(context, SAAS_MODULES.SETTINGS);
 }
 
+export function canManageAllOrganizationUsers(context: NonNullable<SaaSContext>) {
+    return canManageOrganizationSettings(context) && context.member.profile?.systemKey === "ADMIN";
+}
+
 export async function ensureOrganizationProfiles(organizationId: string) {
     await prisma.organizationEntitlement.createMany({
         data: ALL_SAAS_MODULES.map((moduleKey) => ({
@@ -153,8 +157,24 @@ export async function ensureOrganizationProfiles(organizationId: string) {
     }, { timeout: 20_000 });
 }
 
-export async function getOrganizationSettingsData(organizationId: string) {
+export async function getOrganizationSettingsData(
+    organizationId: string,
+    options: { includeAllUsers?: boolean } = {},
+) {
     await ensureOrganizationProfiles(organizationId);
+
+    if (options.includeAllUsers) {
+        const activeOrganizations = await prisma.organization.findMany({
+            where: { status: "ACTIVE" },
+            select: { id: true },
+        });
+
+        await Promise.all(
+            activeOrganizations
+                .filter((organization) => organization.id !== organizationId)
+                .map((organization) => ensureOrganizationProfiles(organization.id)),
+        );
+    }
 
     const organization = await prisma.organization.findUnique({
         where: { id: organizationId },
@@ -214,7 +234,51 @@ export async function getOrganizationSettingsData(organizationId: string) {
 
     if (!organization) return null;
 
-    return organization;
+    const allUsers = options.includeAllUsers
+        ? await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                organizationMemberships: {
+                    where: {
+                        organization: { status: "ACTIVE" },
+                    },
+                    select: {
+                        id: true,
+                        role: true,
+                        active: true,
+                        profileId: true,
+                        profile: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                        organization: {
+                            select: {
+                                id: true,
+                                name: true,
+                                slug: true,
+                                profiles: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        systemKey: true,
+                                    },
+                                    orderBy: { createdAt: "asc" },
+                                },
+                            },
+                        },
+                    },
+                    orderBy: { createdAt: "asc" },
+                },
+            },
+            orderBy: { createdAt: "asc" },
+        })
+        : [];
+
+    return { ...organization, allUsers };
 }
 
 export function profilePermissionEnabled(

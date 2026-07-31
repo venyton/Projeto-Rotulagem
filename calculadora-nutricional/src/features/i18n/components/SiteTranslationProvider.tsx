@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { useSiteLanguage } from "@/features/i18n/components/LanguageSwitcher";
-import { GENERATED_UI_TRANSLATIONS } from "@/features/i18n/domain/generated-ui-translations";
 import type { SiteLanguage } from "@/features/i18n/domain/site-i18n";
 
 type TranslationTuple = readonly [string, string, string, string];
@@ -19,13 +19,12 @@ const LANGUAGE_INDEX: Record<SiteLanguage, number> = {
 const TRANSLATABLE_ATTRIBUTES = ["alt", "aria-label", "placeholder", "title"] as const;
 const SKIPPED_ELEMENTS = new Set(["CODE", "PRE", "SCRIPT", "STYLE"]);
 const SKIPPED_TEXT_ELEMENTS = new Set([...SKIPPED_ELEMENTS, "TEXTAREA"]);
-const catalog = Object.entries(GENERATED_UI_TRANSLATIONS) as [string, TranslationTuple][];
 
 function normalize(value: string) {
     return value.replace(/\s+/g, " ").trim();
 }
 
-function buildLookup(language: SiteLanguage) {
+function buildLookup(language: SiteLanguage, catalog: Array<[string, TranslationTuple]>) {
     const targetIndex = LANGUAGE_INDEX[language];
     const lookup = new Map<string, string>();
 
@@ -96,38 +95,44 @@ function translateTree(root: Node, lookup: Map<string, string>) {
 
 export function SiteTranslationProvider({ children }: { children: React.ReactNode }) {
     const { language } = useSiteLanguage();
-    const languageRef = React.useRef(language);
+    const pathname = usePathname();
 
     React.useEffect(() => {
-        languageRef.current = language;
-        const lookup = buildLookup(language);
-        translateTree(document.body, lookup);
+        let firstFrame = 0;
+        let secondFrame = 0;
+        let cancelled = false;
 
-        const title = lookup.get(normalize(document.title));
-        if (title) document.title = title;
-        const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-        if (description?.content) {
-            const translated = lookup.get(normalize(description.content));
-            if (translated) description.content = translated;
-        }
+        // App Router segments can still be hydrating when a layout effect runs.
+        // Wait two frames before mutating server-rendered text in the document.
+        firstFrame = window.requestAnimationFrame(() => {
+            secondFrame = window.requestAnimationFrame(() => {
+                if (language === "pt-BR") return;
 
-        const observer = new MutationObserver((mutations) => {
-            const currentLookup = buildLookup(languageRef.current);
-            for (const mutation of mutations) {
-                if (mutation.type === "characterData") translateTextNode(mutation.target as Text, currentLookup);
-                if (mutation.type === "attributes") translateElement(mutation.target as Element, currentLookup);
-                mutation.addedNodes.forEach((node) => translateTree(node, currentLookup));
-            }
+                void import("@/features/i18n/domain/generated-ui-translations").then(({ GENERATED_UI_TRANSLATIONS }) => {
+                    if (cancelled) return;
+                    const lookup = buildLookup(
+                        language,
+                        Object.entries(GENERATED_UI_TRANSLATIONS) as [string, TranslationTuple][]
+                    );
+                    translateTree(document.body, lookup);
+
+                    const title = lookup.get(normalize(document.title));
+                    if (title) document.title = title;
+                    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+                    if (description?.content) {
+                        const translated = lookup.get(normalize(description.content));
+                        if (translated) description.content = translated;
+                    }
+                });
+            });
         });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: [...TRANSLATABLE_ATTRIBUTES],
-            childList: true,
-            characterData: true,
-            subtree: true,
-        });
-        return () => observer.disconnect();
-    }, [language]);
+
+        return () => {
+            cancelled = true;
+            window.cancelAnimationFrame(firstFrame);
+            window.cancelAnimationFrame(secondFrame);
+        };
+    }, [language, pathname]);
 
     return children;
 }

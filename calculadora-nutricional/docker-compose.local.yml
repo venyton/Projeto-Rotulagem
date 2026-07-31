@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: calculadora_nutricional
+      POSTGRES_USER: calculadora_local
+      POSTGRES_PASSWORD: calculadora_local
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - calculadora_nutricional_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calculadora_local -d calculadora_nutricional"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  calculadora_nutricional_postgres_data:

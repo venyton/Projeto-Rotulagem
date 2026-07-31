@@ -2,6 +2,15 @@
 
 Este projeto é uma aplicação Next.js e pode ser implantada facilmente em plataformas como **Vercel** ou **Netlify**.
 
+## Regras de segurança do deploy
+
+- O banco de produção deve receber somente `npx prisma migrate deploy`; não use `db push`.
+- Faça backup antes da migration e confirme o registro em `_prisma_migrations` depois dela.
+- Separe `.env.local`, staging e produção. Não baixe segredos de produção para o checkout local.
+- Rode `npm run check`, `npm run security:check` e `npm run build` antes do deploy.
+- Rode também `npm run verify:rate-limit` contra o banco local; nunca execute esse verificador em produção.
+- Depois de publicar, verifique `/api/health`, `/api/ready`, login, criação de tabela e os quatro documentos técnicos em `/api/export/memorial` (Memorial/Ficha, PDF/XLSX).
+
 ## Opção 1: Vercel (Recomendado)
 
 A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](https://vercel.com/new).
@@ -22,24 +31,22 @@ A maneira mais fácil de implantar sua aplicação Next.js é usando o [Vercel](
         5.  Clique em "Deploy".
 
 3.  **Configuração Local (Para rodar no seu PC):**
-    *   Para o comando `npm run dev` voltar a funcionar, você precisa das credenciais do banco.
-    *   Instale o Vercel CLI: `npm i -g vercel`
-    *   Rode `vercel link` para conectar seu código local ao projeto na nuvem.
-    *   Rode `vercel env pull .env` para baixar as senhas do banco para seu computador.
-    *   Agora pode rodar `npm run dev` novamente.
+    *   Copie `.env.example` para `.env.local` e preencha somente credenciais de desenvolvimento.
+    *   Use PostgreSQL local ou um banco de staging isolado.
+    *   Não use `vercel env pull .env` para trazer segredos de produção para o checkout.
 
 4.  **Primeira Execução (Importante):**
-    Quando você cria um banco novo, ele vem vazio (sem tabelas e sem usuários). Você precisa "empurrar" o código para lá e criar um usuário inicial.
+    Quando você cria um banco novo, ele vem vazio (sem tabelas e sem usuários). Aplique as migrations e crie um usuário inicial em local/staging.
     
     *   **Criar as Tabelas:**
-        No seu terminal (com o `.env` já baixado), rode:
+        No seu terminal (com o ambiente explicitamente configurado), rode:
         `npx prisma migrate deploy --schema=./prisma/schema.prisma`
     
     *   **Gerar Prisma Client:**
         `npx prisma generate --schema=./prisma/schema.prisma`
     
     *   **Criar Usuário de Teste:**
-        Rode o script que cria o usuário `teste@teste.com`. A senha padrão local é `TesteSeguro2026`; para outra senha, defina `SEED_TEST_PASSWORD`.
+        Rode o script que cria o usuário `teste@teste.com` somente em local/staging. A senha padrão local é `TesteSeguro2026`; para outra senha, defina `SEED_TEST_PASSWORD`.
         `node scripts/seed-test-user.js`
     
     *   **Carregar Ingredientes (TACO):**
@@ -76,6 +83,16 @@ GEMINI_API_KEY
 GEMINI_MODEL
 TECHNICAL_SHEET_MAX_FILE_SIZE_MB
 TECHNICAL_SHEET_MAX_BATCH_FILES
+TECHNICAL_SHEET_MAX_BATCH_SIZE_MB
+MAX_RUNTIME_REQUEST_BODY_MB
+NEXT_SERVER_ACTION_BODY_SIZE_LIMIT
+REQUEST_LIMIT_OPEN_FOOD_FACTS_SEARCH_PER_WINDOW
+REQUEST_LIMIT_OPEN_FOOD_FACTS_PRODUCT_PER_WINDOW
+REQUEST_LIMIT_OPEN_FOOD_FACTS_USER_PER_WINDOW
+REQUEST_LIMIT_EXPORTS_PER_WINDOW
+REQUEST_LIMIT_API_TABLES_PER_WINDOW
+REQUEST_LIMIT_GEMINI_PROJECT_PER_WINDOW
+REQUEST_LIMIT_GEMINI_USER_PER_WINDOW
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 META_CLIENT_ID
@@ -95,6 +112,8 @@ NEXT_PUBLIC_MARKETING_TRACKING_ENABLED
 NEXT_PUBLIC_GA_MEASUREMENT_ID
 NEXT_PUBLIC_META_PIXEL_ID
 ```
+
+Consulte `docs/operations/RATE_LIMITS.md` para todas as políticas. Em Vercel, o teto de payload de Function é 4,5 MB; a aplicação aplica 4 MB automaticamente. Para processar arquivos maiores, use armazenamento de objetos com upload direto, não apenas um `bodySizeLimit` maior.
 
 SQL manual organizado para DBA:
 

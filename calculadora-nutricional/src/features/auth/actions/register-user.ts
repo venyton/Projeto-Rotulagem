@@ -6,9 +6,9 @@ import { redirect } from "next/navigation";
 import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
 import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 import {
-    isPersistentRateLimited,
-    recordPersistentRateLimitFailure,
+    consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
+import { getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 export async function registerUser(prevState: unknown, formData: FormData): Promise<{ error?: string }> {
     const name = ((formData.get("name") as string | null) ?? "").trim();
@@ -22,15 +22,25 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
         return { error: "Todos os campos são obrigatórios." };
     }
 
+    const globalLimit = await consumePersistentRateLimit(
+        "auth.register.global",
+        "application",
+        getRequestRateLimit("registrationGlobal"),
+    );
+    if (!globalLimit.allowed) return { error: "Muitas tentativas. Tente novamente mais tarde." };
+
     if (email.length > 254 || phone.length > 40) {
         return { error: "Dados de cadastro inválidos." };
     }
 
     const rateLimitScope = "auth.register";
-    if (await isPersistentRateLimited(rateLimitScope, email, 5)) {
+    const rateLimit = await consumePersistentRateLimit(rateLimitScope, email, {
+        maxAttempts: 5,
+        windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
         return { error: "Muitas tentativas. Tente novamente mais tarde." };
     }
-    await recordPersistentRateLimitFailure(rateLimitScope, email, 60 * 60 * 1000);
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {

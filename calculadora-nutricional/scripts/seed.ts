@@ -3,6 +3,8 @@ import ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
 
+import { normalizeIngredientSearchText } from '../src/features/ingredients/domain/ingredient-search';
+
 const prisma = new PrismaClient();
 
 const filePath = path.join(process.cwd(), 'Dataset/runtime/tabela-taco.xlsx');
@@ -158,6 +160,7 @@ async function main() {
 
         ingredients.push({
             name,
+            searchName: normalizeIngredientSearchText(name),
             energy,
             protein,
             carbs,

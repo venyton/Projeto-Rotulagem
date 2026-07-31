@@ -18,5 +18,7 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {}
+  "registries": {
+    "@official": "https://ui.shadcn.com/r/styles/new-york/{name}.json"
+  }
 }

@@ -11,6 +11,8 @@ import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
 import { z } from "zod";
+import { getIngredientSourceLabel } from "@/features/tables/domain/memorial";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 const safeIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const tableInputSchema = z.object({
@@ -83,6 +85,12 @@ export async function saveTable(data: {
         if (safeData.uiState && JSON.stringify(safeData.uiState).length > 500_000) {
             return { error: "Estado visual da tabela excede o limite permitido." };
         }
+        const requestLimit = await consumeRequestRateLimit(
+            "table_writes",
+            context.user.id,
+            getRequestRateLimit("tableWrites"),
+        );
+        if (!requestLimit.allowed) return { error: "Limite temporário de gravações atingido. Tente novamente mais tarde." };
 
         const ingredientIds = [...new Set(safeData.ingredients.map((item) => item.ingredient.id))];
         const snapshotItemIds = ingredientIds
@@ -125,9 +133,10 @@ export async function saveTable(data: {
             ingredientsById.set(ingredient.id, ingredient as unknown as SelectedIngredient["ingredient"]);
         }
         for (const item of snapshotItems) {
-            ingredientsById.set(`snapshot-${item.id}`, {
+            ingredientsById.set(`snapshot-${item.id}`, ({
                 id: `snapshot-${item.id}`,
                 name: item.name,
+                source: item.source,
                 origin: "snapshot",
                 energy: item.energy,
                 carbs: item.carbs,
@@ -141,7 +150,7 @@ export async function saveTable(data: {
                 sugarAdded: item.sugarAdded,
                 customNutrients: item.customNutrients,
                 ...Object.fromEntries(MICRO_KEYS.map((key) => [key, item[key]])),
-            } as SelectedIngredient["ingredient"]);
+            } as unknown) as SelectedIngredient["ingredient"]);
         }
         if (ingredientsById.size !== ingredientIds.length) {
             return { error: "Um ou mais ingredientes são inválidos ou não pertencem à conta." };
@@ -168,6 +177,10 @@ export async function saveTable(data: {
             const customNutrients = readCustomNutrientsSnapshot(trustedIngredient);
             return {
                 name: trustedIngredient.name,
+                source: getIngredientSourceLabel({
+                    ...(trustedIngredient as unknown as Record<string, unknown>),
+                    name: trustedIngredient.name,
+                }),
                 quantity: i.quantity,
                 isAddedSugar: i.isAddedSugar,
                 energy: trustedIngredient.energy || 0,

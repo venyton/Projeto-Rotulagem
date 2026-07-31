@@ -1,14 +1,16 @@
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
 import { cache } from "react";
 import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, type SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
-import { ensureDefaultWorkspaceForUser } from "@/features/saas/services/workspaces";
 import { getCurrentInternalMaster } from "@/features/master/services/master-access";
 import { isProfilePermissionModule } from "@/features/settings/domain/profile-permissions";
 import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
+
+export const ACTIVE_ORGANIZATION_COOKIE = "soizi-active-organization";
 
 export class ModuleAccessError extends Error {
   status = 403;
@@ -26,12 +28,18 @@ async function loadCurrentSaaSContext() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
 
-  const member = await prisma.organizationMember.findFirst({
-    where: {
-      user: { email: session.user.email },
-      active: true,
-      organization: { status: "ACTIVE" },
-    },
+  const cookieStore = await cookies();
+  const selectedOrganizationId = cookieStore.get(ACTIVE_ORGANIZATION_COOKIE)?.value;
+  const memberWhere = {
+    user: { email: session.user.email },
+    active: true,
+    organization: { status: "ACTIVE" as const },
+  };
+
+  let member = await prisma.organizationMember.findFirst({
+    where: selectedOrganizationId
+      ? { ...memberWhere, organizationId: selectedOrganizationId }
+      : memberWhere,
     select: {
       id: true,
       organizationId: true,
@@ -77,42 +85,86 @@ async function loadCurrentSaaSContext() {
     orderBy: { createdAt: "asc" },
   });
 
-  if (!member) {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, email: true, name: true },
+  // Cookie inválido ou organização removida: recua para uma associação válida
+  // em vez de provisionar ou consultar dados fora do workspace escolhido.
+  if (!member && selectedOrganizationId) {
+    member = await prisma.organizationMember.findFirst({
+      where: memberWhere,
+      select: {
+        id: true,
+        organizationId: true,
+        userId: true,
+        profileId: true,
+        role: true,
+        active: true,
+        user: { select: { id: true, email: true, name: true } },
+        moduleGrants: { select: { moduleKey: true, enabled: true, expiresAt: true } },
+        profile: {
+          select: {
+            id: true,
+            systemKey: true,
+            permissions: { select: { moduleKey: true, enabled: true } },
+          },
+        },
+        organization: {
+          select: {
+            id: true,
+            entitlements: { select: { moduleKey: true, enabled: true, expiresAt: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
     });
+  }
 
-    if (!user) return null;
-
-    await ensureDefaultWorkspaceForUser(user);
-
-    return loadCurrentSaaSContext();
+  if (!member) {
+    // Context reads must remain side-effect free. Workspace provisioning is
+    // handled at registration/OAuth login, not while rendering a page.
+    return null;
   }
 
   const entitlementKeys = new Set(member.organization.entitlements.map((item) => item.moduleKey));
-  const missingEntitlements = ALL_SAAS_MODULES.filter((moduleKey) => !entitlementKeys.has(moduleKey));
-  if (missingEntitlements.length > 0) {
-    await prisma.organizationEntitlement.createMany({
-      data: missingEntitlements.map((moduleKey) => ({
-        organizationId: member.organization.id,
-        moduleKey: moduleKey as SaaSModuleKey,
-        enabled: true,
-        source: "SYSTEM_DEFAULT",
-      })),
-      skipDuplicates: true,
-    });
-    return loadCurrentSaaSContext();
-  }
+  const missingEntitlements = ALL_SAAS_MODULES
+    .filter((moduleKey) => !entitlementKeys.has(moduleKey))
+    .map((moduleKey) => ({ moduleKey: moduleKey as SaaSModuleKey, enabled: true, expiresAt: null }));
 
   return {
     user: member.user,
     member,
-    organization: member.organization,
+    organization: {
+      ...member.organization,
+      entitlements: [...member.organization.entitlements, ...missingEntitlements],
+    },
   };
 }
 
 export const getCurrentSaaSContext = cache(loadCurrentSaaSContext);
+
+export async function listAvailableSaaSOrganizations() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return [];
+
+  const memberships = await prisma.organizationMember.findMany({
+    where: {
+      user: { email: session.user.email },
+      active: true,
+      organization: { status: "ACTIVE" },
+    },
+    select: {
+      organizationId: true,
+      role: true,
+      organization: { select: { name: true, slug: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return memberships.map((membership) => ({
+    id: membership.organizationId,
+    name: membership.organization.name,
+    slug: membership.organization.slug,
+    role: membership.role,
+  }));
+}
 
 export type SaaSContext = Awaited<ReturnType<typeof loadCurrentSaaSContext>>;
 

@@ -1,5 +1,7 @@
 import type { Ingredient } from "@prisma/client";
 
+import { normalizeIngredientSearchText } from "../../ingredients/domain/ingredient-search";
+
 type RawNutriments = Record<string, unknown>;
 
 export type OpenFoodFactsProduct = {
@@ -41,6 +43,7 @@ const REQUIRED_NUTRIENTS = [
     ["fiber", "fibras"],
     ["sodium", "sodio"],
 ] as const;
+const ALLOWED_IMAGE_HOSTS = new Set(["images.openfoodfacts.org", "static.openfoodfacts.org"]);
 
 function asString(value: unknown): string {
     if (Array.isArray(value)) {
@@ -50,6 +53,20 @@ function asString(value: unknown): string {
             .join(", ");
     }
     return typeof value === "string" ? value.trim() : "";
+}
+
+function safeImageUrl(value: unknown) {
+    const candidate = asString(value);
+    if (!candidate) return undefined;
+
+    try {
+        const url = new URL(candidate);
+        return url.protocol === "https:" && ALLOWED_IMAGE_HOSTS.has(url.hostname)
+            ? url.toString()
+            : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function asNumber(value: unknown) {
@@ -93,6 +110,7 @@ function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: strin
     return {
         id: `off-${code}`,
         name: `[OFF] ${sourceName}`,
+        searchName: normalizeIngredientSearchText(sourceName),
         energy: energyKcal(nutriments),
         carbs: firstNumber(nutriments, ["carbohydrates_100g", "carbohydrates"]),
         protein: firstNumber(nutriments, ["proteins_100g", "proteins"]),
@@ -184,7 +202,7 @@ export function normalizeOpenFoodFactsProduct(raw: RawOpenFoodFactsProduct): Ope
         asString(raw.product_name_en) ||
         asString(raw.generic_name);
 
-    if (!code || !name) return null;
+    if (!/^\d{8,14}$/.test(code) || !name) return null;
 
     const ingredient = buildIngredient(raw, code, name);
     const completeness = completenessFor(ingredient);
@@ -195,7 +213,7 @@ export function normalizeOpenFoodFactsProduct(raw: RawOpenFoodFactsProduct): Ope
         brands: asString(raw.brands) || undefined,
         quantity: asString(raw.quantity) || undefined,
         servingSize: asString(raw.serving_size) || undefined,
-        imageUrl: asString(raw.image_front_url) || asString(raw.image_url) || undefined,
+        imageUrl: safeImageUrl(raw.image_front_url) || safeImageUrl(raw.image_url),
         sourceUrl: `https://world.openfoodfacts.org/product/${code}`,
         ...completeness,
         ingredient,

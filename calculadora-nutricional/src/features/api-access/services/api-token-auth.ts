@@ -33,6 +33,7 @@ export async function authenticateApiRequest(
       id: true,
       organizationId: true,
       userId: true,
+      lastUsedAt: true,
       expiresAt: true,
       revokedAt: true,
     },
@@ -79,10 +80,12 @@ export async function authenticateApiRequest(
   );
   if (!allowed) return null;
 
-  await prisma.apiAccessToken.update({
-    where: { id: token.id },
-    data: { lastUsedAt: new Date() },
-  });
+  if (!token.lastUsedAt || token.lastUsedAt.getTime() < Date.now() - 60_000) {
+    await prisma.apiAccessToken.update({
+      where: { id: token.id },
+      data: { lastUsedAt: new Date() },
+    });
+  }
 
   return {
     tokenId: token.id,

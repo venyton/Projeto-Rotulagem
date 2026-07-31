@@ -3,11 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiRequest } from "@/features/api-access/services/api-token-auth";
 import { prisma } from "@/lib/prisma";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import {
+  consumeRequestRateLimit,
+  getRequestRateLimit,
+  rateLimitResponse,
+} from "@/lib/security/request-rate-limit";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Cache-Control": "no-store",
+  "Vary": "Authorization",
 };
 
 export async function OPTIONS() {
@@ -20,6 +27,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: "Token inválido, expirado ou sem acesso ao módulo." },
       { status: 401, headers: CORS_HEADERS },
+    );
+  }
+
+  const requestLimit = await consumeRequestRateLimit(
+    "api.tables",
+    apiContext.tokenId,
+    getRequestRateLimit("apiTables"),
+  );
+  if (!requestLimit.allowed) {
+    return rateLimitResponse(
+      requestLimit,
+      { error: "Limite temporário da API atingido." },
+      CORS_HEADERS,
     );
   }
 

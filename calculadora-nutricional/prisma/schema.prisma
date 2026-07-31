@@ -285,6 +285,7 @@ model RateLimitBucket {
 model Ingredient {
   id         String  @id @default(cuid())
   name       String
+  searchName String  @default("")
   energy     Float // kcal
   carbs      Float // g
   protein    Float // g
@@ -343,6 +344,7 @@ model CustomIngredient {
   userId             String
   user               User     @relation(fields: [userId], references: [id])
   name               String
+  searchName         String   @default("")
   energy             Float
   carbs              Float
   protein            Float
@@ -440,6 +442,7 @@ model TableItem {
   table   GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   name         String
+  source       String?
   quantity     Float // g
   isAddedSugar Boolean @default(false)
 

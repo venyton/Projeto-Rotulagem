@@ -1,13 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { TableGenerator } from "@/features/tables/components/TableGenerator";
+import dynamic from "next/dynamic";
 import { SelectedIngredient } from "@/features/tables/domain/nutrients";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
-import { FilePenLine } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+
+const TableGenerator = dynamic(
+    () => import("@/features/tables/components/TableGenerator").then((module) => module.TableGenerator),
+    { loading: () => <div className="min-h-96 animate-pulse rounded-xl border bg-card" role="status" aria-live="polite" aria-label="Carregando editor" /> }
+);
 
 function readItemMicronutrients(item: Record<string, unknown>) {
     return Object.fromEntries(
@@ -45,6 +49,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
                 select: {
                     id: true,
                     name: true,
+                    source: true,
                     quantity: true,
                     isAddedSugar: true,
                     energy: true,
@@ -109,9 +114,10 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     const ingredients: SelectedIngredient[] = table.items.map(item => ({
         quantity: item.quantity,
         isAddedSugar: item.isAddedSugar,
-        ingredient: {
+        ingredient: ({
             id: "snapshot-" + item.id, // Pseudo-ID
             name: item.name,
+            source: item.source,
             origin: "snapshot", // Add mock origin
             energy: item.energy,
             protein: item.protein,
@@ -125,7 +131,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
             sugarAdded: item.sugarAdded,
             customNutrients: item.customNutrients,
             ...readItemMicronutrients(item as unknown as Record<string, unknown>),
-        } as SelectedIngredient["ingredient"] & { sugarAdded?: number | null }
+        } as unknown) as SelectedIngredient["ingredient"] & { sugarAdded?: number | null }
     }));
 
     const initialData = {
@@ -144,7 +150,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
 
     return (
         <div className="app-page flex flex-col gap-6">
-            <PageHeader eyebrow="Tabela" icon={FilePenLine} title="Editar tabela" description="Revise os dados, atualize os cálculos e gere uma nova versão do rótulo." />
+            <PageHeader title="Editar tabela" description="Revise os dados, atualize os cálculos e gere uma nova versão do rótulo." />
             <TableGenerator
                 initialData={initialData}
                 canUseOpenFoodFacts={contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS)}
