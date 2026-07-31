@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+const serverActionBodySizeLimit = (process.env.VERCEL === "1"
+  ? "4mb"
+  : process.env.NEXT_SERVER_ACTION_BODY_SIZE_LIMIT || "90mb") as `${number}mb`;
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -19,7 +23,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: "100mb",
+      // Vercel rejects function payloads above 4.5 MB before Next.js executes.
+      bodySizeLimit: serverActionBodySizeLimit,
     },
   },
   images: {
@@ -27,22 +32,27 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+        pathname: "/photo-*",
       },
       {
         protocol: "https",
         hostname: "unavatar.io",
+        pathname: "/linkedin/**",
       },
       {
         protocol: "https",
         hostname: "media.licdn.com",
+        pathname: "/dms/image/**",
       },
       {
         protocol: "https",
         hostname: "images.openfoodfacts.org",
+        pathname: "/images/products/**",
       },
       {
         protocol: "https",
         hostname: "static.openfoodfacts.org",
+        pathname: "/images/products/**",
       },
     ],
   },
