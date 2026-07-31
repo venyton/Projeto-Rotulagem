@@ -54,7 +54,7 @@ export default function LoginPage() {
         : "Insira o código do seu aplicativo autenticador.";
 
     return (
-        <main className="flex min-h-[calc(100svh-4.5rem)] items-center justify-center bg-muted/20 px-4 py-10">
+        <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-muted/20 px-4 py-8 sm:min-h-[calc(100svh-4.5rem)] sm:py-10">
             <Card className="app-enter w-full max-w-sm border-border/70 bg-card shadow-sm">
                 <CardHeader>
                     <CardTitle>{title}</CardTitle>

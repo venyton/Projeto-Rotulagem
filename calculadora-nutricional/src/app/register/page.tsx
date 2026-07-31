@@ -47,6 +47,19 @@ export default function RegisterPage() {
                         <FieldDescription>Use pelo menos 10 caracteres.</FieldDescription>
                     </Field>
                     <Field><FieldLabel htmlFor="confirmPassword">Confirmar senha</FieldLabel><Input id="confirmPassword" name="confirmPassword" type={showPassword ? "text" : "password"} required minLength={10} maxLength={256} /></Field>
+                    <label htmlFor="legalAcceptance" className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
+                        <input
+                            id="legalAcceptance"
+                            name="legalAcceptance"
+                            type="checkbox"
+                            value="accepted"
+                            required
+                            className="mt-1 size-4 shrink-0 accent-primary"
+                        />
+                        <span>
+                            Li e aceito os <Link href="/termos-de-uso" target="_blank" className="font-medium text-primary underline-offset-4 hover:underline">Termos de Uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" className="font-medium text-primary underline-offset-4 hover:underline">Política de Privacidade</Link>.
+                        </span>
+                    </label>
                     {state?.error ? <Alert variant="destructive"><AlertDescription>{state.error}</AlertDescription></Alert> : null}
                     <Button type="submit" className="w-full" disabled={pending}>
                         {pending ? <Spinner data-icon="inline-start" /> : null}{pending ? "Criando..." : "Criar conta"}

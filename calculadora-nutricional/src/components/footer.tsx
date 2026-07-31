@@ -12,6 +12,8 @@ const FOOTER_LINKS = [
   { label: "Sobre a SoIZI", href: "/#sobre-nos" },
   { label: "Plataforma", href: "/#o-que-fazemos" },
   { label: "Dayane", href: "/#dayane" },
+  { label: "Termos de uso", href: "/termos-de-uso" },
+  { label: "Privacidade", href: "/politica-de-privacidade" },
 ];
 
 export function Footer() {

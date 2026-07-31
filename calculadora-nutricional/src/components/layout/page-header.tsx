@@ -16,7 +16,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "app-enter flex min-w-0 flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between",
+        "app-enter flex min-w-0 flex-col gap-3 border-b pb-5 sm:gap-4 lg:flex-row lg:items-end lg:justify-between",
         className,
       )}
     >
@@ -28,7 +28,7 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {actions ? <div className="flex min-w-0 flex-wrap gap-2 lg:shrink-0">{actions}</div> : null}
+      {actions ? <div className="flex w-full min-w-0 flex-wrap gap-2 sm:justify-end lg:w-auto lg:shrink-0">{actions}</div> : null}
     </header>
   );
 }

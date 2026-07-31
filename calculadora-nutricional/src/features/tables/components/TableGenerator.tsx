@@ -1764,12 +1764,12 @@ export function TableGenerator({
     };
 
     return (
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
             <div className="app-panel px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                         <p className={PANEL_EYEBROW_CLASS}>Editor de tabela nutricional</p>
-                        <h1 className="mt-1 truncate text-xl font-semibold text-foreground">
+                        <h1 className="mt-1 line-clamp-2 break-words text-xl font-semibold text-foreground [overflow-wrap:anywhere] lg:truncate">
                             {title.trim() || "Nova tabela nutricional"}
                         </h1>
                     </div>
@@ -2315,12 +2315,12 @@ export function TableGenerator({
                                     {ingredients.map((item, idx) => (
                                         <div
                                             key={idx}
-                                            className="flex items-end gap-3 rounded-lg border bg-muted/30 p-3"
+                                            className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-3 sm:flex sm:items-end"
                                         >
                                             <div className="flex-1 space-y-1">
-                                                <div className="font-medium text-sm">{item.ingredient.name}</div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-24">
+                                                <div className="break-words text-sm font-medium [overflow-wrap:anywhere]">{item.ingredient.name}</div>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <div className="w-24 shrink-0">
                                                         <Input
                                                             type="number"
                                                             step={INGREDIENT_QUANTITY_STEP}
@@ -2331,7 +2331,7 @@ export function TableGenerator({
                                                             className="h-8"
                                                         />
                                                     </div>
-                                                    <div className="flex items-start gap-2">
+                                                    <div className="flex min-w-0 items-start gap-2">
                                                         <Checkbox
                                                             id={`added-sugar-${idx}`}
                                                             checked={item.isAddedSugar}
@@ -2340,9 +2340,9 @@ export function TableGenerator({
                                                         />
                                                         <label
                                                             htmlFor={`added-sugar-${idx}`}
-                                                            className="cursor-pointer space-y-0.5 text-xs leading-tight"
+                                                            className="min-w-0 cursor-pointer space-y-0.5 text-xs leading-tight"
                                                         >
-                                                            <span className="inline-flex items-center gap-1.5 font-medium">
+                                                            <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                                                                 Conta como açúcar adicionado
                                                                 <HelpTip>Marque quando o ingrediente for açúcar, mel, xarope, maltodextrina ou similar. Isso entra no cálculo de açúcares adicionados e pode ativar lupa.</HelpTip>
                                                             </span>
@@ -2353,6 +2353,7 @@ export function TableGenerator({
                                             <Button
                                                 variant="destructive"
                                                 size="icon"
+                                                className="justify-self-end sm:shrink-0"
                                                 onClick={() => removeIngredient(idx)}
                                             >
                                                 <Trash2 className="h-4 w-4" />

@@ -9,6 +9,7 @@ import {
     consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
 import { getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import { LEGAL_DOCUMENT_VERSION } from "@/lib/legal";
 
 export async function registerUser(prevState: unknown, formData: FormData): Promise<{ error?: string }> {
     const name = ((formData.get("name") as string | null) ?? "").trim();
@@ -17,9 +18,14 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
     const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
+    const legalAcceptance = formData.get("legalAcceptance") === "accepted";
 
     if (!email || !password || !name || !companyName || !phone) {
         return { error: "Todos os campos são obrigatórios." };
+    }
+
+    if (!legalAcceptance) {
+        return { error: "Aceite os Termos de Uso e a Política de Privacidade para criar a conta." };
     }
 
     const globalLimit = await consumePersistentRateLimit(
@@ -79,6 +85,9 @@ export async function registerUser(prevState: unknown, formData: FormData): Prom
             name,
             email,
             password: hashedPassword,
+            termsAcceptedAt: new Date(),
+            privacyAcceptedAt: new Date(),
+            legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
         },
     });
 

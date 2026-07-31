@@ -151,7 +151,7 @@ export default function ProfilePage() {
     const hasTwoFactorSetup = Boolean(setupState?.qrCodeDataUrl && setupState?.manualSecret);
 
     return (
-        <div className="app-page flex max-w-5xl flex-col gap-6">
+        <div className="app-page flex min-w-0 flex-col gap-6">
             <PageHeader title="Perfil e segurança" description="Atualize seus dados de acesso, preferências e proteção da conta." />
 
             <Card className="mb-6 border-border/70">

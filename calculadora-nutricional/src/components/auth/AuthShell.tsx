@@ -10,7 +10,7 @@ type AuthShellProps = {
 
 export function AuthShell({ title, description, children }: AuthShellProps) {
     return (
-        <main className="flex min-h-[calc(100svh-4.5rem)] w-full items-center justify-center px-4 py-10">
+        <main className="flex min-h-[calc(100svh-4rem)] w-full items-center justify-center px-4 py-8 sm:min-h-[calc(100svh-4.5rem)] sm:py-10">
             <Card className="app-enter mx-auto grid w-full max-w-5xl overflow-hidden p-0 md:grid-cols-[0.9fr_1fr]">
                 <CardHeader className="relative min-h-72 content-end overflow-hidden border-b bg-primary px-7 py-8 text-primary-foreground md:min-h-[32rem] md:border-r md:border-b-0">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.24),transparent_34rem)]" />

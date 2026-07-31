@@ -266,11 +266,11 @@ export function DashboardShell({
             </Sidebar>
 
             <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                <header className="app-topbar sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4 backdrop-blur-xl sm:px-6">
+                <header className="app-topbar sticky top-0 z-10 flex min-h-12 shrink-0 items-center gap-2 border-b px-3 py-2 backdrop-blur-xl sm:h-12 sm:px-6 sm:py-0">
                     <SidebarTrigger aria-label="Abrir ou recolher navegação" />
                     <Separator orientation="vertical" className="mr-1 h-4" />
-                    <Breadcrumb>
-                        <BreadcrumbList>
+                    <Breadcrumb className="min-w-0 flex-1 overflow-hidden">
+                        <BreadcrumbList className="flex-nowrap overflow-hidden">
                             {pathname !== "/dashboard" ? (
                               <>
                                 <BreadcrumbItem className="hidden sm:inline-flex">
@@ -279,13 +279,13 @@ export function DashboardShell({
                                 <BreadcrumbSeparator className="hidden sm:block" />
                               </>
                             ) : null}
-                            <BreadcrumbItem>
-                                <BreadcrumbPage>{currentLabel}</BreadcrumbPage>
+                            <BreadcrumbItem className="min-w-0">
+                                <BreadcrumbPage className="block max-w-[min(52vw,24rem)] truncate sm:max-w-[28rem]">{currentLabel}</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
 
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
                         {organizations && organizations.length > 1 ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -391,7 +391,7 @@ export function DashboardShell({
                     </div>
                 </header>
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
-                <footer className="app-footer flex flex-col gap-2 border-t px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <footer className="app-footer flex flex-wrap gap-x-4 gap-y-2 border-t px-3 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
                     <p>SoIZI · Rotulagem nutricional</p>
                     <div className="flex items-center gap-4">
                         <Link href="/dashboard/profile" className="transition-colors hover:text-foreground">Conta</Link>

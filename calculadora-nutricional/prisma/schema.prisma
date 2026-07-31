@@ -94,6 +94,9 @@ model User {
   twoFactorLastUsedAt       DateTime?
   resetPasswordToken        String?                    @unique @db.Text
   resetPasswordExpiresAt    DateTime?
+  termsAcceptedAt           DateTime?
+  privacyAcceptedAt         DateTime?
+  legalDocumentVersion      String?
   ownedOrganizations        Organization[]             @relation("OrganizationOwner")
   organizationMemberships   OrganizationMember[]
   securityAuditLogs         SecurityAuditLog[]

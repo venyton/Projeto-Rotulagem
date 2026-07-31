@@ -745,7 +745,7 @@ export function EnterpriseWorkspace({
             </header>
 
             <section className="app-panel mb-8 p-5 transition-all">
-                <div className="grid gap-5 md:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                     <ControlSelect label={copy.productBase} help="Escolha a tabela brasileira salva que servirá como origem. Ela não será alterada por este módulo.">
                         <Select value={selectedTable.id} onValueChange={setSelectedTableId}>
                             <SelectTrigger className={ENTERPRISE_SELECT_TRIGGER_CLASS}>

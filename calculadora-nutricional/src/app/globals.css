@@ -159,6 +159,9 @@
 
 @layer base {
   html {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     scroll-behavior: smooth;
     font-size: var(--interface-font-size, 13px);
     scrollbar-color: color-mix(in oklab, var(--muted-foreground) 42%, transparent) transparent;
@@ -200,12 +203,30 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    width: 100%;
+    min-width: 320px;
+    max-width: 100%;
+    overflow-x: hidden;
     background-image: none;
     background-attachment: fixed;
     transition:
       background-color 220ms ease,
       color 220ms ease,
       border-color 220ms ease;
+  }
+
+  main,
+  section,
+  article,
+  [data-slot="card"],
+  [data-slot="sidebar-inset"] {
+    min-width: 0;
+  }
+
+  img,
+  video,
+  canvas {
+    max-width: 100%;
   }
 
   .dark body,
@@ -263,6 +284,7 @@
   }
 
   .app-page {
+    box-sizing: border-box;
     width: 100%;
     margin-inline: 0;
     min-height: 0;
@@ -271,6 +293,10 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 1.5rem max(1rem, calc((100% - 88rem) / 2 + 1rem));
+  }
+
+  .app-page > * {
+    min-width: 0;
   }
 
   .app-page-loose {
@@ -315,7 +341,7 @@
 
   .app-feature-panel {
     border-radius: 0.75rem;
-    padding: 2rem;
+    padding: 1.25rem;
   }
 
   .app-panel-muted {
@@ -450,6 +476,20 @@
 
     .app-feature-panel {
       padding: 3rem;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .app-page {
+      padding-block: 1rem max(1.5rem, env(safe-area-inset-bottom));
+    }
+
+    .app-page-loose {
+      padding-block: 1.5rem max(2rem, env(safe-area-inset-bottom));
+    }
+
+    .app-panel-header {
+      padding-inline: 0.75rem;
     }
   }
 

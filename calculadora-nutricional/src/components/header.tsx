@@ -51,10 +51,10 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
 
     return (
         <header className="site-header sticky top-0 z-40 border-b shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur-xl">
-            <div className="mx-auto flex h-18 w-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
-                <Link href={isLoggedIn ? "/dashboard" : "/"} className="relative h-12 w-40 shrink-0 rounded-md outline-none ring-ring focus-visible:ring-2">
-                    <Image src="/logo.png" alt="SoIZI" fill sizes="160px" priority className="object-contain dark:hidden" />
-                    <Image src="/logo-branco.png" alt="SoIZI" fill sizes="160px" priority className="hidden object-contain dark:block" />
+            <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center gap-2 px-3 sm:h-18 sm:gap-3 sm:px-6 lg:px-8">
+                <Link href={isLoggedIn ? "/dashboard" : "/"} className="relative h-10 w-32 shrink-0 rounded-md outline-none ring-ring focus-visible:ring-2 sm:h-12 sm:w-40">
+                    <Image src="/logo.png" alt="SoIZI" fill sizes="(max-width: 639px) 128px, 160px" priority className="object-contain dark:hidden" />
+                    <Image src="/logo-branco.png" alt="SoIZI" fill sizes="(max-width: 639px) 128px, 160px" priority className="hidden object-contain dark:block" />
                 </Link>
 
                 {isHome ? (

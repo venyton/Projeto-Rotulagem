@@ -188,7 +188,7 @@ export default async function Home() {
     <div className={`${bodyFont.className} bg-background text-foreground`}>
       <section
         id="inicio"
-        className="relative isolate min-h-[calc(100svh-4.5rem)] overflow-hidden"
+        className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden sm:min-h-[calc(100svh-4.5rem)]"
       >
         <Image
           src="https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=2000&q=88"
@@ -201,11 +201,11 @@ export default async function Home() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/82 via-black/58 to-black/20" />
         <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/45 to-transparent" />
 
-        <div className="relative mx-auto flex min-h-[calc(100svh-4.5rem)] w-full max-w-7xl items-end px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+        <div className="relative mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-7xl items-end px-4 py-10 sm:min-h-[calc(100svh-4.5rem)] sm:px-6 sm:py-16 lg:px-8 lg:py-20">
           <div className="app-enter max-w-4xl text-white">
             <Badge className="mb-6">SoIZI · Sistema de rotulagem</Badge>
             <h1
-              className={`${titleFont.className} max-w-4xl text-balance text-5xl leading-[0.92] sm:text-6xl lg:text-8xl`}
+              className={`${titleFont.className} max-w-4xl text-balance text-4xl leading-[0.94] sm:text-6xl lg:text-8xl`}
             >
               Da formulação ao rótulo, sem perder o fio.
             </h1>
