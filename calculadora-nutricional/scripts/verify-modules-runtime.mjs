@@ -1,8 +1,48 @@
 import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
 
+const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const databaseKeys = ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "DATABASE_URL"];
+
+function loadLocalEnvironment() {
+  const localEnvPath = resolve(projectRoot, ".env.local");
+  if (!existsSync(localEnvPath)) return;
+
+  for (const line of readFileSync(localEnvPath, "utf8").split(/\r?\n/)) {
+    const match = line.trim().match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match || process.env[match[1]] !== undefined) continue;
+    process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+  }
+}
+
+function assertLocalDatabase() {
+  const configured = databaseKeys
+    .map((key) => [key, process.env[key]])
+    .filter(([, value]) => value);
+  if (configured.length === 0) throw new Error("Runtime verification exige uma URL PostgreSQL local.");
+
+  for (const [key, value] of configured) {
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error(`${key} para runtime verification é inválida.`);
+    }
+
+    if (parsed.protocol !== "postgresql:" || !["127.0.0.1", "localhost", "::1"].includes(parsed.hostname) || parsed.port !== "54329") {
+      throw new Error(`${key} deve apontar somente para PostgreSQL local em 127.0.0.1:54329.`);
+    }
+  }
+}
+
+loadLocalEnvironment();
+assertLocalDatabase();
+
+const { PrismaClient } = await import("@prisma/client");
 const prisma = new PrismaClient();
 const baseUrl = process.env.MODULE_TEST_BASE_URL || "http://localhost:3100";
 const modules = [
@@ -48,7 +88,9 @@ function mergeCookies(current, response) {
 }
 
 async function request(url, options = {}) {
-  return fetch(url, { ...options, signal: AbortSignal.timeout(30_000) });
+  const headers = new Headers(options.headers);
+  if (!headers.has("Origin")) headers.set("Origin", baseUrl);
+  return fetch(url, { ...options, headers, signal: AbortSignal.timeout(30_000) });
 }
 
 async function setModule(moduleKey, enabled) {
