@@ -19,6 +19,13 @@ permissions:
 jobs:
   security:
     runs-on: ubuntu-latest
+    env:
+      # Prisma schema validation only needs valid URL-shaped values; CI must
+      # never connect to a real database.
+      POSTGRES_PRISMA_URL: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
+      POSTGRES_URL_NON_POOLING: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
+      # Build-time auth validation only; never use this value outside CI.
+      NEXTAUTH_SECRET: ci-only-secret-with-more-than-32-characters
     defaults:
       run:
         working-directory: calculadora-nutricional
