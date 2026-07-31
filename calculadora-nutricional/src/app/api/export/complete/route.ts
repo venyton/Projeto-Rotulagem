@@ -4,32 +4,18 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
-import { getCanonicalAppOrigin } from "@/lib/security/app-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { completeExportBodySchema } from "@/features/tables/domain/export-schema";
+import { generateExcelBuffer } from "@/app/api/export/excel/route";
+import {
+  consumeRequestRateLimit,
+  getRequestRateLimit,
+  rateLimitResponse,
+} from "@/lib/security/request-rate-limit";
+import { getRuntimeRequestBodyLimitBytes, getRuntimeResponseBodyLimitBytes } from "@/lib/security/request-body-limit";
 
 export const runtime = "nodejs";
-
-type CompleteExportBody = {
-  title?: string;
-  per100g?: unknown;
-  perPortion?: unknown;
-  portionSize?: number;
-  householdMeasure?: string;
-  popGroup?: string;
-  isSupplement?: boolean;
-  servingsPerPackage?: string;
-  selectedNutrients?: string[];
-  selectedTableTypes?: string[];
-  extraConstituents?: Array<{
-    name?: string;
-    amount?: string;
-    unit?: string;
-  }>;
-  showDailyValue?: boolean;
-  imageDataUrl?: string;
-  imageDataUrls?: Record<string, string>;
-};
 
 type ParsedImage = {
   buffer: Buffer;
@@ -54,6 +40,14 @@ function parseImageDataUrl(imageDataUrl: string | undefined): ParsedImage | null
     return null;
   }
 
+  const isPng = extension === "png" && buffer.subarray(0, 8).equals(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  );
+  const isJpeg = extension === "jpeg" && buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (!isPng && !isJpeg) {
+    return null;
+  }
+
   return { buffer, extension };
 }
 
@@ -73,19 +67,6 @@ function sanitizeModelKey(value: string) {
     .slice(0, 30);
 }
 
-function readFileNameFromDisposition(contentDisposition: string | null, fallback: string) {
-  if (!contentDisposition) {
-    return fallback;
-  }
-
-  const match = contentDisposition.match(/filename\*?=(?:UTF-8''|\"?)([^\";]+)/i);
-  if (!match?.[1]) {
-    return fallback;
-  }
-
-  return decodeURIComponent(match[1]).replace(/\"/g, "").trim() || fallback;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const originError = rejectCrossOriginRequest(req);
@@ -97,12 +78,13 @@ export async function POST(req: NextRequest) {
     }
 
     const contentLength = Number(req.headers.get("content-length") || 0);
-    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 25 * 1024 * 1024) {
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > getRuntimeRequestBodyLimitBytes(25)) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-      await requireModuleAccess(SAAS_MODULES.EXPORTS);
+      context = await requireModuleAccess(SAAS_MODULES.EXPORTS);
     } catch (error) {
       if (error instanceof ModuleAccessError) {
         return NextResponse.json({ error: error.message }, { status: error.status });
@@ -110,59 +92,21 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const body = (await req.json()) as CompleteExportBody;
-
-    if (!body?.per100g || !body?.perPortion) {
-      return NextResponse.json({ error: "Dados nutricionais inválidos para exportação." }, { status: 400 });
+    const parsedBody = completeExportBodySchema.safeParse(await req.json().catch(() => null));
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: "Dados de exportação inválidos." }, { status: 400 });
     }
-
-    const excelPayload = {
-      title: body.title,
-      per100g: body.per100g,
-      perPortion: body.perPortion,
-      portionSize: body.portionSize,
-      householdMeasure: body.householdMeasure,
-      popGroup: body.popGroup,
-      isSupplement: body.isSupplement,
-      servingsPerPackage: body.servingsPerPackage,
-      selectedNutrients: Array.isArray(body.selectedNutrients) ? body.selectedNutrients : [],
-      selectedTableTypes: Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes : [],
-      extraConstituents: Array.isArray(body.extraConstituents) ? body.extraConstituents : [],
-      showDailyValue: body.showDailyValue !== false,
-    };
-
-    const appOrigin = getCanonicalAppOrigin();
-    if (!appOrigin) {
-      return NextResponse.json({ error: "Origem da aplicação não configurada." }, { status: 503 });
+    const requestLimit = await consumeRequestRateLimit(
+      "exports",
+      context.user.id,
+      getRequestRateLimit("exports"),
+    );
+    if (!requestLimit.allowed) {
+      return rateLimitResponse(requestLimit, { error: "Limite temporário de exportações atingido." });
     }
+    const body = parsedBody.data;
 
-    const excelResponse = await fetch(new URL("/api/export/excel", appOrigin), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: req.headers.get("cookie") ?? "",
-        Origin: appOrigin,
-      },
-      body: JSON.stringify(excelPayload),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    if (!excelResponse.ok) {
-      let message = "Falha ao gerar o Excel oficial.";
-      try {
-        const data = (await excelResponse.json()) as { error?: string };
-        if (typeof data?.error === "string" && data.error.trim().length > 0) {
-          message = data.error;
-        }
-      } catch {
-        // keep fallback message
-      }
-      return NextResponse.json({ error: message }, { status: excelResponse.status });
-    }
-
-    const excelBuffer = Buffer.from(await excelResponse.arrayBuffer());
+    const excelBuffer = await generateExcelBuffer(body);
     const isXlsxZip = excelBuffer.length > 4 && excelBuffer[0] === 0x50 && excelBuffer[1] === 0x4b;
     if (!isXlsxZip) {
       return NextResponse.json(
@@ -170,14 +114,11 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    const selectedModels = Array.isArray(body.selectedTableTypes) ? body.selectedTableTypes.slice(0, 12) : [];
-    const imagesFromMap = body.imageDataUrls && typeof body.imageDataUrls === "object" ? body.imageDataUrls : null;
+    const selectedModels = body.selectedTableTypes.slice(0, 12);
+    const imagesFromMap = body.imageDataUrls ?? null;
 
     const safeTitle = sanitizeFileName(body.title || "tabela-nutricional") || "tabela-nutricional";
-    const excelName = readFileNameFromDisposition(
-      excelResponse.headers.get("Content-Disposition"),
-      `tabela-${safeTitle}.xlsx`
-    );
+    const excelName = `tabela-${safeTitle}.xlsx`;
 
     const zip = new JSZip();
     zip.file(excelName, excelBuffer);
@@ -207,12 +148,16 @@ export async function POST(req: NextRequest) {
     const zipBuffer = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
     const safeBuffer = new Uint8Array(zipBuffer.length);
     safeBuffer.set(zipBuffer);
+    if (safeBuffer.byteLength > getRuntimeResponseBodyLimitBytes(25)) {
+      return NextResponse.json({ error: "Arquivo de exportação excede o limite suportado pelo ambiente." }, { status: 413 });
+    }
 
     return new NextResponse(safeBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${safeTitle}-completo.zip"`,
+        "Cache-Control": "private, no-store",
       },
     });
   } catch {
