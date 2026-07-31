@@ -24,6 +24,7 @@ import {
 } from "@/features/enterprise/domain/enterprise";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 
 export type SaveEnterpriseLabelProjectInput = {
     baseTableId: string;
@@ -135,6 +136,13 @@ export async function saveEnterpriseLabelProject(
         if (error instanceof ModuleAccessError) return { error: error.message };
         throw error;
     }
+
+    const requestLimit = await consumeRequestRateLimit(
+        "workspace_writes",
+        user.id,
+        getRequestRateLimit("workspaceWrites"),
+    );
+    if (!requestLimit.allowed) return { error: "Limite temporário de alterações atingido. Tente novamente mais tarde." };
 
     if (!isMarket(input.market) || !isFoodState(input.foodState)) {
         return { error: "Mercado ou base do alimento inválidos." };
@@ -265,6 +273,13 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
         if (error instanceof ModuleAccessError) return { error: error.message };
         throw error;
     }
+
+    const requestLimit = await consumeRequestRateLimit(
+        "workspace_writes",
+        user.id,
+        getRequestRateLimit("workspaceWrites"),
+    );
+    if (!requestLimit.allowed) return { error: "Limite temporário de exportações atingido. Tente novamente mais tarde." };
 
     const project = await prisma.enterpriseLabelProject.findFirst({
         where: { id: input.projectId, userId: user.id },

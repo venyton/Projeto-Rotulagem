@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import type { EnterpriseApprovalStatus } from "@prisma/client";
+import dynamic from "next/dynamic";
 import { prisma } from "@/lib/prisma";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
-import { EnterpriseWorkspace } from "@/features/enterprise/components/EnterpriseWorkspace";
 import type {
     ApprovalStatus,
     EnterpriseLabelProjectSummary,
@@ -13,6 +13,11 @@ import type {
     InternationalMarket,
     LegalLabelData,
 } from "@/features/enterprise/domain/enterprise";
+
+const EnterpriseWorkspace = dynamic(
+    () => import("@/features/enterprise/components/EnterpriseWorkspace").then((module) => module.EnterpriseWorkspace),
+    { loading: () => <div className="min-h-96 animate-pulse rounded-xl border bg-card" role="status" aria-live="polite" aria-label="Carregando workspace" /> }
+);
 
 export default async function EnterprisePage() {
     const context = await getCurrentSaaSContext();
@@ -56,6 +61,7 @@ export default async function EnterprisePage() {
                 },
             },
             orderBy: { updatedAt: "desc" },
+            take: 100,
         }),
         prisma.enterpriseLabelProject.findMany({
             where: { userId: context.user.id },
@@ -85,6 +91,7 @@ export default async function EnterprisePage() {
                     },
                 },
             },
+            take: 100,
         }),
     ]);
 
