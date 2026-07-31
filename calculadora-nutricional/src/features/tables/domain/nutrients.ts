@@ -1,4 +1,5 @@
 import { Ingredient } from "@prisma/client";
+import { MICRO_KEYS, type MicronutrientKey } from "./micronutrients";
 
 type IngredientWithAddedSugar = Ingredient & {
     sugarAdded?: number | null;
@@ -67,6 +68,8 @@ export interface CalculatedNutrients {
     customNutrients: Record<string, { value: number; unit: string }>;
 }
 
+export type ManualMicronutrientValues = Partial<Record<MicronutrientKey, string>>;
+
 export type TransformationMemorial = {
     preparationInstructions: string;
     powderBatchWeight: number;
@@ -91,13 +94,6 @@ export type PreparedProductCalculation = {
     totalWeight: number;
     memorial: TransformationMemorial;
 };
-
-const MICRO_KEYS = [
-    'fatMono', 'fatPoly', 'omega6', 'omega3', 'cholesterol',
-    'vitaminA', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminC',
-    'thiamin', 'riboflavin', 'niacin', 'vitaminB6', 'biotin', 'folicAcid', 'pantothenicAcid', 'vitaminB12',
-    'calcium', 'chloride', 'copper', 'chromium', 'iron', 'fluoride', 'phosphorus', 'iodine', 'magnesium', 'manganese', 'molybdenum', 'potassium', 'selenium', 'zinc', 'choline'
-] as const;
 
 const ADDED_SUGAR_NAME_PATTERNS = [
     /\bacucar(?:es)?\b/,
@@ -151,6 +147,52 @@ function parseDecimal(value: string | number | null | undefined): number {
 
     const parsed = Number(value.trim().replace(",", "."));
     return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function parseManualMicronutrientValue(value: unknown): number | null {
+    const raw = typeof value === "number"
+        ? String(value)
+        : typeof value === "string"
+            ? value.trim()
+            : "";
+    if (!raw || raw.length > 32) return null;
+
+    const parsed = Number(raw.replace(",", "."));
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1_000_000 ? parsed : null;
+}
+
+export function normalizeManualMicronutrients(value: unknown): ManualMicronutrientValues {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+    const values = value as Record<string, unknown>;
+    const normalized: ManualMicronutrientValues = {};
+    for (const key of MICRO_KEYS) {
+        const parsed = parseManualMicronutrientValue(values[key]);
+        if (parsed === null) continue;
+        normalized[key] = typeof values[key] === "string" ? values[key].trim() : String(parsed);
+    }
+    return normalized;
+}
+
+export function applyManualMicronutrientOverrides<T extends {
+    per100g: CalculatedNutrients;
+    perPortion: CalculatedNutrients;
+}>(calculation: T, values: unknown, portionSize: number): T {
+    const manualValues = normalizeManualMicronutrients(values);
+    if (Object.keys(manualValues).length === 0) return calculation;
+
+    const per100g = { ...calculation.per100g };
+    const perPortion = { ...calculation.perPortion };
+    const portionFactor = Number.isFinite(portionSize) && portionSize > 0 ? portionSize / 100 : 0;
+
+    for (const key of MICRO_KEYS) {
+        const value = parseManualMicronutrientValue(manualValues[key]);
+        if (value === null) continue;
+        per100g[key] = value;
+        perPortion[key] = value * portionFactor;
+    }
+
+    return { ...calculation, per100g, perPortion };
 }
 
 function normalizeEnergyComponentName(value: string) {

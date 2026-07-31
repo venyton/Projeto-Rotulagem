@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     const originError = rejectCrossOriginRequest(req);
@@ -37,6 +38,15 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
 
     if (!user) {
         return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+    }
+
+    const requestLimit = await consumeRequestRateLimit(
+        "table_writes",
+        user.id,
+        getRequestRateLimit("tableWrites"),
+    );
+    if (!requestLimit.allowed) {
+        return rateLimitResponse(requestLimit, { error: "Limite temporário de alterações atingido." });
     }
 
     const deleted = await prisma.generatedTable.deleteMany({
