@@ -23,9 +23,10 @@ import {
     getRequestRateLimit,
     rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
+import { barcodeSchema } from "@/lib/validation/identifiers";
 
 export const dynamic = "force-dynamic";
-const importBodySchema = z.object({ code: z.string().trim().regex(/^\d{8,14}$/) }).strict();
+const importBodySchema = z.object({ code: barcodeSchema.trim() }).strict();
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
     return NextResponse.json(body, {
@@ -35,7 +36,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 }
 
 function isBarcode(value: string) {
-    return /^\d{8,14}$/.test(value);
+    return barcodeSchema.safeParse(value).success;
 }
 
 async function findCachedProduct(code: string) {

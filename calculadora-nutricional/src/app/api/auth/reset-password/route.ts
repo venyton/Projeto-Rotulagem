@@ -15,9 +15,10 @@ import {
 } from "@/lib/security/persistent-rate-limit";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { getClientAddress, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
+import { passwordResetTokenSchema } from "@/lib/validation/identifiers";
 
 const requestSchema = z.object({
-  token: z.string().regex(/^[a-f0-9]{64}$/),
+  token: passwordResetTokenSchema,
   password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
 }).strict();
 

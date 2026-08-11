@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { completeExportBodySchema, exportBodySchema } from "./export-schema";
+import { completeExportBodySchema, exportBodySchema, imageDataUrlSchema } from "./export-schema";
 
 const validNutrients = {
   energy: 100,
@@ -52,4 +52,10 @@ test("complete export schema validates image data and model keys", () => {
   });
 
   assert.equal(invalid.success, false);
+});
+
+test("image data URL aceita somente Base64 canônico", () => {
+  assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YWJj").success, true);
+  assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YWJj=").success, false);
+  assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YW\njj").success, false);
 });

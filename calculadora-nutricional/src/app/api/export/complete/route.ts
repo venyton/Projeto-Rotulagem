@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
-import { completeExportBodySchema } from "@/features/tables/domain/export-schema";
+import { completeExportBodySchema, imageDataUrlSchema } from "@/features/tables/domain/export-schema";
 import { generateExcelBuffer } from "@/app/api/export/excel/route";
 import {
   consumeRequestRateLimit,
@@ -23,17 +23,18 @@ type ParsedImage = {
 };
 
 function parseImageDataUrl(imageDataUrl: string | undefined): ParsedImage | null {
-  if (!imageDataUrl || typeof imageDataUrl !== "string") {
+  if (!imageDataUrl || !imageDataUrlSchema.safeParse(imageDataUrl).success) {
     return null;
   }
 
-  const match = imageDataUrl.match(/^data:(image\/(png|jpeg|jpg));base64,([A-Za-z0-9+/=\n\r]+)$/);
-  if (!match) {
+  const separator = imageDataUrl.indexOf(",");
+  if (separator < 0) {
     return null;
   }
 
-  const extension = match[2] === "jpg" ? "jpeg" : (match[2] as "png" | "jpeg");
-  const base64 = match[3].replace(/\s+/g, "");
+  const mediaType = imageDataUrl.slice("data:".length, separator);
+  const extension = mediaType.endsWith("jpg") ? "jpeg" : mediaType.slice("image/".length, mediaType.indexOf(";")) as "png" | "jpeg";
+  const base64 = imageDataUrl.slice(separator + 1);
   const buffer = Buffer.from(base64, "base64");
 
   if (!buffer.length) {

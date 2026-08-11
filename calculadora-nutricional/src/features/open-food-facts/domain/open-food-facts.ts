@@ -1,6 +1,7 @@
 import type { Ingredient } from "@prisma/client";
 
 import { normalizeIngredientSearchText } from "../../ingredients/domain/ingredient-search";
+import { barcodeSchema } from "../../../lib/validation/identifiers";
 
 type RawNutriments = Record<string, unknown>;
 
@@ -202,7 +203,7 @@ export function normalizeOpenFoodFactsProduct(raw: RawOpenFoodFactsProduct): Ope
         asString(raw.product_name_en) ||
         asString(raw.generic_name);
 
-    if (!/^\d{8,14}$/.test(code) || !name) return null;
+    if (!barcodeSchema.safeParse(code).success || !name) return null;
 
     const ingredient = buildIngredient(raw, code, name);
     const completeness = completenessFor(ingredient);

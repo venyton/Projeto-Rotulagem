@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 
 import { generateSecret, generateURI, verify } from "otplib";
 import QRCode from "qrcode";
+import { totpCodeSchema } from "@/lib/validation/identifiers";
 
 const ISSUER = "SoIZI";
 const SECRET_VERSION = "v1";
@@ -70,7 +71,7 @@ export function decryptTotpSecret(payload: string) {
 
 export async function verifyTotpCode(secret: string, code: string) {
   const token = code.replace(/\s+/g, "");
-  if (!/^\d{6}$/.test(token)) return false;
+  if (!totpCodeSchema.safeParse(token).success) return false;
 
   const result = await verify({
     secret,
