@@ -7,10 +7,11 @@ import { Eye, EyeOff } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { registerUser } from "@/features/auth/actions/register-user";
 import { ExternalAuthButtons } from "@/features/auth/components/ExternalAuthButtons";
 
@@ -19,6 +20,7 @@ const initialState: { error?: string } = {};
 export default function RegisterPage() {
     const [state, formAction, pending] = useActionState(registerUser, initialState);
     const [showPassword, setShowPassword] = useState(false);
+    const [accountKind, setAccountKind] = useState<"INDIVIDUAL" | "COMPANY">("INDIVIDUAL");
 
     return (
         <AuthShell title="Criar conta" description="Complete os dados para acessar a plataforma.">
@@ -28,11 +30,40 @@ export default function RegisterPage() {
             <form action={formAction}>
                 <FieldGroup className="gap-4">
                     <Field><FieldLabel htmlFor="name">Nome</FieldLabel><Input id="name" name="name" placeholder="Seu nome" required /></Field>
-                    <Field><FieldLabel htmlFor="companyName">Empresa</FieldLabel><Input id="companyName" name="companyName" placeholder="Nome da empresa" required /></Field>
+                    <FieldSet>
+                        <FieldLegend>Tipo de cadastro</FieldLegend>
+                        <input type="hidden" name="accountKind" value={accountKind} />
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            value={accountKind}
+                            onValueChange={(value) => {
+                                if (value === "INDIVIDUAL" || value === "COMPANY") setAccountKind(value);
+                            }}
+                            aria-label="Tipo de cadastro"
+                        >
+                            <ToggleGroupItem value="INDIVIDUAL">Pessoa física</ToggleGroupItem>
+                            <ToggleGroupItem value="COMPANY">Empresa</ToggleGroupItem>
+                        </ToggleGroup>
+                        <FieldDescription>
+                            {accountKind === "COMPANY"
+                                ? "Cadastre o responsável e os dados da organização. Depois, você poderá convidar sua equipe."
+                                : "Seu acesso será criado em um espaço individual e privado."}
+                        </FieldDescription>
+                    </FieldSet>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Field><FieldLabel htmlFor="document">CPF/CNPJ</FieldLabel><Input id="document" name="document" placeholder="Documento" /></Field>
+                        <Field><FieldLabel htmlFor="cpf">CPF do responsável</FieldLabel><Input id="cpf" name="cpf" inputMode="numeric" placeholder="000.000.000-00" required /></Field>
                         <Field><FieldLabel htmlFor="phone">Telefone</FieldLabel><Input id="phone" name="phone" placeholder="(00) 00000-0000" required /></Field>
                     </div>
+                    {accountKind === "COMPANY" ? (
+                        <>
+                            <Field><FieldLabel htmlFor="companyName">Razão social</FieldLabel><Input id="companyName" name="companyName" placeholder="Nome jurídico da empresa" required /></Field>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <Field><FieldLabel htmlFor="cnpj">CNPJ</FieldLabel><Input id="cnpj" name="cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" required /></Field>
+                                <Field><FieldLabel htmlFor="tradeName">Nome fantasia</FieldLabel><Input id="tradeName" name="tradeName" placeholder="Como a empresa é conhecida" /></Field>
+                            </div>
+                        </>
+                    ) : null}
                     <Field><FieldLabel htmlFor="email">Email</FieldLabel><Input id="email" name="email" type="email" placeholder="voce@empresa.com" required /></Field>
                     <Field>
                         <FieldLabel htmlFor="password">Senha</FieldLabel>

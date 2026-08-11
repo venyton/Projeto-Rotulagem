@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
+import { OrganizationKind, OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, DEFAULT_WORKSPACE_MODULES } from "@/features/saas/domain/modules";
@@ -13,6 +13,11 @@ type WorkspaceUser = {
 
 type EnsureWorkspaceOptions = {
   organizationName?: string | null;
+  organizationKind?: OrganizationKind;
+  legalName?: string | null;
+  tradeName?: string | null;
+  cnpjHash?: string | null;
+  cnpjLastFour?: string | null;
   modules?: SaaSModuleKey[];
   entitlementSource?: string;
 };
@@ -74,6 +79,11 @@ export async function ensureDefaultWorkspaceForUser(user: WorkspaceUser, options
         ownerId: user.id,
         name: organizationName,
         slug,
+        kind: options.organizationKind ?? OrganizationKind.INDIVIDUAL,
+        legalName: options.legalName?.trim() || null,
+        tradeName: options.tradeName?.trim() || null,
+        cnpjHash: options.cnpjHash ?? null,
+        cnpjLastFour: options.cnpjLastFour ?? null,
       },
     });
 
