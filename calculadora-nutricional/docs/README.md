@@ -13,6 +13,7 @@ Atualizado em: 30/07/2026.
 - `operations/DEPLOY.md`: publicacao e variaveis principais.
 - `operations/EXPORTACOES.md`: documentos técnicos, formatos, endpoint e validação local.
 - `operations/LOCAL_DATABASE.md`: banco PostgreSQL local isolado e comandos de runtime.
+- `operations/ROLLOUT-ORGANIZACOES-CPF-CNPJ.md`: ordem de backup, migration e verificação para o rollout de organizações e dados compartilhados.
 - `operations/MELHORIAS-APLICADAS-2026-07-30.md`: registro desta rodada de hardening, testes e operacao.
 - `operations/IMPORTADOR_FICHAS_TECNICAS_IA.md`: uso e configuracao do importador por IA.
 - `operations/PERSISTENCIA_UI_TABELA_BANCO_2026-04-30.md`: persistencia do estado completo da tela de tabela.
