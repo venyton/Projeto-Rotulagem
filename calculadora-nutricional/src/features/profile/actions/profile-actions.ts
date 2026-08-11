@@ -17,6 +17,7 @@ import {
     clearPersistentRateLimit,
     consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
+import { isValidEmail, normalizeEmail } from "@/lib/validation/contacts";
 
 type ProfileResult = { error?: string; success?: string; requireRelogin?: boolean };
 export type ProfileInfo = { name: string; email: string; twoFactorEnabled: boolean };
@@ -107,13 +108,12 @@ export async function updateProfileInfo(prevState: unknown, formData: FormData):
     if (!profileLimit.allowed) return { error: "Muitas tentativas. Tente novamente mais tarde." };
 
     const name = (formData.get("name") as string | null)?.trim() ?? "";
-    const email = (formData.get("email") as string | null)?.trim().toLowerCase() ?? "";
+    const email = normalizeEmail(formData.get("email"));
     const currentPassword = getFormValue(formData, "profileCurrentPassword");
     const twoFactorCode = getFormValue(formData, "profileTwoFactorCode");
 
     if (!email) return { error: "Email é obrigatório." };
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return { error: "Informe um email válido." };
+    if (!isValidEmail(email)) return { error: "Informe um email válido." };
 
     if (name && name.length < 2) return { error: "O nome deve ter pelo menos 2 caracteres." };
     if (name.length > 80) return { error: "O nome deve ter no máximo 80 caracteres." };

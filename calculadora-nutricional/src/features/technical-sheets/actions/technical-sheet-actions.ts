@@ -48,6 +48,7 @@ import {
   consumeRequestRateLimit,
   getRequestRateLimit,
 } from "@/lib/security/request-rate-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -100,7 +101,7 @@ export async function importTechnicalSheet(
     }
     try {
       const file = await validateTechnicalSheetFile(rawFile);
-      const result = await processTechnicalSheetFile(context.user.id, file);
+      const result = await processTechnicalSheetFile(context.user.id, context.organization.id, file);
       documentIds.push(result.documentId);
       if (result.extractionId) {
         successfulDocumentIds.push(result.documentId);
@@ -144,11 +145,13 @@ export async function importTechnicalSheet(
 
 async function processTechnicalSheetFile(
   userId: string,
+  organizationId: string,
   file: ValidatedTechnicalSheetFile
 ): Promise<{ documentId: string; extractionId?: string; error?: string }> {
   const document = await prisma.technicalDocument.create({
     data: {
       userId,
+      organizationId,
       fileName: file.fileName,
       mimeType: file.mimeType,
       status: ExtractionStatus.PROCESSING,
@@ -192,6 +195,7 @@ async function processTechnicalSheetFile(
         data: {
           documentId: document.id,
           userId,
+          organizationId,
           ...normalized.extractionData,
           reviewStatus,
           nutrients: {
@@ -237,10 +241,9 @@ export async function listTechnicalSheetDocuments(page = 1): Promise<{
   pageSize: number;
   total: number;
 }> {
-  const user = await getCurrentUser();
-  if (!user) return { documents: [], page, pageSize: TECHNICAL_SHEET_PAGE_SIZE, total: 0 };
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
   } catch {
     return { documents: [], page, pageSize: TECHNICAL_SHEET_PAGE_SIZE, total: 0 };
   }
@@ -248,7 +251,7 @@ export async function listTechnicalSheetDocuments(page = 1): Promise<{
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_TECHNICAL_SHEET_PAGE)
     : 1;
-  const where = { userId: user.id };
+  const where = { organizationId: context.organization.id };
   const [docs, total] = await Promise.all([
     prisma.technicalDocument.findMany({
       where,
@@ -298,10 +301,10 @@ export async function listTechnicalSheetDocuments(page = 1): Promise<{
  * Gets a specific extraction with full details for review using documentId
  */
 export async function getTechnicalSheetExtraction(documentId: string): Promise<TechnicalSheetReviewData | null> {
-  const user = await getCurrentUser();
-  if (!user || !isSafeId(documentId)) return null;
+  if (!isSafeId(documentId)) return null;
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
   } catch {
     return null;
   }
@@ -309,7 +312,7 @@ export async function getTechnicalSheetExtraction(documentId: string): Promise<T
   const extraction = await prisma.technicalSheetExtraction.findFirst({
     where: { 
       documentId,
-      userId: user.id
+      organizationId: context.organization.id
     },
     include: {
       document: {
@@ -449,16 +452,16 @@ export async function getTechnicalSheetExtraction(documentId: string): Promise<T
 export async function getTechnicalSheetReviewData(
   extractionId: string
 ): Promise<TechnicalSheetReviewData | null> {
-  const user = await getCurrentUser();
-  if (!user || !isSafeId(extractionId)) return null;
+  if (!isSafeId(extractionId)) return null;
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
   } catch {
     return null;
   }
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
-    where: { id: extractionId, userId: user.id },
+    where: { id: extractionId, organizationId: context.organization.id },
     include: {
       document: {
         select: {
@@ -615,11 +618,11 @@ export async function approveTechnicalSheetExtraction(
   _prevState: TechnicalSheetActionState,
   formData: FormData
 ): Promise<TechnicalSheetActionState> {
-  const user = await getCurrentUser();
-  if (!user || !isSafeId(extractionId)) return { error: "Solicitação inválida." };
+  if (!isSafeId(extractionId)) return { error: "Solicitação inválida." };
 
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
     await requireModuleAccess(SAAS_MODULES.CUSTOM_INGREDIENTS);
   } catch (error) {
     if (error instanceof ModuleAccessError) return { error: error.message };
@@ -628,7 +631,7 @@ export async function approveTechnicalSheetExtraction(
 
   const rateLimit = await consumeRequestRateLimit(
     "technical-sheet-review",
-    user.id,
+    context.user.id,
     getRequestRateLimit("technicalSheetReviews"),
   );
   if (!rateLimit.allowed) {
@@ -636,7 +639,7 @@ export async function approveTechnicalSheetExtraction(
   }
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
-    where: { id: extractionId, userId: user.id },
+    where: { id: extractionId, organizationId: context.organization.id },
     include: {
       document: {
         select: {
@@ -695,7 +698,8 @@ export async function approveTechnicalSheetExtraction(
   const result = await prisma.$transaction(async (tx) => {
     const ingredient = await tx.customIngredient.create({
       data: {
-        userId: user.id,
+        userId: context.user.id,
+        organizationId: context.organization.id,
         name: values.productName,
         ...customNutrients,
         manufacturer: values.manufacturer,
@@ -748,23 +752,23 @@ export async function approveTechnicalSheetExtraction(
 }
 
 export async function rejectTechnicalSheetExtraction(extractionId: string) {
-  const user = await getCurrentUser();
-  if (!user || !isSafeId(extractionId)) return;
+  if (!isSafeId(extractionId)) return;
+  let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
-    await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
+    context = await requireModuleAccess(SAAS_MODULES.TECHNICAL_SHEETS);
   } catch {
     return;
   }
 
   const rateLimit = await consumeRequestRateLimit(
     "technical-sheet-review",
-    user.id,
+    context.user.id,
     getRequestRateLimit("technicalSheetReviews"),
   );
   if (!rateLimit.allowed) return;
 
   const extraction = await prisma.technicalSheetExtraction.findFirst({
-    where: { id: extractionId, userId: user.id },
+    where: { id: extractionId, organizationId: context.organization.id },
   });
 
   if (!extraction) return;
@@ -780,18 +784,8 @@ export async function rejectTechnicalSheetExtraction(extractionId: string) {
   revalidatePath("/dashboard/ingredients/technical-sheets");
 }
 
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-
-  return prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true },
-  });
-}
-
 function isSafeId(value: string) {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+  return isDatabaseId(value);
 }
 
 

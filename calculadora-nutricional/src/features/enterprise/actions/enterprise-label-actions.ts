@@ -25,6 +25,7 @@ import {
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 export type SaveEnterpriseLabelProjectInput = {
     baseTableId: string;
@@ -92,7 +93,7 @@ const LEGAL_DATA_KEYS = new Set<keyof LegalLabelData>([
 ]);
 
 function isSafeId(value: unknown): value is string {
-    return typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value);
+    return isDatabaseId(value);
 }
 
 function hasSafeJsonSize(value: unknown, maxBytes: number) {
@@ -130,8 +131,9 @@ export async function saveEnterpriseLabelProject(
         return { error: "Dados do projeto excedem o limite permitido." };
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
+        context = await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
     } catch (error) {
         if (error instanceof ModuleAccessError) return { error: error.message };
         throw error;
@@ -153,7 +155,7 @@ export async function saveEnterpriseLabelProject(
     }
 
     const baseTable = await prisma.generatedTable.findFirst({
-        where: { id: input.baseTableId, userId: user.id },
+        where: { id: input.baseTableId, organizationId: context.organization.id },
         select: { id: true, title: true },
     });
 
@@ -171,14 +173,15 @@ export async function saveEnterpriseLabelProject(
     const project = await prisma.$transaction(async (tx) => {
         const savedProject = await tx.enterpriseLabelProject.upsert({
             where: {
-                userId_baseTableId_market: {
-                    userId: user.id,
+                organizationId_baseTableId_market: {
+                    organizationId: context.organization.id,
                     baseTableId: baseTable.id,
                     market: input.market,
                 },
             },
             create: {
                 userId: user.id,
+                organizationId: context.organization.id,
                 baseTableId: baseTable.id,
                 title: input.table.title,
                 market: input.market,
@@ -237,7 +240,7 @@ export async function saveEnterpriseLabelProject(
         });
 
         return tx.enterpriseLabelProject.findFirstOrThrow({
-            where: { id: savedProject.id, userId: user.id },
+            where: { id: savedProject.id, organizationId: context.organization.id },
             include: {
                 versions: {
                     where: { id: version.id },
@@ -266,8 +269,9 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
         return { error: "Metadados da exportação excedem o limite permitido." };
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
+        context = await requireModuleAccess(SAAS_MODULES.ENTERPRISE_LABELS);
         await requireModuleAccess(SAAS_MODULES.EXPORTS);
     } catch (error) {
         if (error instanceof ModuleAccessError) return { error: error.message };
@@ -282,7 +286,7 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
     if (!requestLimit.allowed) return { error: "Limite temporário de exportações atingido. Tente novamente mais tarde." };
 
     const project = await prisma.enterpriseLabelProject.findFirst({
-        where: { id: input.projectId, userId: user.id },
+        where: { id: input.projectId, organizationId: context.organization.id },
         select: { id: true },
     });
 
@@ -290,7 +294,7 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
 
     if (input.versionId) {
         const version = await prisma.enterpriseLabelVersion.findFirst({
-            where: { id: input.versionId, projectId: project.id, userId: user.id },
+            where: { id: input.versionId, projectId: project.id },
             select: { id: true },
         });
         if (!version) return { error: "Versão Enterprise inválida." };

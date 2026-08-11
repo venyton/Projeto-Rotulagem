@@ -15,6 +15,7 @@ import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
 import { normalizeIngredientSearchText } from "@/features/ingredients/domain/ingredient-search";
 import type { Prisma } from "@prisma/client";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 async function requireCustomIngredientsModule() {
     try {
@@ -77,6 +78,8 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     if (!user) return { error: "Usuário não encontrado" };
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
+    const context = await getCurrentSaaSContext();
+    if (!context || context.user.id !== user.id) return { error: "Workspace não encontrado" };
 
     const name = readText(formData, "name", 160);
     const energy = optionalNumber(formData, "energy") || 0;
@@ -152,6 +155,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
         await prisma.customIngredient.create({
             data: {
                 userId: user.id,
+                organizationId: context.organization.id,
                 name: persistedName,
                 searchName: normalizeIngredientSearchText(persistedName),
                 energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
@@ -171,7 +175,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
 }
 
 export async function deleteCustomIngredient(id: string) {
-    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return { error: "Solicitação inválida" };
+    if (!isDatabaseId(id)) return { error: "Solicitação inválida" };
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 
@@ -179,6 +183,8 @@ export async function deleteCustomIngredient(id: string) {
     if (!user) return { error: "Usuário não encontrado" };
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
+    const context = await getCurrentSaaSContext();
+    if (!context || context.user.id !== user.id) return { error: "Workspace não encontrado" };
 
     const requestLimit = await consumeRequestRateLimit(
         "ingredient_writes",
@@ -190,7 +196,7 @@ export async function deleteCustomIngredient(id: string) {
     try {
         // Ensure ownership
         const ing = await prisma.customIngredient.findUnique({ where: { id } });
-        if (!ing || ing.userId !== user.id) return { error: "Não encontrado ou sem permissão" };
+        if (!ing || ing.organizationId !== context.organization.id) return { error: "Não encontrado ou sem permissão" };
 
         await prisma.customIngredient.delete({ where: { id } });
         revalidatePath("/dashboard/ingredients");
@@ -201,7 +207,7 @@ export async function deleteCustomIngredient(id: string) {
 }
 
 export async function updateCustomIngredient(id: string, prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
-    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return { error: "Solicitação inválida" };
+    if (!isDatabaseId(id)) return { error: "Solicitação inválida" };
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) return { error: "Não autorizado" };
 
@@ -209,6 +215,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     if (!user) return { error: "Usuário não encontrado" };
     const moduleError = await requireCustomIngredientsModule();
     if (moduleError) return { error: moduleError };
+    const context = await getCurrentSaaSContext();
+    if (!context || context.user.id !== user.id) return { error: "Workspace não encontrado" };
 
     const name = readText(formData, "name", 160);
     const energy = optionalNumber(formData, "energy") || 0;
@@ -280,7 +288,7 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
 
     try {
         const ing = await prisma.customIngredient.findUnique({ where: { id } });
-        if (!ing || ing.userId !== user.id) return { error: "Não encontrado ou sem permissão" };
+        if (!ing || ing.organizationId !== context.organization.id) return { error: "Não encontrado ou sem permissão" };
 
         await prisma.customIngredient.update({
             where: { id },
@@ -316,8 +324,8 @@ export async function searchIngredients(query: string) {
     );
     if (!requestLimit.allowed) return [];
     const canUseOpenFoodFacts = contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS);
-    const user = contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS)
-        ? { id: context.user.id }
+    const organization = contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS)
+        ? { id: context.organization.id }
         : null;
     const officialIngredientScope: Prisma.IngredientWhereInput = canUseOpenFoodFacts
         ? {}
@@ -325,9 +333,9 @@ export async function searchIngredients(query: string) {
 
     if (!normalizedQuery) {
         const [customSuggestions, tacoSuggestions] = await Promise.all([
-            user
+            organization
                 ? prisma.customIngredient.findMany({
-                    where: { userId: user.id },
+                    where: { organizationId: organization.id },
                     orderBy: { createdAt: 'desc' },
                     take: 12
                 })
@@ -353,9 +361,9 @@ export async function searchIngredients(query: string) {
     };
 
     const [customDirect, tacoDirect] = await Promise.all([
-        user
+        organization
             ? prisma.customIngredient.findMany({
-                where: { userId: user.id, ...searchNameFilter },
+                where: { organizationId: organization.id, ...searchNameFilter },
                 orderBy: { createdAt: 'desc' },
                 take: 16
             })

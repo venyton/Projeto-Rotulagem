@@ -8,13 +8,14 @@ import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     const originError = rejectCrossOriginRequest(req);
     if (originError) return originError;
 
     const params = await props.params;
-    if (!/^[A-Za-z0-9_-]{1,100}$/.test(params.id)) {
+    if (!isDatabaseId(params.id)) {
         return NextResponse.json({ error: "Solicitação inválida" }, { status: 400 });
     }
     const session = await getServerSession(authOptions);
@@ -22,8 +23,9 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
         return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    let context: Awaited<ReturnType<typeof requireModuleAccess>>;
     try {
-        await requireModuleAccess(SAAS_MODULES.TABLES);
+        context = await requireModuleAccess(SAAS_MODULES.TABLES);
     } catch (error) {
         if (error instanceof ModuleAccessError) {
             return NextResponse.json({ error: error.message }, { status: error.status });
@@ -31,18 +33,9 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
         throw error;
     }
 
-    const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-    });
-
-    if (!user) {
-        return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    }
-
     const requestLimit = await consumeRequestRateLimit(
         "table_writes",
-        user.id,
+        context.user.id,
         getRequestRateLimit("tableWrites"),
     );
     if (!requestLimit.allowed) {
@@ -52,7 +45,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     const deleted = await prisma.generatedTable.deleteMany({
         where: {
             id: params.id,
-            userId: user.id,
+            organizationId: context.organization.id,
         },
     });
 

@@ -72,6 +72,7 @@ async function loadCurrentSaaSContext() {
       organization: {
         select: {
           id: true,
+          lupaStyleConfig: true,
           entitlements: {
             select: {
               moduleKey: true,
@@ -109,6 +110,7 @@ async function loadCurrentSaaSContext() {
         organization: {
           select: {
             id: true,
+            lupaStyleConfig: true,
             entitlements: { select: { moduleKey: true, enabled: true, expiresAt: true } },
           },
         },

@@ -31,7 +31,7 @@ export default async function EnterprisePage() {
 
     const [tables, projects] = await Promise.all([
         prisma.generatedTable.findMany({
-            where: { userId: context.user.id },
+            where: { organizationId: context.organization.id },
             select: {
                 id: true,
                 title: true,
@@ -64,7 +64,7 @@ export default async function EnterprisePage() {
             take: 100,
         }),
         prisma.enterpriseLabelProject.findMany({
-            where: { userId: context.user.id },
+            where: { organizationId: context.organization.id },
             orderBy: { updatedAt: "desc" },
             select: {
                 id: true,

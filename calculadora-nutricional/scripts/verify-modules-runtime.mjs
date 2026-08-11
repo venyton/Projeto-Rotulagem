@@ -126,6 +126,7 @@ async function main() {
   await prisma.generatedTable.create({
     data: {
       userId,
+      organizationId,
       title: "Produto teste",
       portion: 100,
       uom: "g",

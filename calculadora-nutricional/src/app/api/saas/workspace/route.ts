@@ -7,9 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { ACTIVE_ORGANIZATION_COOKIE } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
+import { databaseIdSchema } from "@/lib/validation/identifiers";
 
 const workspaceSchema = z.object({
-  organizationId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  organizationId: databaseIdSchema,
 });
 
 export async function POST(request: NextRequest) {

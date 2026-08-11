@@ -12,9 +12,10 @@ import {
 } from "@/features/saas/services/entitlements";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
+import { databaseIdSchema } from "@/lib/validation/identifiers";
 
 const moduleSchema = z.object({
-  organizationMemberId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  organizationMemberId: databaseIdSchema,
   moduleKey: z.enum([...ALL_SAAS_MODULES] as [SaaSModuleKey, ...SaaSModuleKey[]]),
   enabled: z.boolean(),
 });
