@@ -30,6 +30,7 @@ export default async function NewTablePage() {
             <TableGenerator
                 canUseOpenFoodFacts={contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS)}
                 canExport={contextHasModuleAccess(context, SAAS_MODULES.EXPORTS)}
+                tenantLupaStyle={context.organization.lupaStyleConfig}
             />
         </div>
     );

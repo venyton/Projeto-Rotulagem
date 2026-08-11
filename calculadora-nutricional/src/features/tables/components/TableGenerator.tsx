@@ -32,6 +32,7 @@ import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { HelpTip } from "@/components/ui/help-tip";
 import {
     Select,
@@ -42,6 +43,15 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    AlertDialog,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -81,6 +91,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { renderElementAsSvg } from "@/lib/render-element-svg";
+import { normalizeLupaStyleConfig, type LupaStyleConfig } from "@/features/tables/domain/fop-lupa";
 
 type ExcelTableType =
     | "VERT"
@@ -139,6 +150,7 @@ type TableUiState = {
     selectedTableTypes?: ExcelTableType[];
     selectedImageFormats?: ImageExportFormat[];
     includeFopSealOnImageExport?: boolean;
+    enableFopLupa?: boolean;
     previewTableType?: ExcelTableType;
     enableStrictCompliance?: boolean;
     complianceProfile?: ComplianceProfile;
@@ -161,6 +173,7 @@ type TableUiState = {
     preparationPowderPortionSize?: string;
     preparationFinalYield?: string;
     preparationIngredients?: SelectedIngredient[];
+    lupaStyle?: LupaStyleConfig;
 };
 
 const EXCEL_TABLE_OPTIONS: Array<{ value: ExcelTableType; label: string }> = [
@@ -362,6 +375,7 @@ function calculateServingsPerPackage(portionSize: number, packageContent: number
 interface TableGeneratorProps {
     canUseOpenFoodFacts?: boolean;
     canExport?: boolean;
+    tenantLupaStyle?: unknown;
     initialData?: {
         id: string;
         title: string;
@@ -381,9 +395,11 @@ export function TableGenerator({
     initialData,
     canUseOpenFoodFacts = false,
     canExport = false,
+    tenantLupaStyle,
 }: TableGeneratorProps) {
     const initialMeasure = initialData?.householdMeasure || "";
     const savedUiState: TableUiState = toTableUiState(initialData?.uiState);
+    const effectiveLupaStyle = normalizeLupaStyleConfig(savedUiState.lupaStyle ?? tenantLupaStyle);
     const [tableId, setTableId] = useState(initialData?.id || "");
     const [title, setTitle] = useState(initialData?.title || "");
     const [productDescription, setProductDescription] = useState(savedUiState.productDescription || "");
@@ -452,6 +468,7 @@ export function TableGenerator({
     const [includeFopSealOnImageExport, setIncludeFopSealOnImageExport] = useState(
         savedUiState.includeFopSealOnImageExport ?? true
     );
+    const [enableFopLupa, setEnableFopLupa] = useState(savedUiState.enableFopLupa ?? true);
     const [enableStrictCompliance, setEnableStrictCompliance] = useState(savedUiState.enableStrictCompliance ?? true);
     const [complianceProfile, setComplianceProfile] = useState<ComplianceProfile>(savedUiState.complianceProfile || "general");
     const [fopFoodType, setFopFoodType] = useState<FOPFoodType>(
@@ -483,6 +500,10 @@ export function TableGenerator({
     const [extraConstituentsSectionOpen, setExtraConstituentsSectionOpen] = useState(false);
     const [previewTableType, setPreviewTableType] = useState<ExcelTableType>(savedUiState.previewTableType || "VERT");
     const [saving, setSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [exitDialogOpen, setExitDialogOpen] = useState(false);
+    const [pendingExitUrl, setPendingExitUrl] = useState<string | null>(null);
+    const suppressBeforeUnloadRef = React.useRef(false);
     const [measureSuggestionsExpanded, setMeasureSuggestionsExpanded] = useState(true);
 
     // New state for selectors
@@ -539,6 +560,57 @@ export function TableGenerator({
         }
         return servingsPerPackageAuto;
     }, [servingsDeclarationMode, servingsPerPackageManual, servingsPerPackageAuto]);
+    const currentTableSnapshot = JSON.stringify({
+        title,
+        portionSize,
+        householdMeasure,
+        popGroup,
+        ingredients,
+        productDescription,
+        selectedGroup,
+        selectedProduct,
+        packageContent,
+        servingsDeclarationMode,
+        servingsPerPackageManual,
+        useIndividualPackagePortion,
+        useUnitFractionMeasure,
+        unitWeightForFraction,
+        regulatoryScenario,
+        regulatoryCategory,
+        isSupplement,
+        extraConstituents,
+        enablePreparationSimulator,
+        preparationSectionOpen,
+        preparationInstructions,
+        preparationReadyPortionSize,
+        preparationPowderBatchWeight,
+        preparationPowderPortionSize,
+        preparationFinalYield,
+        preparationIngredients,
+        selectedNutrients,
+        manualMicronutrients,
+        selectedTableTypes,
+        selectedImageFormats,
+        includeFopSealOnImageExport,
+        enableFopLupa,
+        previewTableType,
+        enableStrictCompliance,
+        complianceProfile,
+        fopFoodType,
+        fopReferenceMode,
+        preparedSugarAdded,
+        preparedFatSat,
+        preparedSodium,
+        iodizedSaltStatement,
+        flourStatement,
+        aminoAcidProfile,
+        aminoAcidProteinOverride,
+        aminoAcidSectionOpen,
+        aminoAcidNotApplicable,
+    });
+    const currentTableSnapshotRef = React.useRef(currentTableSnapshot);
+    const lastSavedSnapshotRef = React.useRef<string | null>(null);
+    currentTableSnapshotRef.current = currentTableSnapshot;
     const preparationReadyPortion = parseDecimalInput(preparationReadyPortionSize);
     const preparationPowderBatch = parseDecimalInput(preparationPowderBatchWeight);
     const preparationYield = parseDecimalInput(preparationFinalYield);
@@ -581,10 +653,7 @@ export function TableGenerator({
     const fopStatus = fopReference ? checkFOP(fopReference, fopFoodType) : null;
     const hasFopSeal = !!(fopStatus && (fopStatus.highSugar || fopStatus.highFat || fopStatus.highSodium));
     const effectiveHasFopSeal = !isExcludedFromRdc429 && !isFopForbiddenByCategory && hasFopSeal;
-    const activeFopSealCount = effectiveHasFopSeal && fopStatus
-        ? [fopStatus.highSugar, fopStatus.highFat, fopStatus.highSodium].filter(Boolean).length
-        : 0;
-    const previewFopLayout: "horizontal" | "rectangular" = activeFopSealCount > 1 ? "rectangular" : "horizontal";
+    const shouldShowFopSeal = effectiveHasFopSeal && enableFopLupa;
     const mandatoryStatements = React.useMemo(() => {
         if (isExcludedFromRdc429) return [] as string[];
         const statements: string[] = [];
@@ -1172,6 +1241,7 @@ export function TableGenerator({
             if (typeof persisted.includeFopSealOnImageExport === "boolean") {
                 setIncludeFopSealOnImageExport(persisted.includeFopSealOnImageExport);
             }
+            if (typeof persisted.enableFopLupa === "boolean") setEnableFopLupa(persisted.enableFopLupa);
             if (persisted.previewTableType) setPreviewTableType(persisted.previewTableType);
             if (typeof persisted.enableStrictCompliance === "boolean") setEnableStrictCompliance(persisted.enableStrictCompliance);
             if (persisted.complianceProfile) setComplianceProfile(persisted.complianceProfile);
@@ -1255,12 +1325,56 @@ export function TableGenerator({
         }
     }, [initialData, tableUiStorageKey]);
 
-    const handleSave = async () => {
+    useEffect(() => {
+        if (lastSavedSnapshotRef.current === null) {
+            lastSavedSnapshotRef.current = currentTableSnapshot;
+            return;
+        }
+
+        setHasUnsavedChanges(lastSavedSnapshotRef.current !== currentTableSnapshot);
+    }, [currentTableSnapshot]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (suppressBeforeUnloadRef.current || (!hasUnsavedChanges && !saving)) return;
+            event.preventDefault();
+            event.returnValue = "";
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges, saving]);
+
+    useEffect(() => {
+        const handleDocumentClick = (event: MouseEvent) => {
+            if (!hasUnsavedChanges || saving || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            if (!(event.target instanceof Element)) return;
+
+            const link = event.target.closest("a[href]") as HTMLAnchorElement | null;
+            if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+
+            const destination = new URL(link.href, window.location.href);
+            if (destination.href === window.location.href) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            event.stopPropagation();
+            suppressBeforeUnloadRef.current = true;
+            setPendingExitUrl(destination.href);
+            setExitDialogOpen(true);
+        };
+
+        window.addEventListener("click", handleDocumentClick, true);
+        return () => window.removeEventListener("click", handleDocumentClick, true);
+    }, [hasUnsavedChanges, saving]);
+
+    const handleSave = async ({ showSuccess = true }: { showSuccess?: boolean } = {}): Promise<string | null> => {
+        const snapshotAtSave = currentTableSnapshot;
         setSaving(true);
         try {
             if (Object.values(manualMicronutrients).some((value) => parseManualMicronutrientValue(value) === null)) {
                 toast.error("Informe valores manuais válidos, iguais ou maiores que zero.");
-                return;
+                return null;
             }
             const normalizedManualMicronutrients = normalizeManualMicronutrients(manualMicronutrients);
             const response = await saveTable({
@@ -1297,11 +1411,13 @@ export function TableGenerator({
                     preparationPowderPortionSize,
                     preparationFinalYield,
                     preparationIngredients,
+                    lupaStyle: savedUiState.lupaStyle,
                     selectedNutrients,
                     manualMicronutrients: normalizedManualMicronutrients,
                     selectedTableTypes,
                     selectedImageFormats,
                     includeFopSealOnImageExport,
+                    enableFopLupa,
                     previewTableType,
                     enableStrictCompliance,
                     complianceProfile,
@@ -1320,7 +1436,7 @@ export function TableGenerator({
             });
             if (response?.error) {
                 toast.error(response.error);
-                return;
+                return null;
             }
 
             const savedId = response?.id;
@@ -1356,11 +1472,13 @@ export function TableGenerator({
                     preparationPowderPortionSize,
                     preparationFinalYield,
                     preparationIngredients,
+                    lupaStyle: savedUiState.lupaStyle,
                     selectedNutrients,
                     manualMicronutrients: normalizedManualMicronutrients,
                     selectedTableTypes,
                     selectedImageFormats,
                     includeFopSealOnImageExport,
+                    enableFopLupa,
                     previewTableType,
                     enableStrictCompliance,
                     complianceProfile,
@@ -1378,13 +1496,34 @@ export function TableGenerator({
                 };
                 window.localStorage.setItem(storageKey, JSON.stringify(persisted));
             }
-            toast.success("Tabela salva com sucesso!");
+            lastSavedSnapshotRef.current = snapshotAtSave;
+            setHasUnsavedChanges(snapshotAtSave !== currentTableSnapshotRef.current);
+            if (showSuccess) toast.success("Tabela salva com sucesso!");
+            return savedId ?? null;
         } catch (error) {
             console.error(error);
             toast.error("Erro ao salvar tabela.");
+            return null;
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleOpenLupaEditor = async () => {
+        const savedId = await handleSave({ showSuccess: false });
+        if (!savedId) return;
+
+        window.location.assign(`/dashboard/edit/${savedId}/lupa`);
+    };
+
+    const handleSaveAndExit = async () => {
+        const savedId = await handleSave({ showSuccess: false });
+        if (!savedId || !pendingExitUrl) return;
+        window.location.assign(pendingExitUrl);
+    };
+
+    const handleExitWithoutSaving = () => {
+        if (pendingExitUrl) window.location.assign(pendingExitUrl);
     };
 
     const resolveExportElement = (elementId: string | string[] = "nutrition-label-container") => {
@@ -1515,40 +1654,6 @@ export function TableGenerator({
         }
     };
 
-    const getActiveFopModelAssets = () => {
-        if (!effectiveHasFopSeal || !fopStatus) return [];
-
-        return [
-            { fileName: "modelos_lupa_anvisa/alto_em.png", path: "/images/lupa/alto_em.png", active: true },
-            { fileName: "modelos_lupa_anvisa/acucar_adicionado.png", path: "/images/lupa/acucar_adicionado.png", active: fopStatus.highSugar },
-            { fileName: "modelos_lupa_anvisa/gordura_saturada.png", path: "/images/lupa/gordura_saturada.png", active: fopStatus.highFat },
-            { fileName: "modelos_lupa_anvisa/sodio.png", path: "/images/lupa/sodio.png", active: fopStatus.highSodium },
-        ].filter((asset) => asset.active);
-    };
-
-    const fetchFopModelAsset = async (path: string) => {
-        const response = await fetch(path);
-        if (!response.ok) {
-            throw new Error("Não foi possível carregar os modelos oficiais de lupa.");
-        }
-        return response.blob();
-    };
-
-    const addFopModelAssetsToFiles = async (files: ExportFile[]) => {
-        for (const asset of getActiveFopModelAssets()) {
-            files.push({
-                fileName: asset.fileName,
-                blob: await fetchFopModelAsset(asset.path),
-            });
-        }
-    };
-
-    const addFopModelAssetsToZip = async (zip: { file: (fileName: string, data: Blob) => unknown }) => {
-        for (const asset of getActiveFopModelAssets()) {
-            zip.file(asset.fileName, await fetchFopModelAsset(asset.path));
-        }
-    };
-
     const getPreparationMemorialText = () => {
         const memorial = result?.memorial;
         if (!enablePreparationSimulator || !memorial) return null;
@@ -1639,13 +1744,12 @@ export function TableGenerator({
                 );
             }
 
-            if (effectiveHasFopSeal) {
+            if (shouldShowFopSeal && includeFopSealOnImageExport) {
                 const fopElement = document.getElementById("nutrition-fop-seal-export");
                 if (fopElement) {
                     await addElementImageExportsToFiles(files, "nutrition-fop-seal-export", "selo_fop", formatsToExport);
                 }
             }
-            await addFopModelAssetsToFiles(files);
             addPreparationMemorialToFiles(files);
 
             if (files.length === 1) {
@@ -1700,11 +1804,10 @@ export function TableGenerator({
                 );
             }
 
-            if (effectiveHasFopSeal) {
+            if (shouldShowFopSeal && includeFopSealOnImageExport) {
                 await addElementImageExportsToFiles(imageFiles, "nutrition-fop-seal-export", "selo_fop", imageFormatsToExport);
             }
             imageFiles.forEach((file) => zip.file(file.fileName, file.blob));
-            await addFopModelAssetsToZip(zip);
             addPreparationMemorialToZip(zip);
 
             // 3. Get Excel Blob from Server
@@ -1773,7 +1876,7 @@ export function TableGenerator({
                             {title.trim() || "Nova tabela nutricional"}
                         </h1>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:flex lg:flex-wrap lg:justify-end">
+                    <div className="grid grid-cols-3 gap-2 text-xs lg:flex lg:flex-wrap lg:justify-end">
                         <div className="app-metric">
                             <div className="app-metric-label">Porção</div>
                             <div className="mt-0.5 font-semibold text-foreground">{formatWeight(portionSize)} g</div>
@@ -1782,13 +1885,9 @@ export function TableGenerator({
                             <div className="app-metric-label">Ingredientes</div>
                             <div className="mt-0.5 font-semibold text-foreground">{ingredients.length}</div>
                         </div>
-                        <div className="app-metric">
-                            <div className="app-metric-label">Micros</div>
-                            <div className="mt-0.5 font-semibold text-foreground">{selectedNutrients.length}</div>
-                        </div>
-                        <div className={`app-metric ${effectiveHasFopSeal ? "border-warning/30 bg-warning/10 text-warning-foreground" : "text-muted-foreground"}`}>
-                            <div className="app-metric-label opacity-70">Lupa</div>
-                            <div className="mt-0.5 font-semibold">{effectiveHasFopSeal ? "Ativa" : "Inativa"}</div>
+                        <div className={`app-metric ${shouldShowFopSeal ? "border-warning/55 bg-warning/15 text-warning dark:border-warning/70 dark:bg-warning/20" : "text-muted-foreground"}`}>
+                            <div className={`app-metric-label ${shouldShowFopSeal ? "text-warning" : ""}`}>Lupa</div>
+                            <div className={`mt-0.5 font-semibold ${shouldShowFopSeal ? "text-warning" : ""}`}>{shouldShowFopSeal ? "Ativa" : effectiveHasFopSeal ? "Desativada" : "Inativa"}</div>
                         </div>
                     </div>
                 </div>
@@ -1812,62 +1911,8 @@ export function TableGenerator({
                     </CardHeader>
                     <CardContent className="flex flex-col gap-5 bg-muted/20 p-4 sm:p-5">
 
-                        <div className={`${PANEL_CLASS} grid grid-cols-1 gap-4 p-4`}>
-                            <div className={PANEL_EYEBROW_CLASS}>
-                                Classificação oficial
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="inline-flex items-center gap-1.5">
-                                    Grupo de Alimentos (Opcional)
-                                    <HelpTip>Use quando quiser partir de uma categoria oficial. Isso ajuda a preencher produto, porção e medida com mais consistência.</HelpTip>
-                                </Label>
-                                <Select value={selectedGroup} onValueChange={handleGroupChange}>
-                                    <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
-                                        <SelectValue placeholder="Selecione um grupo" />
-                                    </SelectTrigger>
-                                    <SelectContent
-                                        position="popper"
-                                        className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"
-                                    >
-                                      <SelectGroup>
-                                        {FOOD_GROUPS.map((g, i) => (
-                                            <SelectItem key={i} value={g.group} className="max-w-full">
-                                                {g.group}
-                                            </SelectItem>
-                                        ))}
-                                      </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="inline-flex items-center gap-1.5">
-                                    Produto (Sugestão)
-                                    <HelpTip>Ao selecionar um produto sugerido, o sistema preenche automaticamente nome, porção e medida caseira. Você ainda pode editar tudo depois.</HelpTip>
-                                </Label>
-                                <Select value={selectedProduct} onValueChange={handleProductChange} disabled={!selectedGroup}>
-                                    <SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed">
-                                        <SelectValue placeholder="Selecione um produto" />
-                                    </SelectTrigger>
-                                    <SelectContent
-                                        position="popper"
-                                        className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"
-                                    >
-                                      <SelectGroup>
-                                        {FOOD_GROUPS.find(g => g.group === selectedGroup)?.products.map((p, i) => (
-                                            <SelectItem key={i} value={p.name} className="max-w-full">
-                                                {p.name}
-                                            </SelectItem>
-                                        ))}
-                                      </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
                         <div className={`${PANEL_CLASS} space-y-2 p-4`}>
-                            <Label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                                Denominação de venda
-                            </Label>
+                            <Label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Denominação de venda</Label>
                             <Textarea
                                 value={title}
                                 onChange={e => setTitle(e.target.value)}
@@ -1875,19 +1920,27 @@ export function TableGenerator({
                                 rows={2}
                                 className="min-h-12 resize-y leading-relaxed"
                             />
-                            <div className="space-y-2 pt-2">
-                                <Label htmlFor="product-description">Descrição do produto (opcional)</Label>
-                                <Textarea
-                                    id="product-description"
-                                    value={productDescription}
-                                    onChange={(e) => setProductDescription(e.target.value)}
-                                    placeholder="Descreva brevemente o produto ou sua apresentação."
-                                    rows={2}
-                                    maxLength={500}
-                                    className="resize-y leading-relaxed"
-                                />
-                            </div>
+                            <Collapsible defaultOpen={Boolean(productDescription)}>
+                                <div className="flex items-center justify-between gap-3 pt-2">
+                                    <Label htmlFor="product-description">Adicionar descrição</Label>
+                                    <CollapsibleTrigger asChild><Button type="button" variant="ghost" size="sm">Opcional<ChevronDown data-icon="inline-end" /></Button></CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent className="pt-3"><Textarea id="product-description" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} placeholder="Descreva brevemente o produto ou sua apresentação." rows={2} maxLength={500} className="resize-y leading-relaxed" /></CollapsibleContent>
+                            </Collapsible>
                         </div>
+
+                        <Collapsible defaultOpen={Boolean(selectedGroup || selectedProduct)}>
+                            <div className={`${PANEL_CLASS} flex items-center justify-between gap-4 p-4`}>
+                                <div><p className={PANEL_EYEBROW_CLASS}>Referência oficial</p><p className="mt-1 text-sm text-muted-foreground">Use para preencher dados sugeridos.</p></div>
+                                <CollapsibleTrigger asChild><Button type="button" variant="outline" size="sm">{selectedOfficialProduct ? "Revisar referência" : "Adicionar referência"}<ChevronDown data-icon="inline-end" /></Button></CollapsibleTrigger>
+                            </div>
+                            <CollapsibleContent className="pt-3">
+                                <div className={`${PANEL_CLASS} grid grid-cols-1 gap-4 p-4`}>
+                                    <div className="space-y-2"><Label className="inline-flex items-center gap-1.5">Grupo de alimentos<HelpTip>Use quando quiser partir de uma categoria oficial. Isso ajuda a preencher produto, porção e medida com mais consistência.</HelpTip></Label><Select value={selectedGroup} onValueChange={handleGroupChange}><SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed"><SelectValue placeholder="Selecione um grupo" /></SelectTrigger><SelectContent position="popper" className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"><SelectGroup>{FOOD_GROUPS.map((g, i) => <SelectItem key={i} value={g.group} className="max-w-full">{g.group}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
+                                    <div className="space-y-2"><Label className="inline-flex items-center gap-1.5">Produto sugerido<HelpTip>Preenche nome, porção e medida caseira. Você ainda pode editar tudo depois.</HelpTip></Label><Select value={selectedProduct} onValueChange={handleProductChange} disabled={!selectedGroup}><SelectTrigger className="w-full min-w-0 h-auto min-h-10 py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:whitespace-normal *:data-[slot=select-value]:break-words *:data-[slot=select-value]:text-left *:data-[slot=select-value]:leading-relaxed"><SelectValue placeholder="Selecione um produto" /></SelectTrigger><SelectContent position="popper" className="min-w-[var(--radix-select-trigger-width)] w-max max-w-[min(92vw,72rem)] p-1.5 [&_[data-slot=select-item]]:px-3 [&_[data-slot=select-item]]:py-3 [&_[data-slot=select-item]]:pr-10"><SelectGroup>{FOOD_GROUPS.find(g => g.group === selectedGroup)?.products.map((p, i) => <SelectItem key={i} value={p.name} className="max-w-full">{p.name}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
+                                </div>
+                            </CollapsibleContent>
+                        </Collapsible>
 
                         <div className={`${PANEL_CLASS} grid grid-cols-1 gap-4 p-4 md:grid-cols-2`}>
                             <div className={`${PANEL_EYEBROW_CLASS} md:col-span-2`}>
@@ -2199,8 +2252,17 @@ export function TableGenerator({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="rounded-lg border bg-card px-3 py-2 text-xs">
-                                    {effectiveHasFopSeal ? "Lupa ativa para este produto." : "Lupa inativa para este produto."}
+                                <div className="flex flex-col justify-between gap-3 rounded-lg border bg-card px-3 py-2 text-xs">
+                                    <span>{effectiveHasFopSeal ? "Lupa disponível para este produto." : "Lupa não aplicável para este produto."}</span>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <label htmlFor="enable-fop-lupa" className="cursor-pointer font-medium text-foreground">Exibir lupa frontal</label>
+                                        <Switch
+                                            id="enable-fop-lupa"
+                                            checked={enableFopLupa}
+                                            disabled={!effectiveHasFopSeal}
+                                            onCheckedChange={setEnableFopLupa}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -3104,20 +3166,20 @@ export function TableGenerator({
                         )}
                     </CardContent>
 
-                    {result && effectiveHasFopSeal && fopStatus && (
-                        <div className="flex w-full shrink-0 justify-center bg-muted/[0.25] px-1 py-1 dark:bg-muted/[0.18]">
-                            <div
-                                className="inline-flex max-w-full justify-center rounded-[10px] border-[4px] p-[2px] leading-none"
-                                style={{ borderColor: "#000000", backgroundColor: "#ffffff" }}
-                            >
+                    {result && shouldShowFopSeal && fopStatus && (
+                        <div className="flex w-full shrink-0 flex-col items-center gap-3 bg-muted/[0.25] px-4 py-4">
+                            <div className="inline-flex max-w-full justify-center rounded-lg border bg-background p-3 leading-none">
                                 <MagnifyingGlassLabel
                                     id="nutrition-fop-seal-preview"
                                     highSugar={!!fopStatus.highSugar}
                                     highFat={!!fopStatus.highFat}
                                     highSodium={!!fopStatus.highSodium}
-                                    layout={previewFopLayout}
+                                    config={effectiveLupaStyle}
                                 />
                             </div>
+                            <Button variant="outline" size="sm" onClick={handleOpenLupaEditor} disabled={saving}>
+                                {saving ? "Salvando..." : tableId ? "Alterar lupa" : "Salvar e alterar lupa"}
+                            </Button>
                         </div>
                     )}
 
@@ -3202,11 +3264,11 @@ export function TableGenerator({
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuGroup>
                                                     <DropdownMenuCheckboxItem
-                                                        checked={effectiveHasFopSeal}
+                                                        checked={shouldShowFopSeal && includeFopSealOnImageExport}
                                                         onSelect={(e) => e.preventDefault()}
                                                         disabled
                                                     >
-                                                        Modelos de lupa ANVISA no ZIP
+                                                        Lupa vetorial no ZIP
                                                     </DropdownMenuCheckboxItem>
                                                 </DropdownMenuGroup>
                                                 <DropdownMenuSeparator />
@@ -3361,7 +3423,7 @@ export function TableGenerator({
                                     </Button>
                                 </div>
 
-                                <Button onClick={handleSave} disabled={saving} className="h-10 w-full">
+                                <Button onClick={() => void handleSave()} disabled={saving} className="h-10 w-full">
                                     {saving ? "Salvando..." : (
                                         <>
                                             <Save data-icon="inline-start" />
@@ -3408,22 +3470,19 @@ export function TableGenerator({
                                 )}
                             </div>
                         ))}
-                        {effectiveHasFopSeal && (
+                        {shouldShowFopSeal && includeFopSealOnImageExport && (
                             <div
                                 key="export-hidden-fop-seal"
                                 id="nutrition-fop-seal-export"
                                 className="flex justify-center bg-white rounded-xl border border-border/40 p-6 shadow-sm"
                                 style={{ width: "fit-content" }}
                             >
-                                <div
-                                    className="border-[4px] rounded-[10px] p-[2px] inline-block leading-none"
-                                    style={{ borderColor: "#000000", backgroundColor: "#ffffff" }}
-                                >
+                                <div className="inline-block rounded-lg border bg-white p-3 leading-none">
                                     <MagnifyingGlassLabel
                                         highSugar={!!fopStatus?.highSugar}
                                         highFat={!!fopStatus?.highFat}
                                         highSodium={!!fopStatus?.highSodium}
-                                        layout="horizontal"
+                                        config={effectiveLupaStyle}
                                     />
                                 </div>
                             </div>
@@ -3431,6 +3490,31 @@ export function TableGenerator({
                     </div>
                 </div>
             )}
+            <AlertDialog open={exitDialogOpen} onOpenChange={(open) => {
+                setExitDialogOpen(open);
+                if (!open) {
+                    suppressBeforeUnloadRef.current = false;
+                    setPendingExitUrl(null);
+                }
+            }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Salvar alterações antes de sair?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Você tem alterações na tabela que ainda não foram salvas. Salve agora para manter seu trabalho ou saia sem salvar.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={saving}>Continuar editando</AlertDialogCancel>
+                        <Button type="button" variant="outline" onClick={() => void handleSaveAndExit()} disabled={saving}>
+                            {saving ? "Salvando..." : "Salvar e sair"}
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleExitWithoutSaving} disabled={saving}>
+                            Sair sem salvar
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             </div>
         </div>
     );
