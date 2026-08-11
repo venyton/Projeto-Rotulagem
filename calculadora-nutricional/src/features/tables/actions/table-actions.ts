@@ -13,17 +13,17 @@ import { MICRO_KEYS } from "@/features/tables/domain/micronutrients";
 import { z } from "zod";
 import { getIngredientSourceLabel } from "@/features/tables/domain/memorial";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import { databaseIdSchema, safeResourceIdSchema } from "@/lib/validation/identifiers";
 
-const safeIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const tableInputSchema = z.object({
-    id: safeIdSchema.optional(),
+    id: databaseIdSchema.optional(),
     title: z.string().trim().min(1).max(160),
     portion: z.number().finite().positive().max(10_000_000),
     uom: z.enum(["g", "ml"]),
     householdMeasure: z.string().trim().min(1).max(160),
     popGroup: z.enum(Object.values(POPULATION_GROUPS) as [PopGroup, ...PopGroup[]]),
     ingredients: z.array(z.object({
-        ingredient: z.object({ id: safeIdSchema }),
+        ingredient: z.object({ id: safeResourceIdSchema }),
         quantity: z.number().finite().positive().max(10_000_000),
         isAddedSugar: z.boolean(),
     })).min(1).max(200),
@@ -97,24 +97,29 @@ export async function saveTable(data: {
             .filter((id) => id.startsWith("snapshot-"))
             .map((id) => id.slice("snapshot-".length));
         const persistedIngredientIds = ingredientIds.filter((id) => !id.startsWith("snapshot-"));
-        const [standardIngredients, customIngredients, snapshotItems, existingTable] = await Promise.all([
+        const [standardIngredients, customIngredients, existingTable] = await Promise.all([
             prisma.ingredient.findMany({ where: { id: { in: persistedIngredientIds } } }),
             prisma.customIngredient.findMany({
-                where: { id: { in: persistedIngredientIds }, userId: context.user.id },
+                where: { id: { in: persistedIngredientIds }, organizationId: context.organization.id },
             }),
-            safeData.id && snapshotItemIds.length > 0
-                ? prisma.tableItem.findMany({
-                    where: { id: { in: snapshotItemIds }, tableId: safeData.id },
-                })
-                : Promise.resolve([]),
             safeData.id
                 ? prisma.generatedTable.findFirst({
-                    where: { id: safeData.id, userId: context.user.id },
+                    where: { id: safeData.id, organizationId: context.organization.id },
                     select: { id: true },
                 })
                 : Promise.resolve(null),
         ]);
         if (safeData.id && !existingTable) return { error: "Tabela não encontrada ou permissão negada" };
+
+        // A tabela já foi validada no tenant acima. Consultar os itens pelo
+        // próprio tableId evita que um snapshot legítimo seja descartado por
+        // um filtro relacional adicional durante a gravação do editor.
+        const snapshotItems = safeData.id && snapshotItemIds.length > 0
+            ? await prisma.tableItem.findMany({
+                where: { id: { in: snapshotItemIds }, tableId: safeData.id },
+            })
+            : [];
+
         if (
             customIngredients.length > 0 &&
             !contextHasModuleAccess(context, SAAS_MODULES.CUSTOM_INGREDIENTS)
@@ -158,7 +163,6 @@ export async function saveTable(data: {
 
         const uiStateValue = safeData.uiState ? (safeData.uiState as Prisma.InputJsonValue) : undefined;
         const payload = {
-            userId: context.user.id,
             title: safeData.title,
             portion: safeData.portion,
             uom: safeData.uom,
@@ -218,6 +222,8 @@ export async function saveTable(data: {
             const created = await prisma.generatedTable.create({
                 data: {
                     ...payload,
+                    userId: context.user.id,
+                    organizationId: context.organization.id,
                     items: {
                         create: itemsPayload
                     }

@@ -33,8 +33,8 @@ export default async function TablesPage({ searchParams }: TablesPageProps) {
         : 1;
     const searchQuery = (params.q || "").trim().slice(0, 100);
     const where = searchQuery
-        ? { userId: context.user.id, title: { contains: searchQuery, mode: "insensitive" as const } }
-        : { userId: context.user.id };
+        ? { organizationId: context.organization.id, title: { contains: searchQuery, mode: "insensitive" as const } }
+        : { organizationId: context.organization.id };
     const [rawTables, total] = await Promise.all([
         prisma.generatedTable.findMany({
             where,
@@ -64,7 +64,7 @@ export default async function TablesPage({ searchParams }: TablesPageProps) {
         <div className="app-page flex flex-col gap-8">
             <PageHeader
                 title="Tabelas"
-                description="Suas tabelas nutricionais salvas, prontas para revisar ou exportar."
+                description="Tabelas nutricionais compartilhadas no workspace ativo, prontas para revisar ou exportar."
                 actions={(
                     <Button asChild>
                         <Link href="/dashboard/new"><Plus data-icon="inline-start" />Nova tabela</Link>

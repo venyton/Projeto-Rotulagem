@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   const requestedLimit = Number(request.nextUrl.searchParams.get("limit") || 50);
   const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
   const tables = await prisma.generatedTable.findMany({
-    where: { userId: apiContext.userId },
+    where: { organizationId: apiContext.organizationId },
     take: limit,
     orderBy: { updatedAt: "desc" },
     select: {

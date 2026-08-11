@@ -32,7 +32,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
     }
 
     const table = await prisma.generatedTable.findFirst({
-        where: { id: params.id, userId: context.user.id },
+        where: { id: params.id, organizationId: context.organization.id },
         select: {
             id: true,
             title: true,
@@ -155,6 +155,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
                 initialData={initialData}
                 canUseOpenFoodFacts={contextHasModuleAccess(context, SAAS_MODULES.OPEN_FOOD_FACTS)}
                 canExport={contextHasModuleAccess(context, SAAS_MODULES.EXPORTS)}
+                tenantLupaStyle={context.organization.lupaStyleConfig}
             />
         </div>
     );

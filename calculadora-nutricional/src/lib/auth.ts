@@ -19,6 +19,7 @@ import {
     ensureOrganizationEntitlementsForUser,
 } from "@/features/saas/services/workspaces";
 import { logEvent } from "@/lib/observability/logger";
+import { normalizeEmail } from "@/lib/validation/contacts";
 
 const DUMMY_PASSWORD_HASH = "$2b$10$E/sb7/5hCDw.Gg9UVayjV.VQLXXbbHDTd8N9Ste5adR46HA8QUsKy";
 const authSecret = process.env.NEXTAUTH_SECRET;
@@ -28,10 +29,6 @@ if (process.env.NODE_ENV === "production" && (!authSecret || authSecret.length <
 const useSecureCookies = process.env.SESSION_COOKIE_SECURE
     ? process.env.SESSION_COOKIE_SECURE === "true"
     : process.env.NODE_ENV === "production";
-
-function normalizeEmail(value: string) {
-    return value.trim().toLowerCase();
-}
 
 function configuredOAuthProviders() {
     const providers = [];

@@ -30,6 +30,7 @@ const DEFAULT_PROFILES = [
             SAAS_MODULES.CUSTOM_INGREDIENTS,
             SAAS_MODULES.TECHNICAL_SHEETS,
             SAAS_MODULES.OPEN_FOOD_FACTS,
+            SAAS_MODULES.ENTERPRISE_LABELS,
             SAAS_MODULES.EXPORTS,
             SAAS_MODULES.AI_IMPORT,
         ] as const satisfies readonly SaaSModuleKey[],
@@ -94,9 +95,8 @@ export async function ensureOrganizationProfiles(organizationId: string) {
             });
         });
 
-    if (defaultsReady) return;
-
-    await prisma.$transaction(async (tx) => {
+    if (!defaultsReady) {
+      await prisma.$transaction(async (tx) => {
         let adminProfileId: string | null = null;
 
         for (const profileDefinition of DEFAULT_PROFILES) {
@@ -154,32 +154,96 @@ export async function ensureOrganizationProfiles(organizationId: string) {
                 data: { profileId: adminProfileId },
             });
         }
+      }, { timeout: 20_000 });
+    }
+
+    await ensureGlobalProfilesForOrganization(organizationId);
+}
+
+async function ensureGlobalProfilesForOrganization(organizationId: string) {
+    const templates = await prisma.globalOrganizationProfile.findMany({
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            permissions: { select: { moduleKey: true, enabled: true } },
+        },
+        orderBy: { createdAt: "asc" },
+    });
+
+    if (templates.length === 0) return;
+
+    await prisma.$transaction(async (tx) => {
+        for (const template of templates) {
+            const profile = await tx.organizationProfile.upsert({
+                where: {
+                    organizationId_globalTemplateId: {
+                        organizationId,
+                        globalTemplateId: template.id,
+                    },
+                },
+                create: {
+                    organizationId,
+                    name: template.name,
+                    description: template.description,
+                    systemKey: `GLOBAL_${template.id}`,
+                    globalTemplateId: template.id,
+                },
+                update: {
+                    name: template.name,
+                    description: template.description,
+                },
+                select: { id: true },
+            });
+
+            for (const permission of template.permissions) {
+                await tx.organizationProfilePermission.upsert({
+                    where: {
+                        organizationProfileId_moduleKey: {
+                            organizationProfileId: profile.id,
+                            moduleKey: permission.moduleKey,
+                        },
+                    },
+                    create: {
+                        organizationProfileId: profile.id,
+                        moduleKey: permission.moduleKey,
+                        enabled: permission.enabled,
+                    },
+                    update: { enabled: permission.enabled },
+                });
+            }
+        }
     }, { timeout: 20_000 });
 }
 
-export async function getOrganizationSettingsData(
-    organizationId: string,
-    options: { includeAllUsers?: boolean } = {},
-) {
+export async function syncGlobalProfilesAcrossActiveOrganizations() {
+    const organizations = await prisma.organization.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+    });
+
+    await Promise.all(organizations.map((organization) => ensureGlobalProfilesForOrganization(organization.id)));
+}
+
+export async function getOrganizationSettingsData(organizationId: string) {
+    const activeOrganization = await prisma.organization.findFirst({
+        where: { id: organizationId, status: "ACTIVE" },
+        select: { id: true },
+    });
+
+    if (!activeOrganization) return null;
+
     await ensureOrganizationProfiles(organizationId);
-
-    if (options.includeAllUsers) {
-        const activeOrganizations = await prisma.organization.findMany({
-            where: { status: "ACTIVE" },
-            select: { id: true },
-        });
-
-        await Promise.all(
-            activeOrganizations
-                .filter((organization) => organization.id !== organizationId)
-                .map((organization) => ensureOrganizationProfiles(organization.id)),
-        );
-    }
 
     const organization = await prisma.organization.findUnique({
         where: { id: organizationId },
         select: {
             id: true,
+            name: true,
+            kind: true,
+            legalName: true,
+            tradeName: true,
+            cnpjLastFour: true,
             entitlements: {
                 select: {
                     moduleKey: true,
@@ -217,6 +281,7 @@ export async function getOrganizationSettingsData(
                     name: true,
                     description: true,
                     systemKey: true,
+                    globalTemplateId: true,
                     permissions: {
                         select: {
                             moduleKey: true,
@@ -234,51 +299,105 @@ export async function getOrganizationSettingsData(
 
     if (!organization) return null;
 
-    const allUsers = options.includeAllUsers
-        ? await prisma.user.findMany({
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                organizationMemberships: {
-                    where: {
-                        organization: { status: "ACTIVE" },
+    return organization;
+}
+
+export async function listActiveOrganizationsForSettings(search?: string) {
+    const normalizedSearch = search?.trim().slice(0, 120);
+
+    return prisma.organization.findMany({
+        where: {
+            status: "ACTIVE",
+            ...(normalizedSearch
+                ? {
+                    OR: [
+                        { name: { contains: normalizedSearch, mode: "insensitive" } },
+                        { legalName: { contains: normalizedSearch, mode: "insensitive" } },
+                        { tradeName: { contains: normalizedSearch, mode: "insensitive" } },
+                        { cnpjLastFour: { contains: normalizedSearch } },
+                    ],
+                }
+                : {}),
+        },
+        select: {
+            id: true,
+            name: true,
+            kind: true,
+            legalName: true,
+            tradeName: true,
+            cnpjLastFour: true,
+            _count: {
+                select: { members: true },
+            },
+        },
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+        take: 100,
+    });
+}
+
+export async function listOrganizationMembersForSettings(search?: string) {
+    const normalizedSearch = search?.trim().slice(0, 120);
+
+    return prisma.organizationMember.findMany({
+        where: {
+            organization: { status: "ACTIVE" },
+            ...(normalizedSearch
+                ? {
+                    OR: [
+                        { user: { name: { contains: normalizedSearch, mode: "insensitive" } } },
+                        { user: { email: { contains: normalizedSearch, mode: "insensitive" } } },
+                        { organization: { name: { contains: normalizedSearch, mode: "insensitive" } } },
+                        { organization: { legalName: { contains: normalizedSearch, mode: "insensitive" } } },
+                        { organization: { tradeName: { contains: normalizedSearch, mode: "insensitive" } } },
+                    ],
+                }
+                : {}),
+        },
+        select: {
+            id: true,
+            role: true,
+            active: true,
+            profileId: true,
+            user: {
+                select: { id: true, name: true, email: true, cpfLastFour: true },
+            },
+            organization: {
+                select: { id: true, name: true, tradeName: true },
+            },
+            profile: { select: { id: true, name: true } },
+        },
+        orderBy: [{ organization: { name: "asc" } }, { user: { email: "asc" } }],
+        take: 100,
+    });
+}
+
+export async function getOrganizationMemberForSettings(memberId: string) {
+    return prisma.organizationMember.findFirst({
+        where: { id: memberId, organization: { status: "ACTIVE" } },
+        select: {
+            id: true,
+            organizationId: true,
+            userId: true,
+            role: true,
+            active: true,
+            profileId: true,
+            user: {
+                select: { id: true, name: true, email: true, cpfLastFour: true },
+            },
+            organization: {
+                select: {
+                    id: true,
+                    name: true,
+                    tradeName: true,
+                    profiles: {
+                        select: { id: true, name: true },
+                        orderBy: { createdAt: "asc" },
                     },
-                    select: {
-                        id: true,
-                        role: true,
-                        active: true,
-                        profileId: true,
-                        profile: {
-                            select: {
-                                id: true,
-                                name: true,
-                            },
-                        },
-                        organization: {
-                            select: {
-                                id: true,
-                                name: true,
-                                slug: true,
-                                profiles: {
-                                    select: {
-                                        id: true,
-                                        name: true,
-                                        systemKey: true,
-                                    },
-                                    orderBy: { createdAt: "asc" },
-                                },
-                            },
-                        },
-                    },
-                    orderBy: { createdAt: "asc" },
                 },
             },
-            orderBy: { createdAt: "asc" },
-        })
-        : [];
-
-    return { ...organization, allUsers };
+            profile: { select: { id: true, name: true } },
+        },
+    });
 }
 
 export function profilePermissionEnabled(

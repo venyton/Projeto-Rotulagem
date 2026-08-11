@@ -36,11 +36,10 @@ import {
     rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
 import { getRuntimeResponseBodyLimitBytes } from "@/lib/security/request-body-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const TABLE_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 
 const REGULATORY_CATEGORY_LABELS: Record<string, string> = {
     "general-food": "Alimento em geral",
@@ -482,7 +481,7 @@ function safeFileName(value: string) {
 
 export async function GET(req: NextRequest) {
     const tableId = req.nextUrl.searchParams.get("tableId") || "";
-    if (!TABLE_ID_PATTERN.test(tableId)) {
+    if (!isDatabaseId(tableId)) {
         return NextResponse.json({ error: "Tabela inválida." }, { status: 400 });
     }
 
@@ -507,7 +506,7 @@ export async function GET(req: NextRequest) {
 
     try {
         const table = await prisma.generatedTable.findFirst({
-            where: { id: tableId, userId: context.user.id },
+            where: { id: tableId, organizationId: context.organization.id },
             select: {
                 title: true,
                 uom: true,

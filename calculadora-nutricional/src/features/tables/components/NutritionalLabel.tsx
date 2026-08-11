@@ -4,6 +4,7 @@ import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import { MagnifyingGlassLabel } from "./MagnifyingGlassLabel";
+import type { LupaStyleConfig } from "@/features/tables/domain/fop-lupa";
 import { 
     AnnexIvNutrientKey,
     calculateVD,
@@ -30,6 +31,7 @@ export interface NutritionalLabelProps {
         highFat: boolean;
         highSodium: boolean;
     };
+    lupaStyle?: LupaStyleConfig;
     previewType?: string;
     id?: string;
 }
@@ -218,6 +220,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     showDailyValue = true,
     isSupplement = false,
     fop,
+    lupaStyle,
     previewType = "VERT",
     id = "nutrition-label-container",
 }) => {
@@ -419,8 +422,6 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     const hasSideHeader = sideHeaderTypes.includes(previewType);
     const hasServingBlock = !hasSideHeader && previewType !== "B2B";
     const hasFootnote = previewType !== "B2B";
-    const activeFopCount = fop ? [fop.highSugar, fop.highFat, fop.highSodium].filter(Boolean).length : 0;
-    const fopLayout: "horizontal" | "rectangular" = activeFopCount > 1 ? "rectangular" : "horizontal";
     const simplifiedAbsentText =
         "Não contém quantidades significativas de valor energético, açúcares totais, açúcares adicionados, proteínas, gorduras totais, gorduras saturadas, gorduras trans, fibras alimentares e sódio.";
     const sideHeader = (
@@ -793,7 +794,7 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
                             highSugar={!!fop.highSugar}
                             highFat={!!fop.highFat}
                             highSodium={!!fop.highSodium}
-                            layout={fopLayout}
+                            config={lupaStyle}
                         />
                     </div>
                 </div>

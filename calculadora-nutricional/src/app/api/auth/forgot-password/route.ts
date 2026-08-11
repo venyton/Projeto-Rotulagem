@@ -9,9 +9,10 @@ import {
 import { getClientAddress, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { sendPasswordResetEmail } from "@/lib/security/password-reset-email";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { emailSchema } from "@/lib/validation/contacts";
 
 const requestSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  email: emailSchema,
 }).strict();
 
 const successResponse = () => NextResponse.json(

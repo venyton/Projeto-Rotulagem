@@ -106,10 +106,10 @@ const commonExportFields = {
 
 export const exportBodySchema = z.object(commonExportFields).strict();
 
-const imageDataUrlSchema = z
+export const imageDataUrlSchema = z
   .string()
   .max(12 * 1024 * 1024)
-  .regex(/^data:image\/(?:png|jpeg|jpg);base64,[A-Za-z0-9+/=\n\r]+$/);
+  .regex(/^data:image\/(?:png|jpeg|jpg);base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/);
 
 export const completeExportBodySchema = z
   .object({

@@ -1,7 +1,14 @@
 import Link from 'next/link';
-import { FileSearch } from 'lucide-react';
+import { ChevronDown, FileSearch } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { AddIngredientForm } from '@/features/ingredients/components/AddIngredientForm';
 import { IngredientsTable, type IngredientTableRow } from '@/features/ingredients/components/IngredientsTable';
 import { getUserIngredients } from '@/features/ingredients/actions/import-ingredient-actions';
@@ -60,16 +67,37 @@ export async function IngredientsPageContent({
         description={description}
         actions={showAddButton ? (
           <>
-              {canUseTechnicalSheets && canUseAiImport ? <TechnicalSheetImportDialog /> : null}
-              {canUseTechnicalSheets ? (
-                <Button asChild variant="outline">
-                  <Link href="/dashboard/ingredients/technical-sheets">
-                    <FileSearch data-icon="inline-start" />
+            <AddIngredientForm />
+            {canUseTechnicalSheets ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
                     Fichas técnicas
-                  </Link>
-                </Button>
-              ) : null}
-              <AddIngredientForm />
+                    <ChevronDown data-icon="inline-end" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/ingredients/technical-sheets">
+                        <FileSearch />
+                        Ver fichas técnicas
+                      </Link>
+                    </DropdownMenuItem>
+                    {canUseAiImport ? (
+                      <TechnicalSheetImportDialog
+                        trigger={(
+                          <DropdownMenuItem>
+                            <FileSearch />
+                            Importar ficha com IA
+                          </DropdownMenuItem>
+                        )}
+                      />
+                    ) : null}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
           </>
         ) : undefined}
       />

@@ -70,6 +70,19 @@ enum OrganizationRole {
   MEMBER
 }
 
+enum OrganizationKind {
+  UNCLASSIFIED
+  INDIVIDUAL
+  COMPANY
+}
+
+enum OrganizationInvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELED
+  EXPIRED
+}
+
 enum SaaSModuleKey {
   TABLES
   CUSTOM_INGREDIENTS
@@ -83,49 +96,64 @@ enum SaaSModuleKey {
 }
 
 model User {
-  id                        String                     @id @default(cuid())
-  email                     String                     @unique
-  password                  String?
-  name                      String?
-  twoFactorEnabled          Boolean                    @default(false)
-  twoFactorSecret           String?                    @db.Text
-  twoFactorPendingSecret    String?                    @db.Text
-  twoFactorConfirmedAt      DateTime?
-  twoFactorLastUsedAt       DateTime?
-  resetPasswordToken        String?                    @unique @db.Text
-  resetPasswordExpiresAt    DateTime?
-  termsAcceptedAt           DateTime?
-  privacyAcceptedAt         DateTime?
-  legalDocumentVersion      String?
-  ownedOrganizations        Organization[]             @relation("OrganizationOwner")
-  organizationMemberships   OrganizationMember[]
-  securityAuditLogs         SecurityAuditLog[]
-  tables                    GeneratedTable[]
-  customIngredients         CustomIngredient[]
-  technicalDocuments        TechnicalDocument[]
-  technicalSheetExtractions TechnicalSheetExtraction[]
-  enterpriseLabelProjects   EnterpriseLabelProject[]
-  enterpriseLabelVersions   EnterpriseLabelVersion[]
-  enterpriseApprovals       EnterpriseApproval[]
-  enterpriseExports         EnterpriseExport[]
-  apiAccessTokens           ApiAccessToken[]
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  id                          String                     @id @default(cuid())
+  email                       String                     @unique
+  password                    String?
+  name                        String?
+  twoFactorEnabled            Boolean                    @default(false)
+  twoFactorSecret             String?                    @db.Text
+  twoFactorPendingSecret      String?                    @db.Text
+  twoFactorConfirmedAt        DateTime?
+  twoFactorLastUsedAt         DateTime?
+  resetPasswordToken          String?                    @unique @db.Text
+  resetPasswordExpiresAt      DateTime?
+  termsAcceptedAt             DateTime?
+  privacyAcceptedAt           DateTime?
+  legalDocumentVersion        String?
+  cpfHash                     String?                    @unique
+  cpfLastFour                 String?
+  ownedOrganizations          Organization[]             @relation("OrganizationOwner")
+  organizationMemberships     OrganizationMember[]
+  sentOrganizationInvitations OrganizationInvitation[]   @relation("OrganizationInvitationSender")
+  securityAuditLogs           SecurityAuditLog[]
+  tables                      GeneratedTable[]
+  customIngredients           CustomIngredient[]
+  technicalDocuments          TechnicalDocument[]
+  technicalSheetExtractions   TechnicalSheetExtraction[]
+  enterpriseLabelProjects     EnterpriseLabelProject[]
+  enterpriseLabelVersions     EnterpriseLabelVersion[]
+  enterpriseApprovals         EnterpriseApproval[]
+  enterpriseExports           EnterpriseExport[]
+  apiAccessTokens             ApiAccessToken[]
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
 }
 
 model Organization {
-  id      String             @id @default(cuid())
-  ownerId String
-  owner   User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  name    String
-  slug    String             @unique
-  status  OrganizationStatus @default(ACTIVE)
+  id              String             @id @default(cuid())
+  ownerId         String
+  owner           User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  name            String
+  slug            String             @unique
+  status          OrganizationStatus @default(ACTIVE)
+  kind            OrganizationKind   @default(UNCLASSIFIED)
+  cnpjHash        String?            @unique
+  cnpjLastFour    String?
+  legalName       String?
+  tradeName       String?
+  lupaStyleConfig Json?
 
-  members           OrganizationMember[]
-  profiles          OrganizationProfile[]
-  entitlements      OrganizationEntitlement[]
-  securityAuditLogs SecurityAuditLog[]
-  apiAccessTokens   ApiAccessToken[]
+  members                   OrganizationMember[]
+  profiles                  OrganizationProfile[]
+  invitations               OrganizationInvitation[]
+  entitlements              OrganizationEntitlement[]
+  securityAuditLogs         SecurityAuditLog[]
+  apiAccessTokens           ApiAccessToken[]
+  customIngredients         CustomIngredient[]
+  tables                    GeneratedTable[]
+  technicalDocuments        TechnicalDocument[]
+  technicalSheetExtractions TechnicalSheetExtraction[]
+  enterpriseLabelProjects   EnterpriseLabelProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -160,6 +188,28 @@ model OrganizationMember {
   @@index([role])
 }
 
+model OrganizationInvitation {
+  id              String                       @id @default(cuid())
+  organizationId  String
+  organization    Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String
+  profileId       String?
+  profile         OrganizationProfile?         @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  invitedByUserId String
+  invitedByUser   User                         @relation("OrganizationInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  tokenHash       String                       @unique
+  status          OrganizationInvitationStatus @default(PENDING)
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([email, status, expiresAt])
+  @@index([organizationId, status, createdAt])
+  @@index([profileId])
+}
+
 model OrganizationProfile {
   id             String       @id @default(cuid())
   organizationId String
@@ -167,8 +217,11 @@ model OrganizationProfile {
   name           String
   description    String?      @db.Text
   systemKey      String
+  globalTemplateId String?
+  globalTemplate   GlobalOrganizationProfile? @relation(fields: [globalTemplateId], references: [id], onDelete: SetNull)
 
   members     OrganizationMember[]
+  invitations OrganizationInvitation[]
   permissions OrganizationProfilePermission[]
 
   createdAt DateTime @default(now())
@@ -176,8 +229,36 @@ model OrganizationProfile {
 
   @@unique([organizationId, name])
   @@unique([organizationId, systemKey])
+  @@unique([organizationId, globalTemplateId])
   @@index([organizationId])
+  @@index([globalTemplateId])
   @@index([organizationId, createdAt])
+}
+
+model GlobalOrganizationProfile {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String? @db.Text
+
+  profiles    OrganizationProfile[]
+  permissions GlobalOrganizationProfilePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GlobalOrganizationProfilePermission {
+  id              String                    @id @default(cuid())
+  globalProfileId String
+  globalProfile   GlobalOrganizationProfile @relation(fields: [globalProfileId], references: [id], onDelete: Cascade)
+  moduleKey       SaaSModuleKey
+  enabled         Boolean                   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([globalProfileId, moduleKey])
+  @@index([moduleKey])
 }
 
 model OrganizationProfilePermission {
@@ -343,11 +424,13 @@ model Ingredient {
 }
 
 model CustomIngredient {
-  id                 String   @id @default(cuid())
+  id                 String       @id @default(cuid())
   userId             String
-  user               User     @relation(fields: [userId], references: [id])
+  user               User         @relation(fields: [userId], references: [id])
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name               String
-  searchName         String   @default("")
+  searchName         String       @default("")
   energy             Float
   carbs              Float
   protein            Float
@@ -357,15 +440,15 @@ model CustomIngredient {
   fiber              Float
   sodium             Float
   sugarTotal         Float
-  sugarAdded         Float    @default(0)
+  sugarAdded         Float        @default(0)
   manufacturer       String?
   productCode        String?
-  ingredientsText    String?  @db.Text
+  ingredientsText    String?      @db.Text
   containsGluten     Boolean?
-  glutenText         String?  @db.Text
-  allergensText      String?  @db.Text
-  mayContainText     String?  @db.Text
-  sourceType         String?  @default("MANUAL")
+  glutenText         String?      @db.Text
+  allergensText      String?      @db.Text
+  mayContainText     String?      @db.Text
+  sourceType         String?      @default("MANUAL")
   sourceDocumentId   String?
   sourceExtractionId String?
 
@@ -412,12 +495,16 @@ model CustomIngredient {
   @@index([userId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([name])
+  @@index([organizationId])
+  @@index([organizationId, createdAt(sort: Desc)])
 }
 
 model GeneratedTable {
   id                 String                   @id @default(cuid())
   userId             String
   user               User                     @relation(fields: [userId], references: [id])
+  organizationId     String
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   title              String
   portion            Float
   uom                String // "g" or "ml"
@@ -437,6 +524,9 @@ model GeneratedTable {
   @@index([userId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, updatedAt(sort: Desc)])
 }
 
 model TableItem {
@@ -505,8 +595,10 @@ model TableItem {
 model TechnicalDocument {
   id String @id @default(cuid())
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   fileName String
   fileUrl  String?
@@ -528,6 +620,8 @@ model TechnicalDocument {
 
   @@index([userId])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@index([organizationId, createdAt(sort: Desc)])
 }
 
 model TechnicalSheetExtraction {
@@ -536,8 +630,10 @@ model TechnicalSheetExtraction {
   documentId String            @unique
   document   TechnicalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   productName  String?
   productCode  String?
@@ -590,6 +686,8 @@ model TechnicalSheetExtraction {
 
   @@index([userId])
   @@index([userId, documentId])
+  @@index([organizationId])
+  @@index([organizationId, documentId])
 }
 
 model ExtractedNutrient {
@@ -666,8 +764,10 @@ model ExtractedTechnicalField {
 model EnterpriseLabelProject {
   id String @id @default(cuid())
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   baseTableId String?
   baseTable   GeneratedTable? @relation(fields: [baseTableId], references: [id], onDelete: SetNull)
@@ -685,9 +785,11 @@ model EnterpriseLabelProject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, baseTableId, market])
+  @@unique([organizationId, baseTableId, market])
   @@index([userId])
   @@index([userId, updatedAt(sort: Desc)])
+  @@index([organizationId])
+  @@index([organizationId, updatedAt(sort: Desc)])
   @@index([baseTableId])
   @@index([market])
   @@index([status])

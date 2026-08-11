@@ -8,6 +8,7 @@ import { API_TOKEN_PREFIX, hashApiToken } from "@/features/api-access/services/a
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import { isDatabaseId } from "@/lib/validation/identifiers";
 
 export type ApiTokenActionState = {
   error?: string;
@@ -74,7 +75,7 @@ export async function createApiAccessToken(
 
 export async function revokeApiAccessToken(formData: FormData) {
   const tokenId = String(formData.get("tokenId") || "");
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(tokenId)) return;
+  if (!isDatabaseId(tokenId)) return;
 
   let context: Awaited<ReturnType<typeof requireModuleAccess>>;
   try {
