@@ -22,6 +22,7 @@ import {
 } from "@/features/saas/services/workspaces";
 import { logEvent } from "@/lib/observability/logger";
 import { normalizeEmail } from "@/lib/validation/contacts";
+import { LEGAL_DOCUMENT_VERSION } from "@/lib/legal";
 
 const DUMMY_PASSWORD_HASH = "$2b$10$E/sb7/5hCDw.Gg9UVayjV.VQLXXbbHDTd8N9Ste5adR46HA8QUsKy";
 const authSecret = process.env.NEXTAUTH_SECRET;
@@ -217,18 +218,52 @@ export const authOptions: NextAuthOptions = {
             const email = normalizeEmail(user.email || (profile as { email?: string } | undefined)?.email || "");
             if (!email) return false;
 
-            const dbUser = await prisma.user.upsert({
+            const acceptedAt = new Date();
+            let dbUser = await prisma.user.upsert({
                 where: { email },
                 create: {
                     email,
                     name: user.name || email.split("@")[0],
                     password: null,
+                    termsAcceptedAt: acceptedAt,
+                    privacyAcceptedAt: acceptedAt,
+                    legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
                 },
                 update: {
                     name: user.name || undefined,
                 },
-                select: { id: true, email: true, name: true },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    termsAcceptedAt: true,
+                    privacyAcceptedAt: true,
+                    legalDocumentVersion: true,
+                },
             });
+
+            if (
+                !dbUser.termsAcceptedAt ||
+                !dbUser.privacyAcceptedAt ||
+                dbUser.legalDocumentVersion !== LEGAL_DOCUMENT_VERSION
+            ) {
+                dbUser = await prisma.user.update({
+                    where: { id: dbUser.id },
+                    data: {
+                        termsAcceptedAt: acceptedAt,
+                        privacyAcceptedAt: acceptedAt,
+                        legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
+                    },
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                        termsAcceptedAt: true,
+                        privacyAcceptedAt: true,
+                        legalDocumentVersion: true,
+                    },
+                });
+            }
 
             await ensureDefaultWorkspaceForUser(dbUser);
             await ensureOrganizationEntitlementsForUser(dbUser.id);
