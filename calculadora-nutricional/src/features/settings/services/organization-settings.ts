@@ -244,6 +244,7 @@ export async function getOrganizationSettingsData(organizationId: string) {
             id: true,
             name: true,
             kind: true,
+            cpfLastFour: true,
             legalName: true,
             tradeName: true,
             cnpjLastFour: true,
@@ -317,6 +318,7 @@ export async function listActiveOrganizationsForSettings(search?: string) {
                         { name: { contains: normalizedSearch, mode: "insensitive" } },
                         { legalName: { contains: normalizedSearch, mode: "insensitive" } },
                         { tradeName: { contains: normalizedSearch, mode: "insensitive" } },
+                        { cpfLastFour: { contains: normalizedSearch } },
                         { cnpjLastFour: { contains: normalizedSearch } },
                     ],
                 }
@@ -326,6 +328,7 @@ export async function listActiveOrganizationsForSettings(search?: string) {
             id: true,
             name: true,
             kind: true,
+            cpfLastFour: true,
             legalName: true,
             tradeName: true,
             cnpjLastFour: true,
