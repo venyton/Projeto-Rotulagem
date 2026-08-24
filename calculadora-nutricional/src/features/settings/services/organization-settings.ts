@@ -1,3 +1,5 @@
+import "server-only";
+
 import { OrganizationRole, Prisma, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";

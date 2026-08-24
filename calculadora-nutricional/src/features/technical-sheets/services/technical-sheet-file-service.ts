@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getRuntimeRequestBodyLimitMb } from "@/lib/security/request-body-limit";
 
 const ALLOWED_MIME_TYPES = new Set([

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getServerSession } from "next-auth";
 import { cookies } from "next/headers";
 import { cache } from "react";

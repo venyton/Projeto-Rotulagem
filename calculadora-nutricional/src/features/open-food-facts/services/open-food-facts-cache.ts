@@ -1,3 +1,5 @@
+import "server-only";
+
 import { unstable_cache } from "next/cache";
 
 import { normalizeOpenFoodFactsProduct, type OpenFoodFactsProduct } from "@/features/open-food-facts/domain/open-food-facts";
