@@ -1,12 +1,12 @@
-import { Ingredient } from "@prisma/client";
+import type { IngredientDto } from "../../ingredients/domain/ingredient-dto";
 import { MICRO_KEYS, type MicronutrientKey } from "./micronutrients";
 
-type IngredientWithAddedSugar = Ingredient & {
+type IngredientWithAddedSugar = IngredientDto & {
     sugarAdded?: number | null;
 };
 
 export interface SelectedIngredient {
-    ingredient: Ingredient;
+    ingredient: IngredientDto;
     quantity: number; // g
     isAddedSugar: boolean;
 }

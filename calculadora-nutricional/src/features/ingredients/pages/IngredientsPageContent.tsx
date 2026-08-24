@@ -39,12 +39,7 @@ export async function IngredientsPageContent({
   try {
     const rawIngredients = await getUserIngredients();
 
-    ingredients = rawIngredients.map(ing => ({
-        ...ing,
-        sugarTotal: ing.sugarTotal ?? 0,
-        sugarAdded: ing.sugarAdded ?? 0,
-        createdAt: ing.createdAt.toISOString()
-    }));
+    ingredients = rawIngredients;
   } catch (err) {
     error = err instanceof Error ? err.message : 'Erro desconhecido ao carregar ingredientes.';
   }

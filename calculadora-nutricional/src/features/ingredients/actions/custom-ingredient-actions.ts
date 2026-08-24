@@ -16,6 +16,13 @@ import { normalizeIngredientSearchText } from "@/features/ingredients/domain/ing
 import type { Prisma } from "@prisma/client";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isDatabaseId } from "@/lib/validation/identifiers";
+import { parseOptionalNutrientNumber } from "@/features/ingredients/domain/ingredient-nutrient-input";
+import {
+    customIngredientSearchDtoSelect,
+    ingredientDtoSelect,
+    toCustomIngredientSearchDto,
+    toIngredientDto,
+} from "@/features/ingredients/services/ingredient-dto";
 
 async function requireCustomIngredientsModule() {
     try {
@@ -28,11 +35,7 @@ async function requireCustomIngredientsModule() {
 }
 
 function optionalNumber(formData: FormData, key: string) {
-    const value = formData.get(key);
-    if (typeof value !== "string" || value.trim() === "") return null;
-    const normalized = value.replace(",", ".");
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1_000_000_000 ? parsed : null;
+    return parseOptionalNutrientNumber(formData.get(key));
 }
 
 function readText(formData: FormData, key: string, maxLength: number) {
@@ -66,8 +69,23 @@ function parseCustomNutrients(raw: FormDataEntryValue | null) {
     }
 }
 
-function optionalMicronutrientPayload(formData: FormData) {
-    return Object.fromEntries(MICRO_KEYS.map((key) => [key, optionalNumber(formData, key)]));
+const CORE_NUTRIENT_KEYS = [
+    "energy", "carbs", "protein", "fatTotal", "fatSat", "fatTrans", "fiber", "sodium", "sugarTotal", "sugarAdded",
+] as const;
+type CoreNutrientKey = typeof CORE_NUTRIENT_KEYS[number];
+type MicronutrientKey = typeof MICRO_KEYS[number];
+type NutrientPayload = Record<CoreNutrientKey, number> & Record<MicronutrientKey, number | null>;
+
+function readNutrientPayload(formData: FormData) {
+    const payload: Record<string, number | null> = {};
+    for (const key of [...CORE_NUTRIENT_KEYS, ...MICRO_KEYS]) {
+        const parsed = optionalNumber(formData, key);
+        if (!parsed.ok) return null;
+        payload[key] = CORE_NUTRIENT_KEYS.includes(key as typeof CORE_NUTRIENT_KEYS[number])
+            ? parsed.value ?? 0
+            : parsed.value;
+    }
+    return payload as NutrientPayload;
 }
 
 export async function createCustomIngredient(prevState: unknown, formData: FormData): Promise<{ error?: string; success?: boolean }> {
@@ -82,16 +100,8 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     if (!context || context.user.id !== user.id) return { error: "Workspace não encontrado" };
 
     const name = readText(formData, "name", 160);
-    const energy = optionalNumber(formData, "energy") || 0;
-    const carbs = optionalNumber(formData, "carbs") || 0;
-    const protein = optionalNumber(formData, "protein") || 0;
-    const fatTotal = optionalNumber(formData, "fatTotal") || 0;
-    const fatSat = optionalNumber(formData, "fatSat") || 0;
-    const fatTrans = optionalNumber(formData, "fatTrans") || 0;
-    const fiber = optionalNumber(formData, "fiber") || 0;
-    const sodium = optionalNumber(formData, "sodium") || 0;
-    const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
-    const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
+    const nutrientPayload = readNutrientPayload(formData);
+    if (!nutrientPayload) return { error: "Valores nutricionais inválidos" };
     const ingredientsText = readText(formData, "ingredientsText", 20_000);
     const allergensText = readText(formData, "allergensText", 10_000);
     const glutenText = readText(formData, "glutenText", 10_000);
@@ -100,46 +110,6 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
     const customNutrientsResult = parseCustomNutrients(formData.get("customNutrients"));
     if (customNutrientsResult.error) return { error: "Nutrientes personalizados inválidos" };
     const customNutrients = customNutrientsResult.value;
-
-
-    // Micronutrients
-    const fatMono = optionalNumber(formData, "fatMono");
-    const fatPoly = optionalNumber(formData, "fatPoly");
-    const omega6 = optionalNumber(formData, "omega6");
-    const omega3 = optionalNumber(formData, "omega3");
-    const cholesterol = optionalNumber(formData, "cholesterol");
-
-    const vitaminA = optionalNumber(formData, "vitaminA");
-    const vitaminD = optionalNumber(formData, "vitaminD");
-    const vitaminE = optionalNumber(formData, "vitaminE");
-    const vitaminK = optionalNumber(formData, "vitaminK");
-    const vitaminC = optionalNumber(formData, "vitaminC");
-    const thiamin = optionalNumber(formData, "thiamin");
-    const riboflavin = optionalNumber(formData, "riboflavin");
-    const niacin = optionalNumber(formData, "niacin");
-    const vitaminB6 = optionalNumber(formData, "vitaminB6");
-    const biotin = optionalNumber(formData, "biotin");
-    const folicAcid = optionalNumber(formData, "folicAcid");
-    const pantothenicAcid = optionalNumber(formData, "pantothenicAcid");
-    const vitaminB12 = optionalNumber(formData, "vitaminB12");
-
-    const calcium = optionalNumber(formData, "calcium");
-    const chloride = optionalNumber(formData, "chloride");
-    const copper = optionalNumber(formData, "copper");
-    const chromium = optionalNumber(formData, "chromium");
-    const iron = optionalNumber(formData, "iron");
-    const fluoride = optionalNumber(formData, "fluoride");
-    const phosphorus = optionalNumber(formData, "phosphorus");
-    const iodine = optionalNumber(formData, "iodine");
-    const magnesium = optionalNumber(formData, "magnesium");
-    const manganese = optionalNumber(formData, "manganese");
-    const molybdenum = optionalNumber(formData, "molybdenum");
-    const potassium = optionalNumber(formData, "potassium");
-    const selenium = optionalNumber(formData, "selenium");
-    const zinc = optionalNumber(formData, "zinc");
-    const choline = optionalNumber(formData, "choline");
-    const micronutrients = optionalMicronutrientPayload(formData);
-
     if (!name) return { error: "Nome é obrigatório" };
 
     const requestLimit = await consumeRequestRateLimit(
@@ -158,11 +128,7 @@ export async function createCustomIngredient(prevState: unknown, formData: FormD
                 organizationId: context.organization.id,
                 name: persistedName,
                 searchName: normalizeIngredientSearchText(persistedName),
-                energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
-                fatMono, fatPoly, omega6, omega3, cholesterol,
-                vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
-                ...micronutrients,
+                ...nutrientPayload,
                 ingredientsText, allergensText, glutenText, containsGluten, customNutrients,
             }
         });
@@ -219,16 +185,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     if (!context || context.user.id !== user.id) return { error: "Workspace não encontrado" };
 
     const name = readText(formData, "name", 160);
-    const energy = optionalNumber(formData, "energy") || 0;
-    const carbs = optionalNumber(formData, "carbs") || 0;
-    const protein = optionalNumber(formData, "protein") || 0;
-    const fatTotal = optionalNumber(formData, "fatTotal") || 0;
-    const fatSat = optionalNumber(formData, "fatSat") || 0;
-    const fatTrans = optionalNumber(formData, "fatTrans") || 0;
-    const fiber = optionalNumber(formData, "fiber") || 0;
-    const sodium = optionalNumber(formData, "sodium") || 0;
-    const sugarTotal = optionalNumber(formData, "sugarTotal") || 0;
-    const sugarAdded = optionalNumber(formData, "sugarAdded") || 0;
+    const nutrientPayload = readNutrientPayload(formData);
+    if (!nutrientPayload) return { error: "Valores nutricionais inválidos" };
     const ingredientsText = readText(formData, "ingredientsText", 20_000);
     const allergensText = readText(formData, "allergensText", 10_000);
     const glutenText = readText(formData, "glutenText", 10_000);
@@ -237,46 +195,6 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
     const customNutrientsResult = parseCustomNutrients(formData.get("customNutrients"));
     if (customNutrientsResult.error) return { error: "Nutrientes personalizados inválidos" };
     const customNutrients = customNutrientsResult.value;
-
-
-    // Micronutrients
-    const fatMono = optionalNumber(formData, "fatMono");
-    const fatPoly = optionalNumber(formData, "fatPoly");
-    const omega6 = optionalNumber(formData, "omega6");
-    const omega3 = optionalNumber(formData, "omega3");
-    const cholesterol = optionalNumber(formData, "cholesterol");
-
-    const vitaminA = optionalNumber(formData, "vitaminA");
-    const vitaminD = optionalNumber(formData, "vitaminD");
-    const vitaminE = optionalNumber(formData, "vitaminE");
-    const vitaminK = optionalNumber(formData, "vitaminK");
-    const vitaminC = optionalNumber(formData, "vitaminC");
-    const thiamin = optionalNumber(formData, "thiamin");
-    const riboflavin = optionalNumber(formData, "riboflavin");
-    const niacin = optionalNumber(formData, "niacin");
-    const vitaminB6 = optionalNumber(formData, "vitaminB6");
-    const biotin = optionalNumber(formData, "biotin");
-    const folicAcid = optionalNumber(formData, "folicAcid");
-    const pantothenicAcid = optionalNumber(formData, "pantothenicAcid");
-    const vitaminB12 = optionalNumber(formData, "vitaminB12");
-
-    const calcium = optionalNumber(formData, "calcium");
-    const chloride = optionalNumber(formData, "chloride");
-    const copper = optionalNumber(formData, "copper");
-    const chromium = optionalNumber(formData, "chromium");
-    const iron = optionalNumber(formData, "iron");
-    const fluoride = optionalNumber(formData, "fluoride");
-    const phosphorus = optionalNumber(formData, "phosphorus");
-    const iodine = optionalNumber(formData, "iodine");
-    const magnesium = optionalNumber(formData, "magnesium");
-    const manganese = optionalNumber(formData, "manganese");
-    const molybdenum = optionalNumber(formData, "molybdenum");
-    const potassium = optionalNumber(formData, "potassium");
-    const selenium = optionalNumber(formData, "selenium");
-    const zinc = optionalNumber(formData, "zinc");
-    const choline = optionalNumber(formData, "choline");
-    const micronutrients = optionalMicronutrientPayload(formData);
-
     if (!name) return { error: "Nome é obrigatório" };
 
     const requestLimit = await consumeRequestRateLimit(
@@ -293,11 +211,8 @@ export async function updateCustomIngredient(id: string, prevState: unknown, for
         await prisma.customIngredient.update({
             where: { id },
             data: {
-                name, searchName: normalizeIngredientSearchText(name), energy, carbs, protein, fatTotal, fatSat, fatTrans, fiber, sodium, sugarTotal, sugarAdded,
-                fatMono, fatPoly, omega6, omega3, cholesterol,
-                vitaminA, vitaminD, vitaminE, vitaminK, vitaminC, thiamin, riboflavin, niacin, vitaminB6, biotin, folicAcid, pantothenicAcid, vitaminB12,
-                calcium, chloride, copper, chromium, iron, fluoride, phosphorus, iodine, magnesium, manganese, molybdenum, potassium, selenium, zinc, choline,
-                ...micronutrients,
+                name, searchName: normalizeIngredientSearchText(name),
+                ...nutrientPayload,
                 ingredientsText, allergensText, glutenText, containsGluten, customNutrients,
             }
         });
@@ -336,20 +251,22 @@ export async function searchIngredients(query: string) {
             organization
                 ? prisma.customIngredient.findMany({
                     where: { organizationId: organization.id },
+                    select: customIngredientSearchDtoSelect,
                     orderBy: { createdAt: 'desc' },
                     take: 12
                 })
                 : Promise.resolve([]),
             prisma.ingredient.findMany({
                 where: officialIngredientScope,
+                select: ingredientDtoSelect,
                 orderBy: { name: 'asc' },
                 take: 18
             })
         ]);
 
         return dedupeSearchResults([
-            ...customSuggestions.map((c) => ({ ...c, origin: "CUSTOM" })),
-            ...tacoSuggestions
+            ...customSuggestions.map(toCustomIngredientSearchDto),
+            ...tacoSuggestions.map(toIngredientDto),
         ]).slice(0, MAX_RESULTS);
     }
 
@@ -364,20 +281,22 @@ export async function searchIngredients(query: string) {
         organization
             ? prisma.customIngredient.findMany({
                 where: { organizationId: organization.id, ...searchNameFilter },
+                select: customIngredientSearchDtoSelect,
                 orderBy: { createdAt: 'desc' },
                 take: 16
             })
             : Promise.resolve([]),
         prisma.ingredient.findMany({
             where: { ...officialIngredientScope, ...searchNameFilter },
+            select: ingredientDtoSelect,
             orderBy: { name: 'asc' },
             take: 36
         })
     ]);
 
     const combined = dedupeSearchResults([
-        ...customDirect.map((c) => ({ ...c, origin: "CUSTOM" })),
-        ...tacoDirect
+        ...customDirect.map(toCustomIngredientSearchDto),
+        ...tacoDirect.map(toIngredientDto),
     ]).sort((a, b) => {
         const rankA = matchRank(a.name, normalizedQuery);
         const rankB = matchRank(b.name, normalizedQuery);

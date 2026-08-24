@@ -26,7 +26,7 @@ import {
     normalizePopulationGroupForScenario,
 } from "@/features/tables/domain/constants";
 import { checkFOP, inferFopFoodType, type FOPFoodType } from "@/features/tables/domain/anvisa";
-import { Ingredient } from "@prisma/client";
+import type { IngredientDto } from "@/features/ingredients/domain/ingredient-dto";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
@@ -1022,7 +1022,7 @@ export function TableGenerator({
         }
     };
 
-    const handleAddIngredient = (ing: Ingredient) => {
+    const handleAddIngredient = (ing: IngredientDto) => {
         setIngredients(prev => [
             ...prev,
             {
@@ -1033,7 +1033,7 @@ export function TableGenerator({
         ]);
     };
 
-    const handleAddPreparationIngredient = (ing: Ingredient) => {
+    const handleAddPreparationIngredient = (ing: IngredientDto) => {
         setPreparationIngredients(prev => [
             ...prev,
             {

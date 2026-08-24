@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react";
-import type { Ingredient } from "@prisma/client";
+import type { IngredientDto } from "@/features/ingredients/domain/ingredient-dto";
 import { AlertTriangle, Barcode, ExternalLink, PackagePlus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
@@ -11,7 +11,7 @@ import type { OpenFoodFactsProduct } from "@/features/open-food-facts/domain/ope
 import { toast } from "sonner";
 
 type OpenFoodFactsImporterProps = {
-    onSelect?: (ingredient: Ingredient) => void;
+    onSelect?: (ingredient: IngredientDto) => void;
 };
 
 type SearchResponse = {

@@ -30,23 +30,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import type { CustomIngredientListDto } from "@/features/ingredients/domain/ingredient-dto";
 
-export type IngredientTableRow = {
-    id: string;
-    name: string;
-    energy: number;
-    protein: number;
-    carbs: number;
-    fatTotal: number;
-    fatSat: number;
-    fatTrans: number;
-    fiber: number;
-    sodium: number;
-    sugarTotal: number;
-    sugarAdded: number;
-    createdAt: string;
-    userId: string;
-}
+export type IngredientTableRow = CustomIngredientListDto;
 
 export function IngredientsTable({
     ingredients,

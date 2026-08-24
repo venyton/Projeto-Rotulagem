@@ -24,6 +24,7 @@ import {
     rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
 import { barcodeSchema } from "@/lib/validation/identifiers";
+import { pickIngredientDto } from "@/features/ingredients/domain/ingredient-dto";
 
 export const dynamic = "force-dynamic";
 const importBodySchema = z.object({ code: barcodeSchema.trim() }).strict();
@@ -64,7 +65,7 @@ async function cacheProductByCode(code: string) {
 
     return {
         ...product,
-        ingredient,
+        ingredient: pickIngredientDto(ingredient),
     };
 }
 

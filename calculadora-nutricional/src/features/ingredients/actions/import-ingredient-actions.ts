@@ -8,6 +8,10 @@ import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { getCurrentSaaSContext, ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { normalizeIngredientSearchText } from "@/features/ingredients/domain/ingredient-search";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
+import {
+    customIngredientListDtoSelect,
+    toCustomIngredientListDto,
+} from "@/features/ingredients/services/ingredient-dto";
 
 export type IngredientData = {
     name: string;
@@ -114,11 +118,13 @@ export async function getUserIngredients() {
     const context = await getCurrentSaaSContext();
     if (!context || context.user.id !== user.id) return [];
 
-    return await prisma.customIngredient.findMany({
+    const ingredients = await prisma.customIngredient.findMany({
         where: { organizationId: context.organization.id },
+        select: customIngredientListDtoSelect,
         orderBy: { createdAt: 'desc' },
         take: 200,
     });
+    return ingredients.map(toCustomIngredientListDto);
 }
 
 export async function importIngredients(ingredients: IngredientData[]) {
