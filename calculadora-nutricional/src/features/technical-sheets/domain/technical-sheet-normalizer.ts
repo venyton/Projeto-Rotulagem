@@ -1,4 +1,3 @@
-import { TechnicalFieldCategory, type DocumentType, type Prisma } from "@prisma/client";
 import {
   type TechnicalSheetAiAllergen,
   type TechnicalSheetCertification,
@@ -7,6 +6,7 @@ import {
   type TechnicalSheetAiNutrient,
   type TechnicalSheetWarning,
 } from "./technical-sheet-schema";
+import type { TechnicalSheetDocumentType } from "./technical-sheet-schema";
 import { REQUIRED_NUTRIENT_KEYS } from "./technical-sheet-nutrients";
 
 export type NormalizedExtractedNutrient = {
@@ -32,7 +32,7 @@ export type NormalizedExtractedAllergen = {
 };
 
 export type NormalizedExtractedTechnicalField = {
-  category: TechnicalFieldCategory;
+  category: TechnicalFieldCategoryValue;
   fieldKey: string;
   label: string;
   value: string | null;
@@ -43,7 +43,7 @@ export type NormalizedExtractedTechnicalField = {
 };
 
 export type NormalizedTechnicalSheetExtraction = {
-  documentType: DocumentType;
+  documentType: TechnicalSheetDocumentType;
   confidence: number;
   fieldsForReview: string[];
   extractionData: {
@@ -126,6 +126,21 @@ const CUSTOM_NUTRIENT_DEFAULTS = {
   zinc: null,
   choline: null,
 };
+
+const TECHNICAL_FIELD_CATEGORIES = {
+  REGULATORY: "REGULATORY",
+  DECLARATION: "DECLARATION",
+  SENSORY: "SENSORY",
+  PHYSICOCHEMICAL: "PHYSICOCHEMICAL",
+  MICROBIOLOGICAL: "MICROBIOLOGICAL",
+  CONTAMINANT: "CONTAMINANT",
+  TRACEABILITY: "TRACEABILITY",
+  LOGISTICS: "LOGISTICS",
+  CERTIFICATION: "CERTIFICATION",
+  WARNING: "WARNING",
+} as const;
+
+type TechnicalFieldCategoryValue = (typeof TECHNICAL_FIELD_CATEGORIES)[keyof typeof TECHNICAL_FIELD_CATEGORIES];
 
 type CustomNutrientData = typeof CUSTOM_NUTRIENT_DEFAULTS;
 
@@ -411,11 +426,11 @@ export function parseNumberish(value: unknown) {
 export function buildAiJsonForStorage(
   aiJson: TechnicalSheetAiExtraction,
   fieldsForReview: string[]
-): Prisma.InputJsonValue {
+): Record<string, unknown> {
   return {
     ...aiJson,
     fieldsForReview,
-  } as Prisma.InputJsonValue;
+  };
 }
 
 function normalizeAiNutrient(
@@ -595,54 +610,54 @@ function normalizeAiAllergen(allergen: TechnicalSheetAiAllergen): NormalizedExtr
 function extractTechnicalFields(aiJson: TechnicalSheetAiExtraction): NormalizedExtractedTechnicalField[] {
   const fields: NormalizedExtractedTechnicalField[] = [];
 
-  addTechnicalField(fields, TechnicalFieldCategory.REGULATORY, "productCategory", "Categoria", aiJson.regulatory.productCategory);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.REGULATORY, "productCategory", "Categoria", aiJson.regulatory.productCategory);
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.REGULATORY,
+    TECHNICAL_FIELD_CATEGORIES.REGULATORY,
     "legalClassification",
     "Classificação legal",
     aiJson.regulatory.legalClassification
   );
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.REGULATORY,
+    TECHNICAL_FIELD_CATEGORIES.REGULATORY,
     "anvisaRegistration",
     "Registro ANVISA",
     aiJson.regulatory.anvisaRegistration
   );
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.REGULATORY,
+    TECHNICAL_FIELD_CATEGORIES.REGULATORY,
     "mapaRegistration",
     "Registro MAPA",
     aiJson.regulatory.mapaRegistration
   );
-  addTechnicalField(fields, TechnicalFieldCategory.REGULATORY, "sifRegistration", "Registro SIF", aiJson.regulatory.sifRegistration);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.REGULATORY, "sifRegistration", "Registro SIF", aiJson.regulatory.sifRegistration);
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.REGULATORY,
+    TECHNICAL_FIELD_CATEGORIES.REGULATORY,
     "additiveFunction",
     "Função tecnológica",
     aiJson.regulatory.additiveFunction
   );
 
   for (const code of aiJson.regulatory.insCodes) {
-    addTechnicalField(fields, TechnicalFieldCategory.REGULATORY, "insCode", "INS", code);
+    addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.REGULATORY, "insCode", "INS", code);
   }
 
   for (const cas of aiJson.regulatory.casNumbers) {
-    addTechnicalField(fields, TechnicalFieldCategory.REGULATORY, "casNumber", "CAS", cas);
+    addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.REGULATORY, "casNumber", "CAS", cas);
   }
 
-  addEvidenceItems(fields, TechnicalFieldCategory.REGULATORY, "legalReference", aiJson.regulatory.legalReferences);
-  addEvidenceItems(fields, TechnicalFieldCategory.SENSORY, "sensory", aiJson.qualitySpecs.sensory);
-  addEvidenceItems(fields, TechnicalFieldCategory.PHYSICOCHEMICAL, "physicochemical", aiJson.qualitySpecs.physicochemical);
-  addEvidenceItems(fields, TechnicalFieldCategory.MICROBIOLOGICAL, "microbiological", aiJson.qualitySpecs.microbiological);
-  addEvidenceItems(fields, TechnicalFieldCategory.CONTAMINANT, "contaminant", aiJson.qualitySpecs.contaminants);
+  addEvidenceItems(fields, TECHNICAL_FIELD_CATEGORIES.REGULATORY, "legalReference", aiJson.regulatory.legalReferences);
+  addEvidenceItems(fields, TECHNICAL_FIELD_CATEGORIES.SENSORY, "sensory", aiJson.qualitySpecs.sensory);
+  addEvidenceItems(fields, TECHNICAL_FIELD_CATEGORIES.PHYSICOCHEMICAL, "physicochemical", aiJson.qualitySpecs.physicochemical);
+  addEvidenceItems(fields, TECHNICAL_FIELD_CATEGORIES.MICROBIOLOGICAL, "microbiological", aiJson.qualitySpecs.microbiological);
+  addEvidenceItems(fields, TECHNICAL_FIELD_CATEGORIES.CONTAMINANT, "contaminant", aiJson.qualitySpecs.contaminants);
 
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.DECLARATION,
+    TECHNICAL_FIELD_CATEGORIES.DECLARATION,
     "lactose",
     "Lactose",
     formatLactoseValue(aiJson),
@@ -651,11 +666,11 @@ function extractTechnicalFields(aiJson: TechnicalSheetAiExtraction): NormalizedE
     aiJson.lactose.text
   );
 
-  addTechnicalField(fields, TechnicalFieldCategory.TRACEABILITY, "countryOfOrigin", "País de origem", aiJson.traceability.countryOfOrigin);
-  addTechnicalField(fields, TechnicalFieldCategory.TRACEABILITY, "originText", "Origem", aiJson.traceability.originText);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.TRACEABILITY, "countryOfOrigin", "País de origem", aiJson.traceability.countryOfOrigin);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.TRACEABILITY, "originText", "Origem", aiJson.traceability.originText);
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.TRACEABILITY,
+    TECHNICAL_FIELD_CATEGORIES.TRACEABILITY,
     "animalOrigin",
     "Origem animal",
     booleanToText(aiJson.traceability.animalOrigin),
@@ -663,18 +678,18 @@ function extractTechnicalFields(aiJson: TechnicalSheetAiExtraction): NormalizedE
     null,
     aiJson.traceability.animalOriginText
   );
-  addTechnicalField(fields, TechnicalFieldCategory.TRACEABILITY, "lotPattern", "Padrão de lote", aiJson.traceability.lotPattern);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.TRACEABILITY, "lotPattern", "Padrão de lote", aiJson.traceability.lotPattern);
   addTechnicalField(
     fields,
-    TechnicalFieldCategory.TRACEABILITY,
+    TECHNICAL_FIELD_CATEGORIES.TRACEABILITY,
     "shelfLifeAfterOpening",
     "Validade após aberto",
     aiJson.traceability.shelfLifeAfterOpening
   );
-  addTechnicalField(fields, TechnicalFieldCategory.LOGISTICS, "transportConditions", "Transporte", aiJson.traceability.transportConditions);
-  addTechnicalField(fields, TechnicalFieldCategory.LOGISTICS, "distributionConditions", "Distribuição", aiJson.traceability.distributionConditions);
-  addTechnicalField(fields, TechnicalFieldCategory.LOGISTICS, "netWeight", "Peso líquido", aiJson.traceability.netWeight);
-  addTechnicalField(fields, TechnicalFieldCategory.LOGISTICS, "packagingMaterial", "Material da embalagem", aiJson.traceability.packagingMaterial);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.LOGISTICS, "transportConditions", "Transporte", aiJson.traceability.transportConditions);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.LOGISTICS, "distributionConditions", "Distribuição", aiJson.traceability.distributionConditions);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.LOGISTICS, "netWeight", "Peso líquido", aiJson.traceability.netWeight);
+  addTechnicalField(fields, TECHNICAL_FIELD_CATEGORIES.LOGISTICS, "packagingMaterial", "Material da embalagem", aiJson.traceability.packagingMaterial);
 
   addCertifications(fields, aiJson.certifications);
   addWarnings(fields, aiJson.warnings);
@@ -684,7 +699,7 @@ function extractTechnicalFields(aiJson: TechnicalSheetAiExtraction): NormalizedE
 
 function addEvidenceItems(
   fields: NormalizedExtractedTechnicalField[],
-  category: TechnicalFieldCategory,
+  category: TechnicalFieldCategoryValue,
   fallbackKey: string,
   items: TechnicalSheetEvidenceItem[]
 ) {
@@ -710,7 +725,7 @@ function addCertifications(
   for (const certification of certifications) {
     addTechnicalField(
       fields,
-      TechnicalFieldCategory.CERTIFICATION,
+      TECHNICAL_FIELD_CATEGORIES.CERTIFICATION,
       certification.key,
       certification.label,
       certification.present === null ? null : certification.present ? "presente" : "não declarado",
@@ -726,7 +741,7 @@ function addWarnings(fields: NormalizedExtractedTechnicalField[], warnings: Tech
   for (const warning of warnings) {
     addTechnicalField(
       fields,
-      TechnicalFieldCategory.WARNING,
+      TECHNICAL_FIELD_CATEGORIES.WARNING,
       warning.key,
       warning.label,
       warning.text,
@@ -740,7 +755,7 @@ function addWarnings(fields: NormalizedExtractedTechnicalField[], warnings: Tech
 
 function addTechnicalField(
   fields: NormalizedExtractedTechnicalField[],
-  category: TechnicalFieldCategory,
+  category: TechnicalFieldCategoryValue,
   fieldKey: string,
   label: string,
   value: string | number | boolean | null | undefined,
