@@ -1645,6 +1645,9 @@ export function TableGenerator({
         const toastId = toast.loading("Gerando pacote completo...");
 
         try {
+            const savedId = await handleSave({ showSuccess: false });
+            if (!savedId) throw new Error("Salve uma tabela válida antes de exportar.");
+
             // 1. Get JSZip (dynamic import to avoid bundle issues)
             const JSZipModule = await import("jszip");
             const JSZip = JSZipModule.default;
@@ -1674,20 +1677,7 @@ export function TableGenerator({
             const excelResponse = await fetch("/api/export/excel", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title,
-                    per100g: result.per100g,
-                    perPortion: result.perPortion,
-                    portionSize,
-                    householdMeasure: householdMeasure || "medida caseira",
-                    popGroup,
-                    isSupplement,
-                    servingsPerPackage,
-                    selectedNutrients,
-                    extraConstituents,
-                    showDailyValue,
-                    selectedTableTypes,
-                }),
+                body: JSON.stringify({ tableId: savedId }),
             });
 
             if (!excelResponse.ok) throw new Error("Erro ao gerar planilha Excel.");

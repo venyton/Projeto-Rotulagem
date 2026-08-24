@@ -14,7 +14,8 @@ import {
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
-import { EXPORT_SHEET_TYPES, ExportBodyInput, exportBodySchema } from "@/features/tables/domain/export-schema";
+import { authoritativeExportRequestSchema, EXPORT_SHEET_TYPES, type ExportBodyInput } from "@/features/tables/domain/export-schema";
+import { loadAuthoritativeExportBody } from "@/features/tables/services/authoritative-export";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import {
@@ -575,8 +576,8 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const parsedBody = exportBodySchema.safeParse(await req.json().catch(() => null));
-    if (!parsedBody.success) {
+    const parsedRequest = authoritativeExportRequestSchema.safeParse(await req.json().catch(() => null));
+    if (!parsedRequest.success) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 400 });
     }
     const requestLimit = await consumeRequestRateLimit(
@@ -587,7 +588,11 @@ export async function POST(req: NextRequest) {
     if (!requestLimit.allowed) {
       return rateLimitResponse(requestLimit, { error: "Limite temporário de exportações atingido." });
     }
-    const exportBody = parsedBody.data;
+    const authoritative = await loadAuthoritativeExportBody(parsedRequest.data.tableId, context.organization.id);
+    if (!authoritative.ok) {
+      return NextResponse.json({ error: authoritative.error }, { status: 400 });
+    }
+    const exportBody = authoritative.data;
     const buffer = await generateExcelBuffer(exportBody);
     if (buffer.byteLength > getRuntimeResponseBodyLimitBytes(25)) {
       return NextResponse.json({ error: "Arquivo de exportação excede o limite suportado pelo ambiente." }, { status: 413 });
