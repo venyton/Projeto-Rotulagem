@@ -2,6 +2,10 @@ export type InternationalMarket = "br" | "us" | "eu" | "ca" | "mx" | "cl";
 export type ApprovalStatus = "draft" | "quality" | "regulatory" | "marketing" | "approved";
 export type FoodPhysicalState = "solid" | "liquid";
 
+export function canSetEnterpriseApprovalStatus(status: ApprovalStatus, hasApprovalAuthority: boolean) {
+    return status !== "approved" || hasApprovalAuthority;
+}
+
 export type EnterpriseTableItem = {
     name: string;
     quantity: number;
@@ -30,6 +34,43 @@ export type EnterpriseTable = {
     updatedAt?: Date | string;
     items: EnterpriseTableItem[];
 };
+
+/**
+ * Mantém os campos de localização editáveis, mas sempre recompõe a fórmula e
+ * os nutrientes a partir da tabela persistida pelo tenant.
+ */
+export function buildAuthoritativeEnterpriseTable(
+    trustedBase: EnterpriseTable,
+    localizedDraft: Partial<EnterpriseTable> | null | undefined,
+): EnterpriseTable {
+    const localizedTitle = typeof localizedDraft?.title === "string" ? localizedDraft.title.trim().slice(0, 160) : "";
+    const localizedPortion = typeof localizedDraft?.portion === "number" && Number.isFinite(localizedDraft.portion) && localizedDraft.portion > 0 && localizedDraft.portion <= 10_000_000
+        ? localizedDraft.portion
+        : trustedBase.portion;
+    const localizedUom = typeof localizedDraft?.uom === "string" ? localizedDraft.uom.trim().slice(0, 20) : "";
+    const localizedMeasure = typeof localizedDraft?.householdMeasure === "string"
+        ? localizedDraft.householdMeasure.trim().slice(0, 160)
+        : "";
+    const localizedPackageContent = typeof localizedDraft?.packageContent === "number" && Number.isFinite(localizedDraft.packageContent) && localizedDraft.packageContent > 0 && localizedDraft.packageContent <= 10_000_000
+        ? localizedDraft.packageContent
+        : trustedBase.packageContent ?? null;
+    const localizedServings = typeof localizedDraft?.servingsPerPackage === "string"
+        ? localizedDraft.servingsPerPackage.trim().slice(0, 100)
+        : "";
+
+    return {
+        id: trustedBase.id,
+        title: localizedTitle || trustedBase.title,
+        portion: localizedPortion,
+        uom: localizedUom || trustedBase.uom,
+        householdMeasure: localizedMeasure || trustedBase.householdMeasure,
+        popGroup: trustedBase.popGroup,
+        packageContent: localizedPackageContent,
+        servingsPerPackage: localizedServings || trustedBase.servingsPerPackage || null,
+        updatedAt: trustedBase.updatedAt,
+        items: trustedBase.items.map((item) => ({ ...item })),
+    };
+}
 
 export type EnterpriseLabelVersionSnapshot = {
     id: string;

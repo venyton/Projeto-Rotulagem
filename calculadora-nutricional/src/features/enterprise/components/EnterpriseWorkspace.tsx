@@ -66,6 +66,7 @@ interface EnterpriseWorkspaceProps {
     projects: EnterpriseLabelProjectSummary[];
     canExport?: boolean;
     canCreateTables?: boolean;
+    canApproveFinal?: boolean;
 }
 
 const STATUS_STYLES = {
@@ -395,6 +396,7 @@ export function EnterpriseWorkspace({
     projects,
     canExport = false,
     canCreateTables = false,
+    canApproveFinal = false,
 }: EnterpriseWorkspaceProps) {
     const { language } = useSiteLanguage();
     const copy = ENTERPRISE_COPY[language];
@@ -599,14 +601,13 @@ export function EnterpriseWorkspace({
         });
     };
 
-    const recordExport = (exportType: "PNG" | "JSON" | "GS1_DIGITAL_LINK", fileName?: string, payload?: unknown) => {
-        if (!savedProject) return;
+    const recordExport = (exportType: "PNG" | "JSON" | "GS1_DIGITAL_LINK", fileName?: string) => {
+        if (!savedProject?.currentVersionId) return;
         void recordEnterpriseLabelExport({
             projectId: savedProject.id,
             versionId: savedProject.currentVersionId,
             exportType,
             fileName,
-            payload,
         });
     };
 
@@ -625,7 +626,7 @@ export function EnterpriseWorkspace({
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        recordExport("JSON", fileName, analysis.passport);
+        recordExport("JSON", fileName);
     };
 
     const downloadLabelImage = async () => {
@@ -646,7 +647,7 @@ export function EnterpriseWorkspace({
         document.body.appendChild(link);
         link.click();
         link.remove();
-        recordExport("PNG", fileName, { market, title: workingTable.title });
+        recordExport("PNG", fileName);
     };
 
     const downloadLabelVector = async () => {
@@ -669,7 +670,7 @@ export function EnterpriseWorkspace({
         if (!canExport) return;
         if (!analysis) return;
         await navigator.clipboard.writeText(analysis.gs1Link);
-        recordExport("GS1_DIGITAL_LINK", undefined, { url: analysis.gs1Link });
+        recordExport("GS1_DIGITAL_LINK");
         toast.success(copy.copy);
     };
 
@@ -802,7 +803,7 @@ export function EnterpriseWorkspace({
                             <SelectContent>
                               <SelectGroup>
                                 {APPROVAL_FLOW.map((item) => (
-                                    <SelectItem key={item.status} value={item.status}>
+                                    <SelectItem key={item.status} value={item.status} disabled={item.status === "approved" && !canApproveFinal}>
                                         {getApprovalLabel(item.status, language)}
                                     </SelectItem>
                                 ))}
@@ -848,6 +849,7 @@ export function EnterpriseWorkspace({
                                         <ToggleGroupItem
                                             key={step.status}
                                             value={step.status}
+                                            disabled={step.status === "approved" && !canApproveFinal}
                                             className="h-auto min-h-20 flex-col gap-1 px-3 py-2"
                                         >
                                             <span className="text-xs font-semibold">{done ? <CheckCircle2 aria-hidden="true" /> : index + 1} {getApprovalLabel(step.status, language)}</span>
