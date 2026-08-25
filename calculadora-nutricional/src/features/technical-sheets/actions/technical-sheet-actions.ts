@@ -185,7 +185,7 @@ async function processTechnicalSheetFile(
         data: {
           documentType: normalized.documentType,
           status: ExtractionStatus.COMPLETED,
-          extractedJson: buildAiJsonForStorage(aiJson, fieldsForReviewList),
+          extractedJson: buildAiJsonForStorage(aiJson, fieldsForReviewList) as Prisma.InputJsonValue,
           confidence: normalized.confidence,
           errorMessage: null,
         },

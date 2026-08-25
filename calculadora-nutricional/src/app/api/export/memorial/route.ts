@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import {
-    applyManualMicronutrientOverrides,
-    calculatePreparedProduct,
     calculateRecipe,
     CalculatedNutrients,
     normalizeManualMicronutrients,
     SelectedIngredient,
 } from "@/features/tables/domain/nutrients";
+import { loadAuthoritativeTableCalculation } from "@/features/tables/services/authoritative-export";
 import {
     CALCULATION_VERSION,
     getIngredientSourceLabel,
@@ -71,66 +69,6 @@ function readPositiveNumber(value: unknown) {
 function readText(value: unknown, maxLength: number) {
     if (typeof value !== "string") return "";
     return value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maxLength);
-}
-
-function readCustomNutrients(value: unknown) {
-    if (!isRecord(value)) return {};
-
-    return Object.fromEntries(
-        Object.entries(value)
-            .slice(0, 100)
-            .flatMap(([name, raw]) => {
-                if (!isRecord(raw)) return [];
-                const nutrientValue = readNumber(raw.value);
-                const unit = readText(raw.unit, 30) || "unidade";
-                return [[name.slice(0, 80), { value: nutrientValue, unit }]];
-            })
-    );
-}
-
-function makeSnapshotIngredient(source: SnapshotRecord, fallbackId: string): SelectedIngredient["ingredient"] {
-    const ingredient = {
-        id: readText(source.id, 100) || fallbackId,
-        name: readText(source.name, 160) || "Componente sem nome",
-        origin: readText(source.origin, 100) || "snapshot",
-        energy: readNumber(source.energy),
-        carbs: readNumber(source.carbs),
-        protein: readNumber(source.protein),
-        fatTotal: readNumber(source.fatTotal),
-        fatSat: readNumber(source.fatSat),
-        fatTrans: readNumber(source.fatTrans),
-        fiber: readNumber(source.fiber),
-        sodium: readNumber(source.sodium),
-        sugarTotal: readNumber(source.sugarTotal),
-        sugarAdded: readNumber(source.sugarAdded),
-        customNutrients: readCustomNutrients(source.customNutrients),
-        ...Object.fromEntries(MICRO_KEYS.map((key) => [key, readNumber(source[key])])),
-    };
-
-    return ingredient as unknown as SelectedIngredient["ingredient"];
-}
-
-function toTableIngredient(item: SnapshotRecord): SelectedIngredient {
-    return {
-        ingredient: makeSnapshotIngredient(item, `snapshot-${readText(item.id, 100)}`),
-        quantity: readPositiveNumber(item.quantity),
-        isAddedSugar: item.isAddedSugar === true,
-    };
-}
-
-function readSelectedIngredients(value: unknown): SelectedIngredient[] {
-    if (!Array.isArray(value)) return [];
-
-    return value.flatMap((item, index) => {
-        if (!isRecord(item) || !isRecord(item.ingredient)) return [];
-        const quantity = readPositiveNumber(item.quantity);
-        if (quantity <= 0) return [];
-        return [{
-            ingredient: makeSnapshotIngredient(item.ingredient, `preparation-${index}`),
-            quantity,
-            isAddedSugar: item.isAddedSugar === true,
-        }];
-    });
 }
 
 function readExtraConstituents(value: unknown) {
@@ -505,109 +443,23 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const table = await prisma.generatedTable.findFirst({
-            where: { id: tableId, organizationId: context.organization.id },
-            select: {
-                title: true,
-                uom: true,
-                portion: true,
-                householdMeasure: true,
-                popGroup: true,
-                packageContent: true,
-                servingsPerPackage: true,
-                suggestedFoodGroup: true,
-                suggestedProduct: true,
-                uiState: true,
-                items: {
-                    orderBy: { id: "asc" },
-                    select: {
-                        id: true,
-                        name: true,
-                        source: true,
-                        quantity: true,
-                        isAddedSugar: true,
-                        energy: true,
-                        carbs: true,
-                        protein: true,
-                        fatTotal: true,
-                        fatSat: true,
-                        fatTrans: true,
-                        fiber: true,
-                        sodium: true,
-                        sugarTotal: true,
-                        sugarAdded: true,
-                        customNutrients: true,
-                        fatMono: true,
-                        fatPoly: true,
-                        omega6: true,
-                        omega3: true,
-                        cholesterol: true,
-                        vitaminA: true,
-                        vitaminD: true,
-                        vitaminE: true,
-                        vitaminK: true,
-                        vitaminC: true,
-                        thiamin: true,
-                        riboflavin: true,
-                        niacin: true,
-                        vitaminB6: true,
-                        biotin: true,
-                        folicAcid: true,
-                        pantothenicAcid: true,
-                        vitaminB12: true,
-                        calcium: true,
-                        chloride: true,
-                        copper: true,
-                        chromium: true,
-                        iron: true,
-                        fluoride: true,
-                        phosphorus: true,
-                        iodine: true,
-                        magnesium: true,
-                        manganese: true,
-                        molybdenum: true,
-                        potassium: true,
-                        selenium: true,
-                        zinc: true,
-                        choline: true,
-                    },
-                },
-            },
-        });
-
-        if (!table) return NextResponse.json({ error: "Tabela não encontrada." }, { status: 404 });
-
-        const uiState = isRecord(table.uiState) ? table.uiState : {};
-        const items = table.items.map((item) => toTableIngredient(item as unknown as SnapshotRecord));
-        const extraConstituents = readExtraConstituents(uiState.extraConstituents);
-        const preparationIngredients = readSelectedIngredients(uiState.preparationIngredients);
-        const preparationPowderBatchWeight = readPositiveNumber(uiState.preparationPowderBatchWeight);
-        const preparationReadyPortionSize = readPositiveNumber(uiState.preparationReadyPortionSize);
-        const preparationFinalYield = readPositiveNumber(uiState.preparationFinalYield);
-        const preparationPowderPortionSize = readPositiveNumber(uiState.preparationPowderPortionSize);
-        const canUsePreparation = uiState.enablePreparationSimulator === true
-            && preparationIngredients.length > 0
-            && preparationPowderBatchWeight > 0
-            && preparationReadyPortionSize > 0
-            && preparationFinalYield > 0;
-
-        const calculatedValues = canUsePreparation
-            ? calculatePreparedProduct({
-                powderIngredients: items,
-                preparationIngredients,
-                powderPortionSize: preparationPowderPortionSize || table.portion,
-                powderBatchWeight: preparationPowderBatchWeight,
-                readyPortionSize: preparationReadyPortionSize,
-                finalYield: preparationFinalYield,
-                preparationInstructions: readText(uiState.preparationInstructions, 2_000),
-                extraConstituents,
-            })
-            : calculateRecipe(items, table.portion, extraConstituents);
-        const calculation = applyManualMicronutrientOverrides(
-            calculatedValues,
-            uiState.manualMicronutrients,
-            table.portion,
-        );
+        const authority = await loadAuthoritativeTableCalculation(tableId, context.organization.id);
+        if (!authority.ok) {
+            const status = authority.error === "Tabela não encontrada." ? 404 : 400;
+            return NextResponse.json({ error: authority.error }, { status });
+        }
+        const {
+            table,
+            uiState,
+            ingredients: items,
+            preparationIngredients,
+            powderBatchWeight: preparationPowderBatchWeight,
+            readyPortionSize: preparationReadyPortionSize,
+            finalYield: preparationFinalYield,
+            powderPortionSize: preparationPowderPortionSize,
+            usePreparation: canUsePreparation,
+            result: calculation,
+        } = authority.data;
         const manualMicronutrients = normalizeManualMicronutrients(uiState.manualMicronutrients);
 
         const selectedMicronutrients = new Set(

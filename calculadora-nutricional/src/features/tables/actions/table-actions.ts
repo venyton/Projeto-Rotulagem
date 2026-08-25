@@ -14,6 +14,18 @@ import { z } from "zod";
 import { getIngredientSourceLabel } from "@/features/tables/domain/memorial";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { databaseIdSchema, safeResourceIdSchema } from "@/lib/validation/identifiers";
+import {
+    formatUnitFraction,
+    getIndividualPackagePortion,
+    getOfficialProductReferencePortion,
+} from "@/features/tables/domain/portion-declarations";
+import { calculateServingsPerPackage } from "@/features/tables/domain/regulatory-declarations";
+
+const ingredientSelectionSchema = z.object({
+    ingredient: z.object({ id: safeResourceIdSchema }),
+    quantity: z.number().finite().positive().max(10_000_000),
+    isAddedSugar: z.boolean(),
+}).strict();
 
 const tableInputSchema = z.object({
     id: databaseIdSchema.optional(),
@@ -22,11 +34,7 @@ const tableInputSchema = z.object({
     uom: z.enum(["g", "ml"]),
     householdMeasure: z.string().trim().min(1).max(160),
     popGroup: z.enum(Object.values(POPULATION_GROUPS) as [PopGroup, ...PopGroup[]]),
-    ingredients: z.array(z.object({
-        ingredient: z.object({ id: safeResourceIdSchema }),
-        quantity: z.number().finite().positive().max(10_000_000),
-        isAddedSugar: z.boolean(),
-    })).min(1).max(200),
+    ingredients: z.array(ingredientSelectionSchema).min(1).max(200),
     packageContent: z.number().finite().positive().max(10_000_000).optional(),
     servingsPerPackage: z.string().trim().max(80).optional(),
     suggestedFoodGroup: z.string().trim().max(160).optional(),
@@ -48,6 +56,27 @@ function readCustomNutrientsSnapshot(ingredient: SelectedIngredient["ingredient"
     const value = (ingredient as unknown as { customNutrients?: unknown }).customNutrients;
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
     return value as Prisma.InputJsonValue;
+}
+
+function toTrustedIngredientSnapshot(ingredient: SelectedIngredient["ingredient"]) {
+    const source = ingredient as unknown as Record<string, unknown>;
+    return {
+        id: ingredient.id,
+        name: ingredient.name,
+        origin: typeof source.origin === "string" ? source.origin : "snapshot",
+        energy: ingredient.energy || 0,
+        carbs: ingredient.carbs || 0,
+        protein: ingredient.protein || 0,
+        fatTotal: ingredient.fatTotal || 0,
+        fatSat: ingredient.fatSat || 0,
+        fatTrans: ingredient.fatTrans || 0,
+        fiber: ingredient.fiber || 0,
+        sodium: ingredient.sodium || 0,
+        sugarTotal: ingredient.sugarTotal || 0,
+        sugarAdded: typeof source.sugarAdded === "number" && Number.isFinite(source.sugarAdded) ? source.sugarAdded : 0,
+        customNutrients: readCustomNutrientsSnapshot(ingredient),
+        ...Object.fromEntries(MICRO_KEYS.map((key) => [key, source[key] ?? null])),
+    };
 }
 
 export async function saveTable(data: {
@@ -92,7 +121,18 @@ export async function saveTable(data: {
         );
         if (!requestLimit.allowed) return { error: "Limite temporário de gravações atingido. Tente novamente mais tarde." };
 
-        const ingredientIds = [...new Set(safeData.ingredients.map((item) => item.ingredient.id))];
+        const rawPreparationIngredients = safeData.uiState?.preparationIngredients;
+        const parsedPreparationIngredients = rawPreparationIngredients === undefined
+            ? { success: true as const, data: [] }
+            : z.array(ingredientSelectionSchema).max(200).safeParse(rawPreparationIngredients);
+        if (!parsedPreparationIngredients.success) {
+            return { error: "Ingredientes de preparo inválidos." };
+        }
+        const preparationIngredients = parsedPreparationIngredients.data;
+        const ingredientIds = [...new Set([
+            ...safeData.ingredients.map((item) => item.ingredient.id),
+            ...preparationIngredients.map((item) => item.ingredient.id),
+        ])];
         const snapshotItemIds = ingredientIds
             .filter((id) => id.startsWith("snapshot-"))
             .map((id) => id.slice("snapshot-".length));
@@ -161,15 +201,59 @@ export async function saveTable(data: {
             return { error: "Um ou mais ingredientes são inválidos ou não pertencem à conta." };
         }
 
-        const uiStateValue = safeData.uiState ? (safeData.uiState as Prisma.InputJsonValue) : undefined;
+        const trustedPreparationIngredients = preparationIngredients.map((item) => ({
+            ingredient: toTrustedIngredientSnapshot(ingredientsById.get(item.ingredient.id)!),
+            quantity: item.quantity,
+            isAddedSugar: item.isAddedSugar,
+        }));
+        const uiStateValue = safeData.uiState
+            ? ({
+                ...safeData.uiState,
+                preparationIngredients: trustedPreparationIngredients,
+            } as Prisma.InputJsonValue)
+            : undefined;
+        let authoritativePortion = safeData.portion;
+        let authoritativeHouseholdMeasure = safeData.householdMeasure;
+        const useIndividualPackagePortion = safeData.uiState?.useIndividualPackagePortion === true;
+        const useUnitFractionMeasure = safeData.uiState?.useUnitFractionMeasure === true;
+
+        if (useIndividualPackagePortion) {
+            const referencePortion = getOfficialProductReferencePortion(
+                safeData.suggestedFoodGroup || "",
+                safeData.suggestedProduct || "",
+            );
+            const individualPortion = referencePortion && safeData.packageContent
+                ? getIndividualPackagePortion(referencePortion, safeData.packageContent)
+                : null;
+            if (!individualPortion) return { error: "Referência de embalagem individual inválida." };
+            authoritativePortion = individualPortion.portion;
+            authoritativeHouseholdMeasure = individualPortion.measure;
+        } else if (useUnitFractionMeasure) {
+            const rawUnitWeight = safeData.uiState?.unitWeightForFraction;
+            const unitWeight = typeof rawUnitWeight === "number"
+                ? rawUnitWeight
+                : typeof rawUnitWeight === "string"
+                    ? Number(rawUnitWeight.replace(",", "."))
+                    : 0;
+            const fraction = formatUnitFraction(authoritativePortion, unitWeight);
+            if (!fraction) return { error: "Peso ou volume da unidade inválido." };
+            authoritativeHouseholdMeasure = fraction;
+        }
+
+        const automaticServings = calculateServingsPerPackage(authoritativePortion, safeData.packageContent || 0);
+        const rawManualServings = safeData.uiState?.servingsPerPackageManual;
+        const manualServings = typeof rawManualServings === "string" ? rawManualServings.trim().slice(0, 80) : "";
+        const authoritativeServings = safeData.uiState?.servingsDeclarationMode === "manual" && manualServings
+            ? manualServings
+            : automaticServings;
         const payload = {
             title: safeData.title,
-            portion: safeData.portion,
+            portion: authoritativePortion,
             uom: safeData.uom,
-            householdMeasure: safeData.householdMeasure,
+            householdMeasure: authoritativeHouseholdMeasure,
             popGroup: safeData.popGroup,
             packageContent: safeData.packageContent ?? null,
-            servingsPerPackage: safeData.servingsPerPackage ?? null,
+            servingsPerPackage: authoritativeServings || null,
             suggestedFoodGroup: safeData.suggestedFoodGroup || null,
             suggestedProduct: safeData.suggestedProduct || null,
             uiState: uiStateValue,

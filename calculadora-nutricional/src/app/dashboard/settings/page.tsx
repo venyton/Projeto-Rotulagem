@@ -22,7 +22,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { getCurrentSaaSContext } from "@/features/saas/services/entitlements";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { getProfilePermissionDefinition, PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import {
     canManageAllOrganizationUsers,
@@ -49,6 +49,12 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
+import {
+    canGrantManagedProfilePermissions,
+    canManageOrganizationMember,
+    canResetManagedMemberPassword,
+} from "@/features/settings/domain/credential-management";
+import { OrganizationIdentityFields } from "@/features/settings/components/OrganizationIdentityFields";
 
 type SettingsPageProps = {
     searchParams?: Promise<{
@@ -88,13 +94,15 @@ const settingsErrorMessages: Record<string, string> = {
     invalid: "Verifique os dados informados.",
     cnpj: "Informe um CNPJ válido.",
     cnpj_exists: "Este CNPJ já está vinculado a outra organização.",
+    cpf: "Informe um CPF válido.",
+    cpf_exists: "Este CPF já está vinculado a outra organização.",
+    individual_identity: "Informe o nome completo e o CPF da pessoa física.",
     company_identity: "Informe razão social e CNPJ para cadastrar a empresa.",
     organization_kind: "Uma organização empresarial não pode ser convertida em cadastro individual.",
     forbidden: "Você não tem permissão para concluir esta alteração.",
     organization: "A organização selecionada não está disponível.",
     user_not_found: "O usuário selecionado não está disponível.",
     user_exists: "Já existe outro usuário com este email ou CPF.",
-    cpf: "Informe um CPF válido.",
     password: "A nova senha deve ter pelo menos 10 caracteres e não pode conter nome ou email.",
     protected_member: "Não é permitido remover ou inativar o próprio acesso nem o proprietário da organização.",
     profile_name: "Já existe um perfil com esse nome em uma organização. Escolha outro nome para o padrão global.",
@@ -183,8 +191,46 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         ? PROFILE_PERMISSION_MODULES.filter((moduleKey) => profilePermissionEnabled(selectedProfile.permissions, moduleKey))
         : [];
     const isAdministratorProfile = selectedProfile?.systemKey === "ADMIN";
-    const defaultNewUserProfile = data.profiles.find((profile) => profile.systemKey === "MEMBER") ?? selectedProfile;
+    const actorProfilePermissions = PROFILE_PERMISSION_MODULES.filter((moduleKey) => contextHasModuleAccess(context, moduleKey));
+    const assignableProfiles = data.profiles.filter((profile) => canGrantManagedProfilePermissions({
+        hasGlobalAuthority: canManageAllUsers,
+        actorRole: context.member.role,
+        actorPermissions: actorProfilePermissions,
+        requestedPermissions: profile.permissions
+            .filter((permission) => permission.enabled)
+            .map((permission) => permission.moduleKey),
+    }));
+    const defaultNewUserProfile = assignableProfiles.find((profile) => profile.systemKey === "MEMBER") ?? assignableProfiles[0] ?? selectedProfile;
+    const canEditSelectedProfile = selectedProfile
+        ? canGrantManagedProfilePermissions({
+            hasGlobalAuthority: canManageAllUsers,
+            actorRole: context.member.role,
+            actorPermissions: actorProfilePermissions,
+            requestedPermissions: selectedProfilePermissions,
+        }) && !(
+            context.member.role === "MEMBER" &&
+            (selectedProfile.systemKey === "OWNER" || selectedProfile.systemKey === "ADMIN")
+        )
+        : false;
     const visibleTabs = canManageAllUsers ? tabs : tabs.filter((tab) => tab.key !== "organizations");
+    const canResetSelectedMemberPassword = selectedManagedMember
+        ? canResetManagedMemberPassword({
+            hasGlobalAuthority: canManageAllUsers,
+            sameOrganization: selectedManagedMember.organizationId === context.organization.id,
+            isSelf: selectedManagedMember.userId === context.user.id,
+            actorRole: context.member.role,
+            targetRole: selectedManagedMember.role,
+        })
+        : false;
+    const canManageSelectedMember = selectedManagedMember
+        ? canManageOrganizationMember({
+            hasGlobalAuthority: canManageAllUsers,
+            sameOrganization: selectedManagedMember.organizationId === context.organization.id,
+            isSelf: selectedManagedMember.userId === context.user.id,
+            actorRole: context.member.role,
+            targetRole: selectedManagedMember.role,
+        })
+        : false;
 
     return (
         <div className="app-page flex flex-col gap-6">
@@ -212,33 +258,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                     <Card>
                         <CardHeader>
                             <CardTitle>Organizações cadastradas</CardTitle>
-                            <CardDescription>Busque pelo nome da empresa, razão social, nome fantasia ou pelos quatro últimos dígitos do CNPJ.</CardDescription>
+                            <CardDescription>Busque pelo nome, razão social, nome fantasia ou pelos quatro últimos dígitos do CPF/CNPJ.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4">
                             <details className="rounded-lg border bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Cadastrar organização</summary>
                                 <form action={createManagedOrganization} className="mt-4">
                                     <FieldGroup className="grid gap-3 lg:grid-cols-4">
-                                        <Field>
-                                            <FieldLabel htmlFor="new-organization-kind">Cadastro</FieldLabel>
-                                            <NativeSelect id="new-organization-kind" name="kind" defaultValue="COMPANY">
-                                                <NativeSelectOption value="COMPANY">Empresa</NativeSelectOption>
-                                                <NativeSelectOption value="INDIVIDUAL">Pessoa física</NativeSelectOption>
-                                            </NativeSelect>
-                                        </Field>
-                                        <Field>
-                                            <FieldLabel htmlFor="new-organization-legal-name">Razão social ou nome</FieldLabel>
-                                            <Input id="new-organization-legal-name" name="legalName" required maxLength={120} />
-                                        </Field>
-                                        <Field>
-                                            <FieldLabel htmlFor="new-organization-trade-name">Nome fantasia</FieldLabel>
-                                            <Input id="new-organization-trade-name" name="tradeName" maxLength={120} />
-                                        </Field>
-                                        <Field>
-                                            <FieldLabel htmlFor="new-organization-cnpj">CNPJ</FieldLabel>
-                                            <Input id="new-organization-cnpj" name="cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" />
-                                            <FieldDescription>Obrigatório para empresa.</FieldDescription>
-                                        </Field>
+                                        <OrganizationIdentityFields idPrefix="new-organization" initialKind="COMPANY" />
                                         <Button type="submit"><Plus data-icon="inline-start" />Criar organização</Button>
                                     </FieldGroup>
                                 </form>
@@ -265,7 +292,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <TableRow>
                                         <TableHead>Organização</TableHead>
                                         <TableHead>Cadastro</TableHead>
-                                        <TableHead>CNPJ</TableHead>
+                                        <TableHead>CPF/CNPJ</TableHead>
                                         <TableHead>Usuários</TableHead>
                                         <TableHead className="text-right">Ação</TableHead>
                                     </TableRow>
@@ -280,9 +307,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                 ) : null}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="secondary">{organization.kind === "COMPANY" ? "Empresa" : "Pessoa física"}</Badge>
+                                                <Badge variant="secondary">{organization.kind === "COMPANY" ? "Pessoa jurídica" : "Pessoa física"}</Badge>
                                             </TableCell>
-                                            <TableCell>{organization.cnpjLastFour ? `••••${organization.cnpjLastFour}` : "—"}</TableCell>
+                                            <TableCell>
+                                                {organization.kind === "COMPANY"
+                                                    ? organization.cnpjLastFour ? `CNPJ ••••${organization.cnpjLastFour}` : "—"
+                                                    : organization.cpfLastFour ? `CPF ••••${organization.cpfLastFour}` : "—"}
+                                            </TableCell>
                                             <TableCell>{organization._count.members}</TableCell>
                                             <TableCell className="text-right">
                                                 <Button asChild variant={selectedOrganizationData?.id === organization.id ? "secondary" : "outline"} size="sm">
@@ -315,7 +346,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <CardDescription>
                                         {selectedOrganizationData.kind === "COMPANY"
                                             ? `${selectedOrganizationData.legalName || selectedOrganizationData.name}${selectedOrganizationData.cnpjLastFour ? ` · CNPJ ••••${selectedOrganizationData.cnpjLastFour}` : ""}`
-                                            : "Cadastro individual"}
+                                            : `${selectedOrganizationData.name}${selectedOrganizationData.cpfLastFour ? ` · CPF ••••${selectedOrganizationData.cpfLastFour}` : ""}`}
                                     </CardDescription>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -333,20 +364,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <input type="hidden" name="organizationId" value={selectedOrganizationData.id} />
                                     <input type="hidden" name="managementTab" value="organizations" />
                                     <FieldGroup className="grid gap-3 lg:grid-cols-4 lg:items-end">
-                                        <Field>
-                                            <FieldLabel htmlFor="selected-organization-kind">Cadastro</FieldLabel>
-                                            <NativeSelect id="selected-organization-kind" name="kind" defaultValue={selectedOrganizationData.kind === "COMPANY" ? "COMPANY" : "INDIVIDUAL"}>
-                                                <NativeSelectOption value="INDIVIDUAL">Pessoa física</NativeSelectOption>
-                                                <NativeSelectOption value="COMPANY">Empresa</NativeSelectOption>
-                                            </NativeSelect>
-                                        </Field>
-                                        <Field><FieldLabel htmlFor="selected-organization-legal-name">Razão social</FieldLabel><Input id="selected-organization-legal-name" name="legalName" maxLength={120} defaultValue={selectedOrganizationData.legalName || ""} /></Field>
-                                        <Field><FieldLabel htmlFor="selected-organization-trade-name">Nome fantasia</FieldLabel><Input id="selected-organization-trade-name" name="tradeName" maxLength={120} defaultValue={selectedOrganizationData.tradeName || ""} /></Field>
-                                        <Field>
-                                            <FieldLabel htmlFor="selected-organization-cnpj">CNPJ</FieldLabel>
-                                            <Input id="selected-organization-cnpj" name="cnpj" inputMode="numeric" placeholder={selectedOrganizationData.cnpjLastFour ? `CNPJ cadastrado ••••${selectedOrganizationData.cnpjLastFour}` : "00.000.000/0000-00"} />
-                                            <FieldDescription>Deixe vazio para manter o CNPJ atual.</FieldDescription>
-                                        </Field>
+                                        <OrganizationIdentityFields
+                                            idPrefix="selected-organization"
+                                            initialKind={selectedOrganizationData.kind === "COMPANY" ? "COMPANY" : "INDIVIDUAL"}
+                                            personName={selectedOrganizationData.name}
+                                            cpfLastFour={selectedOrganizationData.cpfLastFour}
+                                            legalName={selectedOrganizationData.legalName}
+                                            tradeName={selectedOrganizationData.tradeName}
+                                            cnpjLastFour={selectedOrganizationData.cnpjLastFour}
+                                            lockCompanyKind={selectedOrganizationData.kind === "COMPANY"}
+                                        />
                                         <Button type="submit" variant="outline"><Building2 data-icon="inline-start" />Salvar dados</Button>
                                     </FieldGroup>
                                 </form>
@@ -486,15 +513,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                 </form>
 
                                 <div className="flex flex-col gap-4">
-                                    <form action={resetManagedUserPassword}>
+                                    {canResetSelectedMemberPassword ? <form action={resetManagedUserPassword}>
                                         <input type="hidden" name="memberId" value={selectedManagedMember.id} />
                                         <FieldGroup className="gap-3"><Field><FieldLabel htmlFor="managed-user-password">Nova senha temporária</FieldLabel><Input id="managed-user-password" name="password" type="password" required minLength={10} /><FieldDescription>A senha anterior não pode ser visualizada.</FieldDescription></Field><Button type="submit" variant="outline"><KeyRound data-icon="inline-start" />Definir nova senha</Button></FieldGroup>
-                                    </form>
-                                    <form action={updateMemberProfile} className="flex flex-col gap-3"><input type="hidden" name="memberId" value={selectedManagedMember.id} /><Field><FieldLabel htmlFor="managed-user-profile">Perfil nesta organização</FieldLabel><NativeSelect id="managed-user-profile" name="profileId" defaultValue={selectedManagedMember.profileId || ""}>{selectedManagedMember.organization.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field><Button type="submit" variant="outline"><ShieldCheck data-icon="inline-start" />Salvar perfil</Button></form>
-                                    <div className="flex flex-wrap gap-2">
+                                    </form> : null}
+                                    {canManageSelectedMember ? <form action={updateMemberProfile} className="flex flex-col gap-3"><input type="hidden" name="memberId" value={selectedManagedMember.id} /><Field><FieldLabel htmlFor="managed-user-profile">Perfil nesta organização</FieldLabel><NativeSelect id="managed-user-profile" name="profileId" defaultValue={selectedManagedMember.profileId || ""}>{selectedManagedMember.organization.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field><Button type="submit" variant="outline"><ShieldCheck data-icon="inline-start" />Salvar perfil</Button></form> : null}
+                                    {canManageSelectedMember ? <div className="flex flex-wrap gap-2">
                                         <form action={setOrganizationMemberActive}><input type="hidden" name="memberId" value={selectedManagedMember.id} /><input type="hidden" name="active" value={selectedManagedMember.active ? "false" : "true"} /><Button type="submit" variant="outline"><Power data-icon="inline-start" />{selectedManagedMember.active ? "Inativar acesso" : "Ativar acesso"}</Button></form>
                                         <details className="rounded-md border border-destructive/30 px-3 py-2"><summary className="cursor-pointer text-sm font-medium text-destructive">Remover acesso</summary><form action={removeOrganizationMember} className="mt-3 flex flex-col gap-2"><input type="hidden" name="memberId" value={selectedManagedMember.id} /><Field><FieldLabel htmlFor="remove-confirmation">Digite REMOVER para confirmar</FieldLabel><Input id="remove-confirmation" name="confirmation" required /></Field><Button type="submit" variant="destructive"><Trash2 data-icon="inline-start" />Remover da organização</Button></form></details>
-                                    </div>
+                                    </div> : null}
                                 </div>
                             </CardContent>
                         </Card>
@@ -508,32 +535,22 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><Building2 aria-hidden="true" />Dados da organização</CardTitle>
                             <CardDescription>
-                                Classifique este workspace como individual ou empresa. O CNPJ é armazenado de forma protegida e apenas os quatro últimos dígitos ficam visíveis.
+                                Informe os dados da pessoa física ou jurídica. CPF e CNPJ são armazenados de forma protegida e apenas os quatro últimos dígitos ficam visíveis.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="min-w-0">
                             <form action={updateOrganizationIdentity}>
                                 <FieldGroup className="grid gap-3 lg:grid-cols-4 lg:items-end">
-                                    <Field>
-                                        <FieldLabel htmlFor="organization-kind">Cadastro</FieldLabel>
-                                        <NativeSelect id="organization-kind" name="kind" defaultValue={data.kind === "COMPANY" ? "COMPANY" : "INDIVIDUAL"}>
-                                            <NativeSelectOption value="INDIVIDUAL">Pessoa física</NativeSelectOption>
-                                            <NativeSelectOption value="COMPANY">Empresa</NativeSelectOption>
-                                        </NativeSelect>
-                                    </Field>
-                                    <Field>
-                                        <FieldLabel htmlFor="organization-legal-name">Razão social</FieldLabel>
-                                        <Input id="organization-legal-name" name="legalName" maxLength={120} defaultValue={data.legalName || ""} />
-                                    </Field>
-                                    <Field>
-                                        <FieldLabel htmlFor="organization-trade-name">Nome fantasia</FieldLabel>
-                                        <Input id="organization-trade-name" name="tradeName" maxLength={120} defaultValue={data.tradeName || ""} />
-                                    </Field>
-                                    <Field>
-                                        <FieldLabel htmlFor="organization-cnpj">CNPJ</FieldLabel>
-                                        <Input id="organization-cnpj" name="cnpj" inputMode="numeric" placeholder={data.cnpjLastFour ? `CNPJ cadastrado ••••${data.cnpjLastFour}` : "00.000.000/0000-00"} />
-                                        <FieldDescription>{data.cnpjLastFour ? "Deixe vazio para manter o CNPJ atual." : "Obrigatório para empresa."}</FieldDescription>
-                                    </Field>
+                                    <OrganizationIdentityFields
+                                        idPrefix="organization"
+                                        initialKind={data.kind === "COMPANY" ? "COMPANY" : "INDIVIDUAL"}
+                                        personName={data.name}
+                                        cpfLastFour={data.cpfLastFour}
+                                        legalName={data.legalName}
+                                        tradeName={data.tradeName}
+                                        cnpjLastFour={data.cnpjLastFour}
+                                        lockCompanyKind={data.kind === "COMPANY"}
+                                    />
                                     <Button type="submit" variant="outline"><Building2 data-icon="inline-start" />Salvar organização</Button>
                                 </FieldGroup>
                             </form>
@@ -587,7 +604,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                         required
                                         defaultValue={defaultNewUserProfile?.id || ""}
                                     >
-                                        {data.profiles.map((profile) => (
+                                        {assignableProfiles.map((profile) => (
                                             <NativeSelectOption key={profile.id} value={profile.id}>
                                                 {profile.name}
                                             </NativeSelectOption>
@@ -624,7 +641,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <Field>
                                         <FieldLabel htmlFor="existing-user-profile">Perfil</FieldLabel>
                                         <NativeSelect id="existing-user-profile" name="profileId" required defaultValue={defaultNewUserProfile?.id || ""}>
-                                            {data.profiles.map((profile) => (
+                                            {assignableProfiles.map((profile) => (
                                                 <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>
                                             ))}
                                         </NativeSelect>
@@ -654,7 +671,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {data.members.map((member) => (
+                                    {data.members.map((member) => {
+                                        const canManageMember = canManageOrganizationMember({
+                                            hasGlobalAuthority: canManageAllUsers,
+                                            sameOrganization: true,
+                                            isSelf: member.user.id === context.user.id,
+                                            actorRole: context.member.role,
+                                            targetRole: member.role,
+                                        });
+
+                                        return (
                                         <TableRow key={member.id}>
                                             <TableCell>
                                                 <div className="font-medium">{member.user.name || member.user.email}</div>
@@ -667,13 +693,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
-                                                <form action={updateMemberProfile} className="flex min-w-[18rem] items-center gap-2">
+                                                {canManageMember ? <form action={updateMemberProfile} className="flex min-w-[18rem] items-center gap-2">
                                                     <input type="hidden" name="memberId" value={member.id} />
                                                     <NativeSelect
                                                         name="profileId"
                                                         defaultValue={member.profileId || ""}
                                                     >
-                                                        {data.profiles.map((profile) => (
+                                                        {assignableProfiles.map((profile) => (
                                                             <NativeSelectOption key={profile.id} value={profile.id}>
                                                                 {profile.name}
                                                             </NativeSelectOption>
@@ -682,16 +708,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                                     <Button type="submit" variant="outline" size="sm">
                                                         Salvar
                                                     </Button>
-                                                </form>
+                                                </form> : <span className="text-sm text-muted-foreground">Protegido pela hierarquia</span>}
                                             </TableCell>
                                             <TableCell>
-                                                <div className="flex min-w-[11rem] flex-col gap-2">
+                                                {canManageMember ? <div className="flex min-w-[11rem] flex-col gap-2">
                                                     <form action={setOrganizationMemberActive}><input type="hidden" name="memberId" value={member.id} /><input type="hidden" name="active" value={member.active ? "false" : "true"} /><Button type="submit" variant="outline" size="sm"><Power data-icon="inline-start" />{member.active ? "Inativar" : "Ativar"}</Button></form>
-                                                    <details><summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary><div className="mt-2 flex flex-col gap-2"><form action={resetManagedUserPassword} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="password" type="password" minLength={10} required placeholder="Nova senha temporária" /><Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button></form><form action={removeOrganizationMember} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="confirmation" required placeholder="Digite REMOVER" /><Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button></form></div></details>
-                                                </div>
+                                                    <details><summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary><div className="mt-2 flex flex-col gap-2">{canResetManagedMemberPassword({ hasGlobalAuthority: canManageAllUsers, sameOrganization: true, isSelf: member.user.id === context.user.id, actorRole: context.member.role, targetRole: member.role }) ? <form action={resetManagedUserPassword} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="password" type="password" minLength={10} required placeholder="Nova senha temporária" /><Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button></form> : null}<form action={removeOrganizationMember} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="confirmation" required placeholder="Digite REMOVER" /><Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button></form></div></details>
+                                                </div> : <span className="text-sm text-muted-foreground">Sem ações disponíveis</span>}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                             {data.members.length === 0 ? (
@@ -752,7 +779,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                             {PROFILE_PERMISSION_MODULES.map((moduleKey) => {
                                                 const definition = getProfilePermissionDefinition(moduleKey);
                                                 if (!definition) return null;
-                                                const available = enabledOrganizationModules.has(moduleKey);
+                                                const available = enabledOrganizationModules.has(moduleKey) && (
+                                                    canManageAllUsers ||
+                                                    context.member.role !== "MEMBER" ||
+                                                    actorProfilePermissions.includes(moduleKey)
+                                                );
                                                 return <Field key={moduleKey} orientation="horizontal" data-disabled={!available}><Checkbox name="moduleKey" value={moduleKey} disabled={!available} /><FieldLabel>{definition.name}</FieldLabel></Field>;
                                             })}
                                         </FieldGroup>
@@ -808,7 +839,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {selectedProfile ? (
+                            {selectedProfile && canEditSelectedProfile ? (
                                 <form action={updateOrganizationProfile} className="flex flex-col gap-6">
                                     <input type="hidden" name="profileId" value={selectedProfile.id} />
                                     <input type="hidden" name="organizationId" value={profileData.id} />
@@ -885,7 +916,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     </div>
                                 </form>
                             ) : (
-                                <p className="text-sm text-muted-foreground">Nenhum perfil encontrado.</p>
+                                <p className="text-sm text-muted-foreground">
+                                    {selectedProfile ? "Este perfil está protegido pela sua hierarquia de acesso." : "Nenhum perfil encontrado."}
+                                </p>
                             )}
                         </CardContent>
                     </Card>

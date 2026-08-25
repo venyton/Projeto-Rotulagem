@@ -1,9 +1,12 @@
+import "server-only";
+
 import { OrganizationRole, Prisma, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, type SaaSContext } from "@/features/saas/services/entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
+import { isInternalMasterEmail } from "@/features/master/domain/master-identity";
 
 const DEFAULT_PROFILES = [
     {
@@ -44,7 +47,7 @@ export function canManageOrganizationSettings(context: NonNullable<SaaSContext>)
 }
 
 export function canManageAllOrganizationUsers(context: NonNullable<SaaSContext>) {
-    return canManageOrganizationSettings(context) && context.member.profile?.systemKey === "ADMIN";
+    return canManageOrganizationSettings(context) && isInternalMasterEmail(context.user.email);
 }
 
 export async function ensureOrganizationProfiles(organizationId: string) {
@@ -241,6 +244,7 @@ export async function getOrganizationSettingsData(organizationId: string) {
             id: true,
             name: true,
             kind: true,
+            cpfLastFour: true,
             legalName: true,
             tradeName: true,
             cnpjLastFour: true,
@@ -314,6 +318,7 @@ export async function listActiveOrganizationsForSettings(search?: string) {
                         { name: { contains: normalizedSearch, mode: "insensitive" } },
                         { legalName: { contains: normalizedSearch, mode: "insensitive" } },
                         { tradeName: { contains: normalizedSearch, mode: "insensitive" } },
+                        { cpfLastFour: { contains: normalizedSearch } },
                         { cnpjLastFour: { contains: normalizedSearch } },
                     ],
                 }
@@ -323,6 +328,7 @@ export async function listActiveOrganizationsForSettings(search?: string) {
             id: true,
             name: true,
             kind: true,
+            cpfLastFour: true,
             legalName: true,
             tradeName: true,
             cnpjLastFour: true,

@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { completeExportBodySchema, exportBodySchema, imageDataUrlSchema } from "./export-schema";
+import {
+  authoritativeCompleteExportRequestSchema,
+  authoritativeExportRequestSchema,
+  completeExportBodySchema,
+  exportBodySchema,
+  imageDataUrlSchema,
+} from "./export-schema";
 
 const validNutrients = {
   energy: 100,
@@ -58,4 +64,14 @@ test("image data URL aceita somente Base64 canônico", () => {
   assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YWJj").success, true);
   assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YWJj=").success, false);
   assert.equal(imageDataUrlSchema.safeParse("data:image/png;base64,YW\njj").success, false);
+});
+
+test("endpoint autoritativo aceita somente a referência da tabela persistida", () => {
+  const tableId = "clw3f9z5a0000qwerty123456";
+  assert.equal(authoritativeExportRequestSchema.safeParse({ tableId }).success, true);
+  assert.equal(authoritativeCompleteExportRequestSchema.safeParse({ tableId }).success, true);
+  assert.equal(authoritativeExportRequestSchema.safeParse({
+    tableId,
+    per100g: { ...validNutrients, sodium: 999_999 },
+  }).success, false);
 });

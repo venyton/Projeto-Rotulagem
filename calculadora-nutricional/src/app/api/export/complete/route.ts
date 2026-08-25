@@ -6,7 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
-import { completeExportBodySchema, imageDataUrlSchema } from "@/features/tables/domain/export-schema";
+import { authoritativeCompleteExportRequestSchema, imageDataUrlSchema } from "@/features/tables/domain/export-schema";
+import { loadAuthoritativeExportBody } from "@/features/tables/services/authoritative-export";
 import { generateExcelBuffer } from "@/app/api/export/excel/route";
 import {
   consumeRequestRateLimit,
@@ -93,8 +94,8 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const parsedBody = completeExportBodySchema.safeParse(await req.json().catch(() => null));
-    if (!parsedBody.success) {
+    const parsedRequest = authoritativeCompleteExportRequestSchema.safeParse(await req.json().catch(() => null));
+    if (!parsedRequest.success) {
       return NextResponse.json({ error: "Dados de exportação inválidos." }, { status: 400 });
     }
     const requestLimit = await consumeRequestRateLimit(
@@ -105,7 +106,11 @@ export async function POST(req: NextRequest) {
     if (!requestLimit.allowed) {
       return rateLimitResponse(requestLimit, { error: "Limite temporário de exportações atingido." });
     }
-    const body = parsedBody.data;
+    const authoritative = await loadAuthoritativeExportBody(parsedRequest.data.tableId, context.organization.id);
+    if (!authoritative.ok) {
+      return NextResponse.json({ error: authoritative.error }, { status: 400 });
+    }
+    const body = authoritative.data;
 
     const excelBuffer = await generateExcelBuffer(body);
     const isXlsxZip = excelBuffer.length > 4 && excelBuffer[0] === 0x50 && excelBuffer[1] === 0x4b;
@@ -116,7 +121,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const selectedModels = body.selectedTableTypes.slice(0, 12);
-    const imagesFromMap = body.imageDataUrls ?? null;
+    const imagesFromMap = parsedRequest.data.imageDataUrls ?? null;
 
     const safeTitle = sanitizeFileName(body.title || "tabela-nutricional") || "tabela-nutricional";
     const excelName = `tabela-${safeTitle}.xlsx`;
@@ -139,7 +144,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (appendedImageCount === 0) {
-      const parsedImage = parseImageDataUrl(body.imageDataUrl);
+      const parsedImage = parseImageDataUrl(parsedRequest.data.imageDataUrl);
       if (parsedImage) {
         const imageExt = parsedImage.extension === "jpeg" ? "jpg" : "png";
         zip.file(`${safeTitle}.${imageExt}`, parsedImage.buffer);

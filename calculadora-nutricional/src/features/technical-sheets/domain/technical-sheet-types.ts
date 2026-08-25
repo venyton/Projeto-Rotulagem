@@ -1,5 +1,6 @@
-import type { ReviewStatus } from "@prisma/client";
 import type { AnnexIiOptionalNutrientKey } from "./technical-sheet-nutrients";
+
+export type TechnicalSheetReviewStatus = "PENDING" | "APPROVED" | "REJECTED" | "NEEDS_REVIEW";
 
 export type TechnicalSheetActionState = {
   error?: string;
@@ -55,7 +56,7 @@ export type TechnicalSheetDocumentListItem = {
   confidence: number | null;
   errorMessage: string | null;
   createdAt: string;
-  reviewStatus: ReviewStatus | null;
+  reviewStatus: TechnicalSheetReviewStatus | null;
   productName: string | null;
 };
 
@@ -95,7 +96,7 @@ export type TechnicalSheetReviewData = {
     servingUnit: string | null;
     householdMeasure: string | null;
     servingsPerPackage: string | null;
-    reviewStatus: ReviewStatus;
+    reviewStatus: TechnicalSheetReviewStatus;
     confidence: number | null;
     approvedTargetId: string | null;
     fieldsForReview: string[];

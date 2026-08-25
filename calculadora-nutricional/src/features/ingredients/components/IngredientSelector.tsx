@@ -17,19 +17,19 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { Ingredient } from "@prisma/client"
 import { searchIngredients } from "@/features/ingredients/actions/custom-ingredient-actions";
+import type { IngredientDto } from "@/features/ingredients/domain/ingredient-dto";
 
-export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) => void }) {
+export function IngredientSelector({ onSelect }: { onSelect: (ing: IngredientDto) => void }) {
     const [open, setOpen] = React.useState(false)
     const [query, setQuery] = React.useState("")
-    const [results, setResults] = React.useState<Ingredient[]>([])
+    const [results, setResults] = React.useState<IngredientDto[]>([])
     const [loading, setLoading] = React.useState(false)
 
     const customResults = React.useMemo(
         () =>
             results.filter((item) => {
-                const origin = (item as Ingredient & { origin?: string }).origin
+                const origin = item.origin
                 return origin === "CUSTOM" || item.name.startsWith("[Meu]")
             }),
         [results]
@@ -38,7 +38,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
     const officialResults = React.useMemo(
         () =>
             results.filter((item) => {
-                const origin = (item as Ingredient & { origin?: string }).origin
+                const origin = item.origin
                 return origin !== "CUSTOM" && !item.name.startsWith("[Meu]")
             }),
         [results]
@@ -68,7 +68,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: Ingredient) =
         setQuery("")
     }, [open])
 
-    const handleSelect = (item: Ingredient) => {
+    const handleSelect = (item: IngredientDto) => {
         onSelect(item)
         setQuery("")
         setResults([])

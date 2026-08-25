@@ -20,8 +20,8 @@ type Ingredient = {
     fatTrans: number;
     fiber: number;
     sodium: number;
-    sugarTotal: number;
-    sugarAdded: number;
+    sugarTotal: number | null;
+    sugarAdded: number | null;
     [key: string]: unknown;
 }
 

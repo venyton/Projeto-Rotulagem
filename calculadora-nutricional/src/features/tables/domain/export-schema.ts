@@ -1,21 +1,10 @@
 import { z } from "zod";
 
 import { POPULATION_GROUPS, PopGroup } from "./constants";
+import { databaseIdSchema } from "../../../lib/validation/identifiers";
+import { EXPORT_SHEET_TYPES } from "./export-sheet-types";
 
-export const EXPORT_SHEET_TYPES = [
-  "VERT",
-  "HORIZ",
-  "VERT-QUEB",
-  "HORIZ-QUEB",
-  "LINEAR",
-  "AGREGADO",
-  "SIMPLIF",
-  "B2B",
-  "ADICAO",
-  "100",
-  "SUPLEM",
-  "SUPLEM-POP",
-] as const;
+export { EXPORT_SHEET_TYPES } from "./export-sheet-types";
 
 const populationGroupValues = Object.values(POPULATION_GROUPS) as [PopGroup, ...PopGroup[]];
 const finiteNutrient = z.number().finite().nonnegative().max(1_000_000).default(0);
@@ -106,6 +95,10 @@ const commonExportFields = {
 
 export const exportBodySchema = z.object(commonExportFields).strict();
 
+export const authoritativeExportRequestSchema = z.object({
+  tableId: databaseIdSchema,
+}).strict();
+
 export const imageDataUrlSchema = z
   .string()
   .max(12 * 1024 * 1024)
@@ -125,6 +118,19 @@ export const completeExportBodySchema = z
       .optional(),
   })
   .strict();
+
+export const authoritativeCompleteExportRequestSchema = z.object({
+  tableId: databaseIdSchema,
+  imageDataUrl: imageDataUrlSchema.optional(),
+  imageDataUrls: z
+    .record(z.string().trim().min(1).max(80), imageDataUrlSchema)
+    .refine((value) => Object.keys(value).length <= EXPORT_SHEET_TYPES.length, "Número máximo de imagens excedido")
+    .refine(
+      (value) => Object.values(value).reduce((total, image) => total + image.length, 0) <= 24 * 1024 * 1024,
+      "Tamanho total das imagens excedido"
+    )
+    .optional(),
+}).strict();
 
 export type ExportBodyInput = z.infer<typeof exportBodySchema>;
 export type CompleteExportBodyInput = z.infer<typeof completeExportBodySchema>;

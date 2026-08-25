@@ -30,12 +30,22 @@ type CustomNutrientsInput = Record<string, { value: number; unit: string }>;
 type IngredientFormData = Record<string, unknown> & {
     id?: string;
     name?: string;
-    customNutrients?: CustomNutrientsInput;
-    ingredientsText?: string;
-    allergensText?: string;
+    customNutrients?: unknown;
+    ingredientsText?: string | null;
+    allergensText?: string | null;
     containsGluten?: boolean | null;
-    glutenText?: string;
+    glutenText?: string | null;
 };
+
+function readInitialCustomNutrients(value: unknown): CustomNutrientsInput {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).flatMap(([name, raw]) => {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+        const item = raw as Record<string, unknown>;
+        if (typeof item.value !== "number" || !Number.isFinite(item.value) || typeof item.unit !== "string") return [];
+        return [[name, { value: item.value, unit: item.unit }]];
+    }));
+}
 
 const MAIN_NUTRIENTS: NutrientField[] = [
     { name: "energy", label: "Valor energético", unit: "kcal", required: true },
@@ -130,7 +140,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
 
     // Dynamic custom nutrients
     const [customNutrients, setCustomNutrients] = useState<Record<string, { value: number; unit: string }>>(
-        initialData?.customNutrients || {}
+        readInitialCustomNutrients(initialData?.customNutrients)
     );
     const [newCustomName, setNewCustomName] = useState("");
     const [newCustomValue, setNewCustomValue] = useState("");

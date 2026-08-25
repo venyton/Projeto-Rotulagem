@@ -11,6 +11,8 @@ import {
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+    buildAuthoritativeEnterpriseTable,
+    canSetEnterpriseApprovalStatus,
     calculateEnterpriseNutrients,
     getFrontWarnings,
     getNutritionLines,
@@ -23,7 +25,7 @@ import {
     type LegalLabelData,
 } from "@/features/enterprise/domain/enterprise";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
-import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { contextHasModuleAccess, ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isDatabaseId } from "@/lib/validation/identifiers";
 
@@ -47,10 +49,9 @@ export type SaveEnterpriseLabelProjectResult = {
 
 export type RecordEnterpriseExportInput = {
     projectId: string;
-    versionId?: string | null;
+    versionId: string;
     exportType: "PNG" | "JSON" | "GS1_DIGITAL_LINK";
     fileName?: string;
-    payload?: unknown;
 };
 
 const APPROVAL_TO_DB: Record<ApprovalStatus, EnterpriseApprovalStatus> = {
@@ -104,19 +105,16 @@ function hasSafeJsonSize(value: unknown, maxBytes: number) {
     }
 }
 
-function isSafeEnterpriseTable(table: unknown): table is EnterpriseTable {
+function isSafeEnterpriseTableDraft(table: unknown): table is EnterpriseTable {
     if (!table || typeof table !== "object" || Array.isArray(table)) return false;
     const value = table as EnterpriseTable;
-    if (!isSafeId(value.id) || typeof value.title !== "string" || value.title.trim().length < 1 || value.title.length > 160) return false;
+    if (typeof value.id !== "string" || value.id.length > 220 || typeof value.title !== "string" || value.title.trim().length < 1 || value.title.length > 160) return false;
     if (!Number.isFinite(value.portion) || value.portion <= 0 || value.portion > 10_000_000) return false;
     if (typeof value.uom !== "string" || value.uom.length > 20) return false;
     if (typeof value.householdMeasure !== "string" || value.householdMeasure.length > 160) return false;
-    if (!Array.isArray(value.items) || value.items.length > 200) return false;
-    return value.items.every((item) =>
-        item && typeof item.name === "string" && item.name.length <= 160 &&
-        [item.quantity, item.energy, item.carbs, item.protein, item.fatTotal, item.fatSat, item.fatTrans, item.fiber, item.sodium]
-            .every((number) => typeof number === "number" && Number.isFinite(number) && number >= 0 && number <= 1_000_000_000)
-    );
+    if (value.packageContent != null && (!Number.isFinite(value.packageContent) || value.packageContent <= 0 || value.packageContent > 10_000_000)) return false;
+    if (value.servingsPerPackage != null && (typeof value.servingsPerPackage !== "string" || value.servingsPerPackage.length > 100)) return false;
+    return Array.isArray(value.items) && value.items.length <= 200;
 }
 
 export async function saveEnterpriseLabelProject(
@@ -124,7 +122,7 @@ export async function saveEnterpriseLabelProject(
 ): Promise<SaveEnterpriseLabelProjectResult> {
     const user = await getCurrentUser();
     if (!user) return { error: "Não autorizado" };
-    if (!input || typeof input !== "object" || !isSafeId(input.baseTableId) || !isSafeEnterpriseTable(input.table)) {
+    if (!input || typeof input !== "object" || !isSafeId(input.baseTableId) || !isSafeEnterpriseTableDraft(input.table)) {
         return { error: "Dados do projeto inválidos." };
     }
     if (!hasSafeJsonSize(input, 1_000_000) || (input.notes?.length ?? 0) > 5_000) {
@@ -153,10 +151,44 @@ export async function saveEnterpriseLabelProject(
     if (!APPROVAL_TO_DB[input.approvalStatus]) {
         return { error: "Status de aprovação inválido." };
     }
+    if (!canSetEnterpriseApprovalStatus(
+        input.approvalStatus,
+        contextHasModuleAccess(context, SAAS_MODULES.SETTINGS),
+    )) {
+        return { error: "A aprovação para arte final exige permissão administrativa." };
+    }
 
     const baseTable = await prisma.generatedTable.findFirst({
         where: { id: input.baseTableId, organizationId: context.organization.id },
-        select: { id: true, title: true },
+        select: {
+            id: true,
+            title: true,
+            portion: true,
+            uom: true,
+            householdMeasure: true,
+            popGroup: true,
+            packageContent: true,
+            servingsPerPackage: true,
+            updatedAt: true,
+            items: {
+                orderBy: { id: "asc" },
+                select: {
+                    name: true,
+                    quantity: true,
+                    isAddedSugar: true,
+                    sugarAdded: true,
+                    energy: true,
+                    carbs: true,
+                    protein: true,
+                    fatTotal: true,
+                    fatSat: true,
+                    fatTrans: true,
+                    fiber: true,
+                    sodium: true,
+                    sugarTotal: true,
+                },
+            },
+        },
     });
 
     if (!baseTable) return { error: "Tabela base não encontrada ou sem permissão." };
@@ -165,11 +197,12 @@ export async function saveEnterpriseLabelProject(
         return { error: "Informe uma porção válida." };
     }
 
+    const authoritativeTable = buildAuthoritativeEnterpriseTable(baseTable, input.table);
     const status = APPROVAL_TO_DB[input.approvalStatus];
     const legalData = sanitizeLegalData(input.legalData);
-    const nutrition = calculateEnterpriseNutrients(input.table);
-    const validationSnapshot = validateEnterpriseTable(input.table, input.market, input.foodState, legalData);
-    const frontWarnings = getFrontWarnings(input.table, input.market, input.foodState);
+    const nutrition = calculateEnterpriseNutrients(authoritativeTable);
+    const validationSnapshot = validateEnterpriseTable(authoritativeTable, input.market, input.foodState, legalData);
+    const frontWarnings = getFrontWarnings(authoritativeTable, input.market, input.foodState);
     const project = await prisma.$transaction(async (tx) => {
         const savedProject = await tx.enterpriseLabelProject.upsert({
             where: {
@@ -183,12 +216,12 @@ export async function saveEnterpriseLabelProject(
                 userId: user.id,
                 organizationId: context.organization.id,
                 baseTableId: baseTable.id,
-                title: input.table.title,
+                title: authoritativeTable.title,
                 market: input.market,
                 status,
             },
             update: {
-                title: input.table.title,
+                title: authoritativeTable.title,
                 status,
             },
         });
@@ -204,15 +237,15 @@ export async function saveEnterpriseLabelProject(
                 userId: user.id,
                 baseTableId: baseTable.id,
                 version: (lastVersion._max.version || 0) + 1,
-                title: input.table.title,
+                title: authoritativeTable.title,
                 market: input.market,
                 foodState: input.foodState,
                 approvalStatus: status,
-                tableSnapshot: toJson(input.table),
+                tableSnapshot: toJson(authoritativeTable),
                 legalData: toJson(legalData),
                 nutritionSnapshot: toJson({
                     ...nutrition,
-                    marketLines: getNutritionLines(input.table, input.market),
+                    marketLines: getNutritionLines(authoritativeTable, input.market),
                 }),
                 validationSnapshot: toJson(validationSnapshot),
                 frontWarningsSnapshot: toJson(frontWarnings),
@@ -225,7 +258,7 @@ export async function saveEnterpriseLabelProject(
             data: {
                 currentVersionId: version.id,
                 status,
-                title: input.table.title,
+                title: authoritativeTable.title,
             },
         });
 
@@ -264,8 +297,8 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
     if (!input || !isSafeId(input.projectId) || !EXPORT_TO_DB[input.exportType]) {
         return { error: "Dados da exportação inválidos." };
     }
-    if (input.versionId && !isSafeId(input.versionId)) return { error: "Versão inválida." };
-    if ((input.fileName?.length ?? 0) > 180 || !hasSafeJsonSize(input.payload, 250_000)) {
+    if (!isSafeId(input.versionId)) return { error: "Versão inválida." };
+    if ((input.fileName?.length ?? 0) > 180) {
         return { error: "Metadados da exportação excedem o limite permitido." };
     }
 
@@ -287,27 +320,51 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
 
     const project = await prisma.enterpriseLabelProject.findFirst({
         where: { id: input.projectId, organizationId: context.organization.id },
-        select: { id: true },
+        select: {
+            id: true,
+            baseTableId: true,
+            title: true,
+            market: true,
+            currentVersionId: true,
+        },
     });
 
     if (!project) return { error: "Projeto Enterprise não encontrado." };
-
-    if (input.versionId) {
-        const version = await prisma.enterpriseLabelVersion.findFirst({
-            where: { id: input.versionId, projectId: project.id },
-            select: { id: true },
-        });
-        if (!version) return { error: "Versão Enterprise inválida." };
+    if (project.currentVersionId !== input.versionId) {
+        return { error: "Salve a versão atual antes de registrar a exportação." };
     }
+
+    const version = await prisma.enterpriseLabelVersion.findFirst({
+        where: { id: input.versionId, projectId: project.id },
+        select: {
+            id: true,
+            version: true,
+            title: true,
+            market: true,
+            foodState: true,
+            approvalStatus: true,
+        },
+    });
+    if (!version) return { error: "Versão Enterprise inválida." };
 
     await prisma.enterpriseExport.create({
         data: {
             projectId: project.id,
-            versionId: input.versionId || null,
+            versionId: version.id,
             userId: user.id,
             exportType: EXPORT_TO_DB[input.exportType],
             fileName: input.fileName?.trim() || null,
-            payload: input.payload === undefined ? undefined : toJson(input.payload),
+            payload: toJson({
+                source: "persisted_enterprise_version",
+                baseTableId: project.baseTableId,
+                projectTitle: project.title,
+                projectMarket: project.market,
+                version: version.version,
+                versionTitle: version.title,
+                versionMarket: version.market,
+                foodState: version.foodState,
+                approvalStatus: version.approvalStatus,
+            }),
         },
     });
 

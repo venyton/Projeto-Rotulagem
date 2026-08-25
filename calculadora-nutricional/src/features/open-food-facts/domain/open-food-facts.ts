@@ -1,4 +1,5 @@
-import type { Ingredient } from "@prisma/client";
+import type { IngredientDto } from "../../ingredients/domain/ingredient-dto";
+import { pickIngredientDto } from "../../ingredients/domain/ingredient-dto";
 
 import { normalizeIngredientSearchText } from "../../ingredients/domain/ingredient-search";
 import { barcodeSchema } from "../../../lib/validation/identifiers";
@@ -15,10 +16,10 @@ export type OpenFoodFactsProduct = {
     sourceUrl: string;
     completeness: "high" | "medium" | "low";
     missingNutrients: string[];
-    ingredient: Ingredient;
+    ingredient: IngredientDto;
 };
 
-export type OpenFoodFactsIngredientData = Omit<Ingredient, "id">;
+export type OpenFoodFactsIngredientData = Omit<IngredientDto, "id">;
 
 type RawOpenFoodFactsProduct = {
     code?: unknown;
@@ -103,7 +104,7 @@ function sodiumMg(nutriments: RawNutriments) {
     return saltGrams > 0 ? (saltGrams / 2.5) * 1000 : 0;
 }
 
-function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: string): Ingredient {
+function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: string): IngredientDto {
     const nutriments = raw.nutriments || {};
     const brands = asString(raw.brands);
     const sourceName = brands ? `${name} - ${brands}` : name;
@@ -160,9 +161,9 @@ function buildIngredient(raw: RawOpenFoodFactsProduct, code: string, name: strin
     };
 }
 
-function completenessFor(ingredient: Ingredient) {
+function completenessFor(ingredient: IngredientDto) {
     const missingNutrients = REQUIRED_NUTRIENTS
-        .filter(([key]) => Number(ingredient[key as keyof Ingredient] || 0) <= 0)
+        .filter(([key]) => Number(ingredient[key as keyof IngredientDto] || 0) <= 0)
         .map(([, label]) => label);
 
     if (missingNutrients.length <= 1) return { completeness: "high" as const, missingNutrients };
@@ -170,13 +171,13 @@ function completenessFor(ingredient: Ingredient) {
     return { completeness: "low" as const, missingNutrients };
 }
 
-export function ingredientToCacheData(ingredient: Ingredient): OpenFoodFactsIngredientData {
+export function ingredientToCacheData(ingredient: IngredientDto): OpenFoodFactsIngredientData {
     const { id: _id, ...data } = ingredient;
     void _id;
     return data;
 }
 
-export function productFromCachedIngredient(ingredient: Ingredient): OpenFoodFactsProduct | null {
+export function productFromCachedIngredient(ingredient: IngredientDto): OpenFoodFactsProduct | null {
     if (!ingredient.id.startsWith("off-")) return null;
     const code = ingredient.id.replace(/^off-/, "");
     if (!code) return null;
@@ -191,7 +192,7 @@ export function productFromCachedIngredient(ingredient: Ingredient): OpenFoodFac
         name: displayName || ingredient.name,
         sourceUrl: `https://world.openfoodfacts.org/product/${code}`,
         ...completeness,
-        ingredient,
+        ingredient: pickIngredientDto(ingredient),
     };
 }
 

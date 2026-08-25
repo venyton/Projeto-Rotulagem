@@ -8,11 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { MODULE_CATALOG, type SaaSModuleKey } from "@/features/saas/domain/modules";
 
-type ModuleGrant = {
-  moduleKey: SaaSModuleKey;
-  enabled: boolean;
-};
-
 type Member = {
   id: string;
   role: string;
@@ -21,7 +16,7 @@ type Member = {
     name: string | null;
     email: string;
   };
-  moduleGrants: ModuleGrant[];
+  effectiveModules: SaaSModuleKey[];
 };
 
 type Payload = {
@@ -93,7 +88,7 @@ export function ParticipantModuleManager() {
   return (
     <div className="grid gap-4">
       {payload.members.map((member) => {
-        const memberGrants = new Map(member.moduleGrants.map((grant) => [grant.moduleKey, grant.enabled]));
+        const effectiveModules = new Set(member.effectiveModules);
         return (
           <Card key={member.id} className="overflow-hidden">
             <CardHeader>
@@ -103,9 +98,7 @@ export function ParticipantModuleManager() {
             <CardContent className="grid gap-3 md:grid-cols-2">
               {MODULE_CATALOG.map((module) => {
                 const organizationHasModule = enabledOrganizationModules.has(module.key);
-                const enabled = member.role === "OWNER" || member.role === "ADMIN"
-                  ? organizationHasModule
-                  : Boolean(memberGrants.get(module.key));
+                const enabled = effectiveModules.has(module.key);
                 const key = `${member.id}:${module.key}`;
 
                 return (

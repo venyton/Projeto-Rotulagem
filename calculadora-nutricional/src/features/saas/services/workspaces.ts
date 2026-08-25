@@ -1,3 +1,5 @@
+import "server-only";
+
 import { randomBytes } from "node:crypto";
 
 import { OrganizationKind, OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";

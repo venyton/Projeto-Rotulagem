@@ -5,6 +5,7 @@ import { z } from "zod";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
+import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
 import {
   contextHasModuleAccess,
   getCurrentSaaSContext,
@@ -13,6 +14,7 @@ import {
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
 import { databaseIdSchema } from "@/lib/validation/identifiers";
+import { isProfilePermissionModule } from "@/features/settings/domain/profile-permissions";
 
 const moduleSchema = z.object({
   organizationMemberId: databaseIdSchema,
@@ -38,17 +40,42 @@ export async function GET() {
         id: true,
         role: true,
         active: true,
+        profileId: true,
         user: { select: { name: true, email: true } },
-        moduleGrants: { select: { moduleKey: true, enabled: true } },
+        profile: {
+          select: {
+            permissions: { select: { moduleKey: true, enabled: true } },
+          },
+        },
+        moduleGrants: { select: { moduleKey: true, enabled: true, expiresAt: true } },
       },
     }),
     prisma.organizationEntitlement.findMany({
       where: { organizationId: context.organization.id },
-      select: { moduleKey: true, enabled: true },
+      select: { moduleKey: true, enabled: true, expiresAt: true },
     }),
   ]);
 
-  return NextResponse.json({ members, organization: { entitlements } }, { headers: { "Cache-Control": "no-store" } });
+  const memberDtos = members.map((member) => ({
+    id: member.id,
+    role: member.role,
+    active: member.active,
+    user: member.user,
+    effectiveModules: ALL_SAAS_MODULES.filter((moduleKey) => hasEffectiveModuleAccess({
+      moduleKey,
+      organizationEntitlements: entitlements,
+      profilePermissions: member.profile?.permissions,
+      hasProfile: Boolean(member.profileId),
+      role: member.role,
+      memberGrants: member.moduleGrants,
+      profileControlledModules: isProfilePermissionModule(moduleKey) ? [moduleKey] : [],
+    })),
+  }));
+
+  return NextResponse.json(
+    { members: memberDtos, organization: { entitlements } },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function POST(request: NextRequest) {

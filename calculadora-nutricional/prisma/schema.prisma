@@ -137,6 +137,8 @@ model Organization {
   slug            String             @unique
   status          OrganizationStatus @default(ACTIVE)
   kind            OrganizationKind   @default(UNCLASSIFIED)
+  cpfHash         String?            @unique
+  cpfLastFour     String?
   cnpjHash        String?            @unique
   cnpjLastFour    String?
   legalName       String?

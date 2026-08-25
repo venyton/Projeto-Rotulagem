@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isSaaSModuleKey } from "@/features/saas/domain/modules";
-import { getCurrentSaaSContext } from "@/features/saas/services/entitlements";
+import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import {
     canManageAllOrganizationUsers,
@@ -21,12 +21,17 @@ import {
 } from "@/features/settings/services/organization-settings";
 import {
     hashBrazilianDocument,
-    isValidCpf,
-    isValidCnpj,
     lastFourDigits,
 } from "@/features/organizations/domain/brazilian-documents";
+import { validateOrganizationIdentity } from "@/features/organizations/domain/organization-identity";
+import { isValidCpf } from "@/features/organizations/domain/brazilian-documents";
 import { isValidEmail, normalizeEmail } from "@/lib/validation/contacts";
 import { isDatabaseId } from "@/lib/validation/identifiers";
+import { canResetManagedMemberPassword } from "@/features/settings/domain/credential-management";
+import {
+    canGrantManagedProfilePermissions,
+    canManageOrganizationMember,
+} from "@/features/settings/domain/credential-management";
 
 async function requireSettingsContext() {
     const context = await getCurrentSaaSContext();
@@ -44,6 +49,34 @@ async function canWriteSettings(userId: string) {
         getRequestRateLimit("workspaceWrites"),
     );
     return rateLimit.allowed;
+}
+
+function actorProfilePermissions(context: Awaited<ReturnType<typeof requireSettingsContext>>) {
+    return PROFILE_PERMISSION_MODULES.filter((moduleKey) => contextHasModuleAccess(context, moduleKey));
+}
+
+function canGrantProfilePermissions(
+    context: Awaited<ReturnType<typeof requireSettingsContext>>,
+    permissions: Array<{ moduleKey: PrismaSaaSModuleKey; enabled: boolean }>,
+) {
+    return canGrantManagedProfilePermissions({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        actorRole: context.member.role,
+        actorPermissions: actorProfilePermissions(context),
+        requestedPermissions: permissions.filter((permission) => permission.enabled).map((permission) => permission.moduleKey),
+    });
+}
+
+function canGrantSelectedModules(
+    context: Awaited<ReturnType<typeof requireSettingsContext>>,
+    selectedModules: ReadonlySet<string>,
+) {
+    return canGrantManagedProfilePermissions({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        actorRole: context.member.role,
+        actorPermissions: actorProfilePermissions(context),
+        requestedPermissions: [...selectedModules],
+    });
 }
 
 function redirectUserError(error: string): never {
@@ -106,24 +139,27 @@ export async function createManagedOrganization(formData: FormData) {
     if (!canManageAllOrganizationUsers(context)) redirectSettingsError("organizations", "forbidden");
     if (!await canWriteSettings(context.user.id)) redirectSettingsError("organizations", "rate_limit");
 
-    const kind = formData.get("kind") === "INDIVIDUAL" ? OrganizationKind.INDIVIDUAL : OrganizationKind.COMPANY;
-    const legalName = String(formData.get("legalName") || "").trim();
-    const tradeName = String(formData.get("tradeName") || "").trim();
-    const cnpj = String(formData.get("cnpj") || "").trim();
-    const organizationName = kind === OrganizationKind.COMPANY ? tradeName || legalName : tradeName || legalName;
+    const identity = validateOrganizationIdentity({
+        kind: formData.get("kind"),
+        personName: formData.get("personName"),
+        cpf: formData.get("cpf"),
+        legalName: formData.get("legalName"),
+        tradeName: formData.get("tradeName"),
+        cnpj: formData.get("cnpj"),
+    });
+    if (!identity.success) redirectSettingsError("organizations", identity.error);
 
-    if (!organizationName || organizationName.length > 120 || legalName.length > 120 || tradeName.length > 120) {
-        redirectSettingsError("organizations", "invalid");
-    }
-    if (kind === OrganizationKind.COMPANY && (!legalName || !cnpj || !isValidCnpj(cnpj))) {
-        redirectSettingsError("organizations", "company_identity");
-    }
-
+    const { personName, cpf, legalName, tradeName, cnpj } = identity.data;
+    const kind = identity.data.kind === "COMPANY" ? OrganizationKind.COMPANY : OrganizationKind.INDIVIDUAL;
+    const organizationName = kind === OrganizationKind.COMPANY ? tradeName || legalName : personName;
+    const cpfHash = kind === OrganizationKind.INDIVIDUAL ? hashBrazilianDocument("CPF", cpf) : null;
     const cnpjHash = kind === OrganizationKind.COMPANY ? hashBrazilianDocument("CNPJ", cnpj) : null;
-    if (cnpjHash) {
-        const existing = await prisma.organization.findUnique({ where: { cnpjHash }, select: { id: true } });
-        if (existing) redirectSettingsError("organizations", "cnpj_exists");
-    }
+    const [duplicateCpf, duplicateCnpj] = await Promise.all([
+        cpfHash ? prisma.organization.findUnique({ where: { cpfHash }, select: { id: true } }) : null,
+        cnpjHash ? prisma.organization.findUnique({ where: { cnpjHash }, select: { id: true } }) : null,
+    ]);
+    if (duplicateCpf) redirectSettingsError("organizations", "cpf_exists");
+    if (duplicateCnpj) redirectSettingsError("organizations", "cnpj_exists");
 
     const organization = await prisma.organization.create({
         data: {
@@ -131,6 +167,8 @@ export async function createManagedOrganization(formData: FormData) {
             name: organizationName,
             slug: await createUniqueOrganizationSlug(organizationName),
             kind,
+            cpfHash,
+            cpfLastFour: cpf ? lastFourDigits(cpf) : null,
             legalName: kind === OrganizationKind.COMPANY ? legalName : null,
             tradeName: kind === OrganizationKind.COMPANY ? tradeName || null : null,
             cnpjHash,
@@ -161,7 +199,7 @@ export async function createManagedOrganization(formData: FormData) {
             userId: context.user.id,
             action: "settings.organization.created",
             riskLevel: "INFO",
-            metadata: settingsAuditMetadata({ kind, hasCnpj: Boolean(cnpjHash) }),
+            metadata: settingsAuditMetadata({ kind, hasCpf: Boolean(cpfHash), hasCnpj: Boolean(cnpjHash) }),
         },
     });
 
@@ -204,12 +242,16 @@ export async function createOrganizationUser(formData: FormData) {
                 id: profileId,
                 organizationId,
             },
-            select: { id: true, name: true },
+            select: {
+                id: true,
+                name: true,
+                permissions: { select: { moduleKey: true, enabled: true } },
+            },
         }),
     ]);
 
     if (existingUser || existingCpf) redirectUserError("exists");
-    if (!profile) redirectUserError("profile");
+    if (!profile || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
 
     const hashedPassword = await hash(password, PASSWORD_HASH_ROUNDS);
 
@@ -270,11 +312,29 @@ export async function linkExistingOrganizationUser(formData: FormData) {
         prisma.user.findUnique({ where: { email }, select: { id: true, name: true } }),
         prisma.organizationProfile.findFirst({
             where: { id: profileId, organizationId },
-            select: { id: true, name: true },
+            select: {
+                id: true,
+                name: true,
+                permissions: { select: { moduleKey: true, enabled: true } },
+            },
         }),
     ]);
     if (!user) redirectUserError("not_found");
-    if (!profile) redirectUserError("profile");
+    if (!profile || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
+
+    const existingMembership = await prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId, userId: user.id } },
+        select: { id: true, role: true },
+    });
+    if (user.id === context.user.id || (existingMembership && !canManageOrganizationMember({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        sameOrganization: organizationId === context.organization.id,
+        isSelf: existingMembership.id === context.member.id,
+        actorRole: context.member.role,
+        targetRole: existingMembership.role,
+    }))) {
+        redirectUserError("forbidden");
+    }
 
     const member = await prisma.organizationMember.upsert({
         where: {
@@ -327,27 +387,47 @@ export async function updateOrganizationIdentity(formData: FormData) {
     const organizationId = await resolveManagedOrganizationId(context, formData.get("organizationId"));
     if (!organizationId) managementRedirect(tab, { settingsError: "organization" });
 
-    const kind = formData.get("kind") === "COMPANY" ? OrganizationKind.COMPANY : OrganizationKind.INDIVIDUAL;
-    const legalName = String(formData.get("legalName") || "").trim();
-    const tradeName = String(formData.get("tradeName") || "").trim();
-    const cnpj = String(formData.get("cnpj") || "").trim();
-    if (legalName.length > 120 || tradeName.length > 120) redirectSettingsError(tab, "invalid");
-
     const organization = await prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { kind: true, name: true, cnpjHash: true, cnpjLastFour: true },
+        select: {
+            kind: true,
+            name: true,
+            cpfHash: true,
+            cpfLastFour: true,
+            cnpjHash: true,
+            cnpjLastFour: true,
+        },
     });
     if (!organization) redirectSettingsError(tab, "invalid");
+    const identity = validateOrganizationIdentity({
+        kind: formData.get("kind"),
+        personName: formData.get("personName"),
+        cpf: formData.get("cpf"),
+        legalName: formData.get("legalName"),
+        tradeName: formData.get("tradeName"),
+        cnpj: formData.get("cnpj"),
+    }, {
+        hasCpf: Boolean(organization.cpfHash),
+        hasCnpj: Boolean(organization.cnpjHash),
+    });
+    if (!identity.success) redirectSettingsError(tab, identity.error);
+
+    const { personName, cpf, legalName, tradeName, cnpj } = identity.data;
+    const kind = identity.data.kind === "COMPANY" ? OrganizationKind.COMPANY : OrganizationKind.INDIVIDUAL;
     if (organization.kind === OrganizationKind.COMPANY && kind !== OrganizationKind.COMPANY) {
         redirectSettingsError(tab, "organization_kind");
     }
 
-    if (kind === OrganizationKind.COMPANY && (!legalName || (!cnpj && !organization.cnpjHash))) {
-        redirectSettingsError(tab, "company_identity");
+    const cpfHash = kind === OrganizationKind.INDIVIDUAL
+        ? cpf ? hashBrazilianDocument("CPF", cpf) : organization.cpfHash
+        : null;
+    const cnpjHash = kind === OrganizationKind.COMPANY
+        ? cnpj ? hashBrazilianDocument("CNPJ", cnpj) : organization.cnpjHash
+        : null;
+    if (cpfHash && cpfHash !== organization.cpfHash) {
+        const duplicate = await prisma.organization.findUnique({ where: { cpfHash }, select: { id: true } });
+        if (duplicate) redirectSettingsError(tab, "cpf_exists");
     }
-    if (cnpj && !isValidCnpj(cnpj)) redirectSettingsError(tab, "cnpj");
-
-    const cnpjHash = cnpj ? hashBrazilianDocument("CNPJ", cnpj) : organization.cnpjHash;
     if (cnpjHash && cnpjHash !== organization.cnpjHash) {
         const duplicate = await prisma.organization.findUnique({ where: { cnpjHash }, select: { id: true } });
         if (duplicate) redirectSettingsError(tab, "cnpj_exists");
@@ -357,7 +437,11 @@ export async function updateOrganizationIdentity(formData: FormData) {
         where: { id: organizationId },
         data: {
             kind,
-            name: kind === OrganizationKind.COMPANY ? tradeName || legalName : organization.name,
+            name: kind === OrganizationKind.COMPANY ? tradeName || legalName : personName,
+            cpfHash: kind === OrganizationKind.INDIVIDUAL ? cpfHash : null,
+            cpfLastFour: kind === OrganizationKind.INDIVIDUAL
+                ? cpf ? lastFourDigits(cpf) : organization.cpfLastFour
+                : null,
             legalName: kind === OrganizationKind.COMPANY ? legalName : null,
             tradeName: kind === OrganizationKind.COMPANY ? tradeName || null : null,
             cnpjHash: kind === OrganizationKind.COMPANY ? cnpjHash : null,
@@ -371,7 +455,7 @@ export async function updateOrganizationIdentity(formData: FormData) {
             userId: context.user.id,
             action: "settings.organization_identity.updated",
             riskLevel: "INFO",
-            metadata: settingsAuditMetadata({ kind, hasCnpj: Boolean(cnpjHash) }),
+            metadata: settingsAuditMetadata({ kind, hasCpf: Boolean(cpfHash), hasCnpj: Boolean(cnpjHash) }),
         },
     });
 
@@ -416,15 +500,22 @@ export async function updateMemberProfile(formData: FormData) {
             id: profileId,
             organizationId: targetMember.organizationId,
         },
-        select: { id: true, name: true },
+        select: {
+            id: true,
+            name: true,
+            permissions: { select: { moduleKey: true, enabled: true } },
+        },
     });
 
     if (!targetMember || !targetProfile) return;
-    if (
-        targetMember.role === OrganizationRole.OWNER &&
-        context.member.id !== targetMember.id &&
-        !canManageAllUsers
-    ) return;
+    if (!canManageOrganizationMember({
+        hasGlobalAuthority: canManageAllUsers,
+        sameOrganization: targetMember.organizationId === context.organization.id,
+        isSelf: targetMember.userId === context.user.id,
+        actorRole: context.member.role,
+        targetRole: targetMember.role,
+    })) return;
+    if (!canGrantProfilePermissions(context, targetProfile.permissions)) return;
 
     await prisma.organizationMember.update({
         where: { id: targetMember.id },
@@ -523,6 +614,15 @@ export async function resetManagedUserPassword(formData: FormData) {
 
     const member = await findManageableMember(context, formData.get("memberId"));
     if (!member) redirectSettingsError("users", "user_not_found");
+    if (!canResetManagedMemberPassword({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        sameOrganization: member.organizationId === context.organization.id,
+        isSelf: member.userId === context.user.id,
+        actorRole: context.member.role,
+        targetRole: member.role,
+    })) {
+        redirectSettingsError("users", "forbidden");
+    }
     const password = String(formData.get("password") || "");
     const passwordError = validatePasswordStrength(password, { email: member.user.email, name: member.user.name || undefined });
     if (passwordError) redirectSettingsError("users", "password");
@@ -556,7 +656,13 @@ export async function setOrganizationMemberActive(formData: FormData) {
     if (!member) redirectSettingsError("users", "user_not_found");
     const active = formData.get("active") === "true";
 
-    if (!active && (member.id === context.member.id || member.role === OrganizationRole.OWNER)) {
+    if (!canManageOrganizationMember({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        sameOrganization: member.organizationId === context.organization.id,
+        isSelf: member.userId === context.user.id,
+        actorRole: context.member.role,
+        targetRole: member.role,
+    })) {
         redirectSettingsError("users", "protected_member");
     }
 
@@ -581,7 +687,13 @@ export async function removeOrganizationMember(formData: FormData) {
     if (!await canWriteSettings(context.user.id)) redirectSettingsError("users", "rate_limit");
     const member = await findManageableMember(context, formData.get("memberId"));
     if (!member) redirectSettingsError("users", "user_not_found");
-    if (member.id === context.member.id || member.role === OrganizationRole.OWNER || formData.get("confirmation") !== "REMOVER") {
+    if (!canManageOrganizationMember({
+        hasGlobalAuthority: canManageAllOrganizationUsers(context),
+        sameOrganization: member.organizationId === context.organization.id,
+        isSelf: member.userId === context.user.id,
+        actorRole: context.member.role,
+        targetRole: member.role,
+    }) || formData.get("confirmation") !== "REMOVER") {
         redirectSettingsError("users", "protected_member");
     }
 
@@ -618,6 +730,7 @@ export async function createOrganizationProfile(formData: FormData) {
     );
 
     if (name.length < 2 || name.length > 60 || description.length > 500) return;
+    if (!canGrantSelectedModules(context, selectedModules)) redirectSettingsError(tab, "forbidden");
 
     if (scope === "GLOBAL") {
         if (!canManageAllOrganizationUsers(context)) redirectSettingsError(tab, "forbidden");
@@ -741,7 +854,13 @@ export async function updateOrganizationProfile(formData: FormData) {
                 id: profileId,
                 organizationId,
             },
-            select: { id: true, name: true, systemKey: true, globalTemplateId: true },
+            select: {
+                id: true,
+                name: true,
+                systemKey: true,
+                globalTemplateId: true,
+                permissions: { select: { moduleKey: true, enabled: true } },
+            },
         }),
         prisma.organizationProfile.findFirst({
             where: {
@@ -754,6 +873,15 @@ export async function updateOrganizationProfile(formData: FormData) {
     ]);
 
     if (!profile || duplicateProfile) return;
+    if (!canGrantProfilePermissions(context, profile.permissions)) redirectSettingsError(tab, "forbidden");
+
+    if (
+        (profile.systemKey === "OWNER" || profile.systemKey === "ADMIN") &&
+        context.member.role === OrganizationRole.MEMBER &&
+        !canManageAllOrganizationUsers(context)
+    ) {
+        redirectSettingsError(tab, "forbidden");
+    }
 
     if (profile.globalTemplateId) {
         if (!canManageAllOrganizationUsers(context)) redirectSettingsError(tab, "forbidden");
@@ -807,6 +935,7 @@ export async function updateOrganizationProfile(formData: FormData) {
     const effectiveSelectedModules = profile.systemKey === "ADMIN"
         ? new Set(PROFILE_PERMISSION_MODULES)
         : selectedModules;
+    if (!canGrantSelectedModules(context, effectiveSelectedModules)) redirectSettingsError(tab, "forbidden");
 
     await prisma.$transaction(async (tx) => {
         await tx.organizationProfile.update({

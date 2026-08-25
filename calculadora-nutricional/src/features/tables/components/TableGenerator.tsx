@@ -26,7 +26,7 @@ import {
     normalizePopulationGroupForScenario,
 } from "@/features/tables/domain/constants";
 import { checkFOP, inferFopFoodType, type FOPFoodType } from "@/features/tables/domain/anvisa";
-import { Ingredient } from "@prisma/client";
+import type { IngredientDto } from "@/features/ingredients/domain/ingredient-dto";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { renderElementAsSvg } from "@/lib/render-element-svg";
 import { normalizeLupaStyleConfig, type LupaStyleConfig } from "@/features/tables/domain/fop-lupa";
+import {
+    calculateServingsPerPackage,
+    getAvailableExportSheetTypes,
+    getComplianceProfileRules,
+    getRegulatoryComplianceWarnings,
+    shouldShowDailyValue,
+    type ComplianceProfile,
+    type FopReferenceMode,
+    type RegulatoryCategory,
+    type ServingsDeclarationMode,
+} from "@/features/tables/domain/regulatory-declarations";
+import {
+    formatUnitFraction,
+    getIndividualPackagePortion,
+} from "@/features/tables/domain/portion-declarations";
 
 type ExcelTableType =
     | "VERT"
@@ -109,18 +124,6 @@ type ExcelTableType =
 
 type ImageExportFormat = "png" | "jpeg" | "webp" | "svg";
 type RasterImageExportFormat = Exclude<ImageExportFormat, "svg">;
-type ServingsDeclarationMode = "auto" | "manual";
-type ComplianceProfile = "general" | "bottled-water" | "iodized-salt" | "flour" | "annex-xvi";
-type FopReferenceMode = "as-sold" | "prepared";
-type RegulatoryCategory =
-    | "general-food"
-    | "supplement"
-    | "special-purpose"
-    | "infant-formula"
-    | "enteral-formula"
-    | "metabolic-formula"
-    | "lactose-restriction"
-    | "hyposodium-salt";
 type ExtraConstituent = {
     id: string;
     name: string;
@@ -232,11 +235,6 @@ const CLAIM_STATUS_STYLES: Record<NutritionClaimStatus, { label: string; classNa
     },
 };
 
-const NO_DAILY_VALUE_CATEGORIES: RegulatoryCategory[] = [
-    "infant-formula",
-    "enteral-formula",
-    "metabolic-formula",
-];
 const INGREDIENT_QUANTITY_STEP = "0.0000001";
 const PANEL_CLASS = "app-panel";
 const PANEL_MUTED_CLASS = "app-panel-muted";
@@ -254,59 +252,6 @@ function normalizeText(value: string) {
 function parseDecimalInput(value: string) {
     const parsed = Number(value.trim().replace(",", "."));
     return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function gcd(a: number, b: number): number {
-    let x = Math.abs(a);
-    let y = Math.abs(b);
-
-    while (y) {
-        const next = x % y;
-        x = y;
-        y = next;
-    }
-
-    return x || 1;
-}
-
-function toScaledInteger(value: number) {
-    return Math.round(value * 10_000_000);
-}
-
-function formatUnitFraction(portion: number, unitWeight: number) {
-    if (portion <= 0 || unitWeight <= 0) return "";
-
-    let numerator = toScaledInteger(portion);
-    let denominator = toScaledInteger(unitWeight);
-    const divisor = gcd(numerator, denominator);
-    numerator = numerator / divisor;
-    denominator = denominator / divisor;
-
-    if (denominator === 1) {
-        return `${numerator} ${numerator === 1 ? "unidade" : "unidades"}`;
-    }
-
-    if (numerator > denominator) {
-        const whole = Math.floor(numerator / denominator);
-        const remainder = numerator % denominator;
-        return `${whole} ${remainder}/${denominator} unidade`;
-    }
-
-    return `${numerator}/${denominator} unidade`;
-}
-
-function getIndividualPackagePortion(referencePortion: number, packageContent: number) {
-    if (referencePortion <= 0 || packageContent <= 0) return null;
-
-    const useFullPackage = packageContent < referencePortion * 2;
-    const portion = useFullPackage ? packageContent : referencePortion;
-
-    return {
-        portion,
-        unitWeight: packageContent,
-        measure: formatUnitFraction(portion, packageContent),
-        useFullPackage,
-    };
 }
 
 function formatWeight(value: number) {
@@ -349,28 +294,6 @@ function toTableUiState(value: unknown): TableUiState {
     return value as TableUiState;
 }
 
-function calculateServingsPerPackage(portionSize: number, packageContent: number) {
-    const EPSILON = 1e-6;
-    if (portionSize <= 0 || packageContent <= 0) return "-";
-
-    const servings = packageContent / portionSize;
-    if (!Number.isFinite(servings) || servings <= EPSILON) return "-";
-
-    const rounded = Math.round(servings);
-    const isInteger = Math.abs(servings - rounded) <= EPSILON;
-
-    // RDC 429/2020 define embalagem individual como <= 2 porções.
-    if (isInteger) {
-        return rounded >= 3 ? String(rounded) : "-";
-    }
-
-    // IN 75/2020 Anexo VI: > 2 porções não inteiras deve ser expresso como "Cerca de N".
-    if (servings > 2 + EPSILON) {
-        return `Cerca de ${rounded}`;
-    }
-
-    return "-";
-}
 
 interface TableGeneratorProps {
     canUseOpenFoodFacts?: boolean;
@@ -644,11 +567,12 @@ export function TableGenerator({
         };
     }, [fopReferenceMode, preparedReference, result]);
 
-    const isExcludedFromRdc429 = complianceProfile === "bottled-water";
-    const isFopForbiddenByCategory = complianceProfile === "annex-xvi";
-    const requiresIodizedSaltStatement = complianceProfile === "iodized-salt";
-    const requiresFlourStatement = complianceProfile === "flour";
-    const showDailyValue = !NO_DAILY_VALUE_CATEGORIES.includes(regulatoryCategory);
+    const complianceRules = getComplianceProfileRules(complianceProfile);
+    const isExcludedFromRdc429 = complianceRules.excludedFromRdc429;
+    const isFopForbiddenByCategory = complianceRules.fopForbiddenByCategory;
+    const requiresIodizedSaltStatement = complianceRules.requiresIodizedSaltStatement;
+    const requiresFlourStatement = complianceRules.requiresFlourStatement;
+    const showDailyValue = shouldShowDailyValue(regulatoryCategory);
 
     const fopStatus = fopReference ? checkFOP(fopReference, fopFoodType) : null;
     const hasFopSeal = !!(fopStatus && (fopStatus.highSugar || fopStatus.highFat || fopStatus.highSodium));
@@ -697,74 +621,21 @@ export function TableGenerator({
     }, [aminoAcidNotApplicable, aminoAcidResults, fopStatus, portionSize, result]);
 
     const complianceWarnings = React.useMemo(() => {
-        if (!enableStrictCompliance) return [] as string[];
-        const warnings: string[] = [];
-
-        if (isExcludedFromRdc429) {
-            warnings.push("Produto marcado como água envasada: tabela/lupa da RDC 429/IN 75 não se aplica.");
-        }
-
-        if (isFopForbiddenByCategory) {
-            warnings.push("Categoria marcada como vedada no Anexo XVI: não exibir lupa frontal.");
-        }
-
-        if (fopReferenceMode === "prepared") {
-            warnings.push("Lupa está sendo calculada por alimento pronto para consumo (Art. 19, parágrafo único, RDC 429/2020).");
-        }
-
-        if (!showDailyValue) {
-            warnings.push("Categoria selecionada dispensa %VD: a tabela não deve declarar percentual de valores diários.");
-        }
-
-        if (regulatoryCategory === "supplement") {
-            warnings.push("Suplemento: a porção deve corresponder à quantidade diária recomendada para o grupo populacional indicado.");
-            warnings.push("Validar constituintes, limites mínimos/máximos, alegações e rotulagem complementar na IN 28/2018 e atualizações.");
-        }
-
-        if (regulatoryCategory === "lactose-restriction") {
-            warnings.push("Restrição de lactose: declarar lactose e galactose na tabela.");
-        }
-
-        if (regulatoryCategory === "hyposodium-salt") {
-            warnings.push("Sal hipossódico: declarar potássio na tabela.");
-        }
-
-        if (regulatoryCategory === "infant-formula") {
-            warnings.push("Fórmula infantil: declarar vitaminas/minerais e DHA, ARA, taurina, L-carnitina, nucleotídeos, FOS, GOS e outros nutrientes quando adicionados.");
-        }
-
-        if (regulatoryCategory === "enteral-formula") {
-            warnings.push("Nutrição enteral: declarar monoinsaturadas, poli-insaturadas, ômega 6, ômega 3, colesterol, vitaminas, minerais e nutrientes adicionados.");
-        }
-
-        if (regulatoryCategory === "metabolic-formula") {
-            warnings.push("Fórmula dietoterápica: declarar substâncias associadas ao erro inato do metabolismo indicado.");
-        }
-
-        if (servingsDeclarationMode === "manual" && servingsPerPackageManual.trim().length === 0) {
-            warnings.push("Declaração manual de porções por embalagem está vazia.");
-        }
-
-        if (requiresIodizedSaltStatement) {
-            warnings.push("Validar frase obrigatória de sal iodado próxima à tabela.");
-        }
-
-        if (requiresFlourStatement) {
-            warnings.push("Validar frase obrigatória de enriquecimento da farinha próxima à tabela.");
-        }
-
-        return warnings;
+        return getRegulatoryComplianceWarnings({
+            enabled: enableStrictCompliance,
+            complianceProfile,
+            fopReferenceMode,
+            category: regulatoryCategory,
+            servingsDeclarationMode,
+            manualServings: servingsPerPackageManual,
+        });
     }, [
         enableStrictCompliance,
-        isExcludedFromRdc429,
-        isFopForbiddenByCategory,
+        complianceProfile,
         fopReferenceMode,
-        showDailyValue,
         regulatoryCategory,
         servingsDeclarationMode,
         servingsPerPackageManual,
-        requiresIodizedSaltStatement,
-        requiresFlourStatement,
     ]);
     const imageExportTableTypes = React.useMemo(
         () => (selectedTableTypes.length > 0 ? selectedTableTypes : [previewTableType]),
@@ -776,19 +647,8 @@ export function TableGenerator({
     const [previewScale, setPreviewScale] = useState(1);
     const isExactHundredPortion = Math.abs(Number(portionSize) - 100) < 0.001;
     const availableTableOptionValues = React.useMemo(
-        () =>
-            EXCEL_TABLE_OPTIONS
-                .filter((item) => {
-                    if (isSupplement) {
-                        return SUPPLEMENT_TABLE_TYPES.includes(item.value);
-                    }
-                    if (item.value === "100") {
-                        return isExactHundredPortion;
-                    }
-                    return !SUPPLEMENT_TABLE_TYPES.includes(item.value);
-                })
-                .map((item) => item.value),
-        [isExactHundredPortion, isSupplement]
+        () => getAvailableExportSheetTypes(isSupplement, portionSize),
+        [isSupplement, portionSize]
     );
     const availableTableOptions = React.useMemo(
         () => EXCEL_TABLE_OPTIONS.filter((item) => availableTableOptionValues.includes(item.value)),
@@ -1022,7 +882,7 @@ export function TableGenerator({
         }
     };
 
-    const handleAddIngredient = (ing: Ingredient) => {
+    const handleAddIngredient = (ing: IngredientDto) => {
         setIngredients(prev => [
             ...prev,
             {
@@ -1033,7 +893,7 @@ export function TableGenerator({
         ]);
     };
 
-    const handleAddPreparationIngredient = (ing: Ingredient) => {
+    const handleAddPreparationIngredient = (ing: IngredientDto) => {
         setPreparationIngredients(prev => [
             ...prev,
             {
@@ -1785,6 +1645,9 @@ export function TableGenerator({
         const toastId = toast.loading("Gerando pacote completo...");
 
         try {
+            const savedId = await handleSave({ showSuccess: false });
+            if (!savedId) throw new Error("Salve uma tabela válida antes de exportar.");
+
             // 1. Get JSZip (dynamic import to avoid bundle issues)
             const JSZipModule = await import("jszip");
             const JSZip = JSZipModule.default;
@@ -1814,20 +1677,7 @@ export function TableGenerator({
             const excelResponse = await fetch("/api/export/excel", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title,
-                    per100g: result.per100g,
-                    perPortion: result.perPortion,
-                    portionSize,
-                    householdMeasure: householdMeasure || "medida caseira",
-                    popGroup,
-                    isSupplement,
-                    servingsPerPackage,
-                    selectedNutrients,
-                    extraConstituents,
-                    showDailyValue,
-                    selectedTableTypes,
-                }),
+                body: JSON.stringify({ tableId: savedId }),
             });
 
             if (!excelResponse.ok) throw new Error("Erro ao gerar planilha Excel.");

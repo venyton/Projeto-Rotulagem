@@ -6,6 +6,7 @@ import { Chrome, Facebook, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FieldSeparator } from "@/components/ui/field";
+import Link from "next/link";
 
 const providerLabels: Record<string, string> = {
   google: "Google",
@@ -53,6 +54,12 @@ export function ExternalAuthButtons({ actionLabel = "Entrar com", dividerLabel }
           </Button>
         );
       })}
+      <p className="px-1 text-center text-xs leading-5 text-muted-foreground">
+        Ao continuar com um provedor, você declara que leu e aceita os{" "}
+        <Link href="/termos-de-uso" target="_blank" className="underline underline-offset-4 hover:text-foreground">Termos de Uso</Link>
+        {" "}e a{" "}
+        <Link href="/politica-de-privacidade" target="_blank" className="underline underline-offset-4 hover:text-foreground">Política de Privacidade</Link>.
+      </p>
     </div>
   );
 }
