@@ -699,12 +699,13 @@ function FieldContainer({
 }) {
   return (
     <div
+      data-slot="field"
       className={`space-y-2 rounded-md p-2 transition-colors ${
         inReview ? "bg-red-50/60 ring-1 ring-red-200" : ""
       }`}
     >
       <div className="flex items-center gap-1.5">
-        <Label className={labelClass}>{label}</Label>
+        <Label data-slot="field-label" className={labelClass}>{label}</Label>
 
         {/* Help tooltip — always visible */}
         {helpText && <HelpTip>{helpText}</HelpTip>}

@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { InterfaceScaleControl } from "@/components/interface-scale-control";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -350,10 +349,10 @@ export default function ProfilePage() {
                                     {hasTwoFactorSetup && (
                                         <form action={confirmAction} className="space-y-4 border-t border-border/70 pt-5">
                                             <ActionMessage state={confirmState} />
-                                            <div className="space-y-2">
-                                                <Label htmlFor="confirmCurrentPassword">Senha atual</Label>
+                                            <Field>
+                                                <FieldLabel htmlFor="confirmCurrentPassword">Senha atual</FieldLabel>
                                                 <Input id="confirmCurrentPassword" name="confirmCurrentPassword" type="password" required />
-                                            </div>
+                                            </Field>
                                             <OtpField id="setupCode" name="setupCode" label="Código do aplicativo" />
                                             <Button type="submit" disabled={confirmPending} className="h-11 w-full">
                                                 {confirmPending ? <Spinner data-icon="inline-start" /> : <BadgeCheck data-icon="inline-start" />}
@@ -376,10 +375,10 @@ export default function ProfilePage() {
                                 <div className="p-6">
                                     <form action={disableAction} className="max-w-md space-y-4">
                                         <ActionMessage state={disableState} />
-                                        <div className="space-y-2">
-                                            <Label htmlFor="disableCurrentPassword">Senha atual</Label>
+                                        <Field>
+                                            <FieldLabel htmlFor="disableCurrentPassword">Senha atual</FieldLabel>
                                             <Input id="disableCurrentPassword" name="disableCurrentPassword" type="password" required />
-                                        </div>
+                                        </Field>
                                         <OtpField id="disableTwoFactorCode" name="disableTwoFactorCode" label="Código 2FA" />
                                         <Button type="submit" variant="destructive" disabled={disablePending} className="h-11 w-full">
                                             {disablePending && <Spinner data-icon="inline-start" />}

@@ -713,7 +713,29 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                             <TableCell>
                                                 {canManageMember ? <div className="flex min-w-[11rem] flex-col gap-2">
                                                     <form action={setOrganizationMemberActive}><input type="hidden" name="memberId" value={member.id} /><input type="hidden" name="active" value={member.active ? "false" : "true"} /><Button type="submit" variant="outline" size="sm"><Power data-icon="inline-start" />{member.active ? "Inativar" : "Ativar"}</Button></form>
-                                                    <details><summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary><div className="mt-2 flex flex-col gap-2">{canResetManagedMemberPassword({ hasGlobalAuthority: canManageAllUsers, sameOrganization: true, isSelf: member.user.id === context.user.id, actorRole: context.member.role, targetRole: member.role }) ? <form action={resetManagedUserPassword} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="password" type="password" minLength={10} required placeholder="Nova senha temporária" /><Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button></form> : null}<form action={removeOrganizationMember} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="confirmation" required placeholder="Digite REMOVER" /><Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button></form></div></details>
+                                                    <details>
+                                                        <summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary>
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            {canResetManagedMemberPassword({ hasGlobalAuthority: canManageAllUsers, sameOrganization: true, isSelf: member.user.id === context.user.id, actorRole: context.member.role, targetRole: member.role }) ? (
+                                                                <form action={resetManagedUserPassword} className="flex flex-col gap-2">
+                                                                    <input type="hidden" name="memberId" value={member.id} />
+                                                                    <Field className="gap-1.5">
+                                                                        <FieldLabel htmlFor={`member-password-${member.id}`}>Nova senha temporária</FieldLabel>
+                                                                        <Input id={`member-password-${member.id}`} name="password" type="password" minLength={10} required />
+                                                                    </Field>
+                                                                    <Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button>
+                                                                </form>
+                                                            ) : null}
+                                                            <form action={removeOrganizationMember} className="flex flex-col gap-2">
+                                                                <input type="hidden" name="memberId" value={member.id} />
+                                                                <Field className="gap-1.5">
+                                                                    <FieldLabel htmlFor={`member-removal-${member.id}`}>Digite REMOVER para confirmar</FieldLabel>
+                                                                    <Input id={`member-removal-${member.id}`} name="confirmation" required />
+                                                                </Field>
+                                                                <Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button>
+                                                            </form>
+                                                        </div>
+                                                    </details>
                                                 </div> : <span className="text-sm text-muted-foreground">Sem ações disponíveis</span>}
                                             </TableCell>
                                         </TableRow>
@@ -753,7 +775,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                         required
                                         minLength={2}
                                         maxLength={60}
-                                        placeholder="Nome do perfil"
+                                        placeholder="Nome do perfil *"
                                       />
                                     </Field>
                                     <Field>

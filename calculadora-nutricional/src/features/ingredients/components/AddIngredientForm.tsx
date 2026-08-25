@@ -224,7 +224,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                                 </Field>
 
                                 <h3 className="mt-4 border-b border-border/70 pb-2 text-sm font-semibold text-foreground">Macronutrientes (por 100g)</h3>
-                                <Alert><AlertDescription>Os campos obrigatórios estão marcados. Açúcares totais e adicionados podem ficar vazios se não declarados.</AlertDescription></Alert>
+                                <Alert><AlertDescription>Açúcares totais e adicionados podem ficar vazios se não declarados.</AlertDescription></Alert>
                                 <div className={nutrientGridClass}>
                                     {MAIN_NUTRIENTS.map(renderNutrientField)}
                                 </div>

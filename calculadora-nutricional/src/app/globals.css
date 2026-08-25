@@ -259,6 +259,49 @@
 }
 
 @layer components {
+  /* Required fields use one visual convention across every form. */
+  [data-slot="field"]:has(:is(input, textarea, select):required)
+    [data-slot="field-label"]::after,
+  label:has(> input:required) > span:last-child::after {
+    content: "*";
+    color: var(--destructive);
+    font-weight: 700;
+  }
+
+  [data-slot="field"]:has(:is(input, textarea, select):required)
+    [data-slot="field-label"]::after {
+    margin-inline-start: -0.375rem;
+  }
+
+  label:has(> input:required) > span:last-child::after {
+    margin-inline-start: 0.125rem;
+  }
+
+  /* Native validation stays quiet until the user interacts or submits. */
+  :is(
+    [data-slot="input"],
+    [data-slot="textarea"],
+    [data-slot="native-select"]
+  ):user-invalid {
+    border-color: var(--destructive);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+  }
+
+  [data-slot="input-group"]:has([data-slot="input-group-control"]:user-invalid) {
+    border-color: var(--destructive);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+  }
+
+  .soizi-input-otp:has([data-slot="input-otp"]:user-invalid)
+    [data-slot="input-otp-slot"] {
+    border-color: var(--destructive);
+  }
+
+  input[type="checkbox"]:user-invalid {
+    outline: 2px solid var(--destructive);
+    outline-offset: 2px;
+  }
+
   .site-header,
   .app-topbar {
     background-color: color-mix(in oklab, var(--header) 94%, transparent);

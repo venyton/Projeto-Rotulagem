@@ -71,9 +71,9 @@ export function OrganizationIdentityFields({
                             pattern="(?:[0-9]{11}|[0-9]{3}[.][0-9]{3}[.][0-9]{3}-[0-9]{2})"
                             placeholder={cpfLastFour ? `CPF cadastrado ••••${cpfLastFour}` : "000.000.000-00"}
                         />
-                        <FieldDescription>
-                            {cpfLastFour ? "Deixe vazio para manter o CPF cadastrado." : "Obrigatório para pessoa física."}
-                        </FieldDescription>
+                        {cpfLastFour ? (
+                            <FieldDescription>Deixe vazio para manter o CPF cadastrado.</FieldDescription>
+                        ) : null}
                     </Field>
                 </>
             ) : (
@@ -111,9 +111,9 @@ export function OrganizationIdentityFields({
                             pattern="(?:[0-9]{14}|[0-9]{2}[.][0-9]{3}[.][0-9]{3}/[0-9]{4}-[0-9]{2})"
                             placeholder={cnpjLastFour ? `CNPJ cadastrado ••••${cnpjLastFour}` : "00.000.000/0000-00"}
                         />
-                        <FieldDescription>
-                            {cnpjLastFour ? "Deixe vazio para manter o CNPJ cadastrado." : "Obrigatório para pessoa jurídica."}
-                        </FieldDescription>
+                        {cnpjLastFour ? (
+                            <FieldDescription>Deixe vazio para manter o CNPJ cadastrado.</FieldDescription>
+                        ) : null}
                     </Field>
                 </>
             )}
