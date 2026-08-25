@@ -1,12 +1,18 @@
-# Indice da documentacao
+# Índice da documentação
 
-Atualizado em: 30/07/2026.
+Atualizado em: 25/08/2026.
 
 ## Leitura principal
 
-- `system/documentacao_completa_sistema.md`: mapa geral do produto, fluxos, banco, paginas, APIs e pontos de atencao.
+- `system/documentacao_completa_sistema.md`: documento canônico da arquitetura atual; cobre produto, stack e versões, árvore comentada, camadas, páginas, APIs, 26 modelos, fluxos, cálculo, frontend, segurança, integrações, operação, CI, exemplos de código, decisões e dívidas conhecidas.
+- `security-business-rules-audit-2026-08-24.md`: auditoria recente das fronteiras de autoridade entre navegador, servidor e banco.
 - `architecture/estrutura-do-projeto.md`: estrutura atual das pastas e responsabilidades.
 - `architecture/organizacao-aplicada-e-justificativa.md`: por que a organizacao foi aplicada desse jeito.
+
+> Em caso de conflito sobre o estado atual, prevalecem o código, o schema Prisma e
+> `system/documentacao_completa_sistema.md`. Alguns documentos arquiteturais mais
+> antigos preservam contexto histórico, inclusive referências a billing e
+> marketing que não fazem parte do runtime atual.
 
 ## Operacao
 
