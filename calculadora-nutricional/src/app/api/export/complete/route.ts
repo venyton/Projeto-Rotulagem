@@ -15,6 +15,7 @@ import {
   rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
 import { getRuntimeRequestBodyLimitBytes, getRuntimeResponseBodyLimitBytes } from "@/lib/security/request-body-limit";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 
 export const runtime = "nodejs";
 
@@ -79,8 +80,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    const requestBodyLimit = getRuntimeRequestBodyLimitBytes(25);
     const contentLength = Number(req.headers.get("content-length") || 0);
-    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > getRuntimeRequestBodyLimitBytes(25)) {
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > requestBodyLimit) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
     }
 
@@ -94,7 +96,14 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const parsedRequest = authoritativeCompleteExportRequestSchema.safeParse(await req.json().catch(() => null));
+    const requestBody = await readBoundedJsonRequest(req, requestBodyLimit);
+    if (!requestBody.ok) {
+      return NextResponse.json(
+        { error: "Payload de exportação inválido." },
+        { status: requestBody.error === "TOO_LARGE" ? 413 : 400 },
+      );
+    }
+    const parsedRequest = authoritativeCompleteExportRequestSchema.safeParse(requestBody.value);
     if (!parsedRequest.success) {
       return NextResponse.json({ error: "Dados de exportação inválidos." }, { status: 400 });
     }

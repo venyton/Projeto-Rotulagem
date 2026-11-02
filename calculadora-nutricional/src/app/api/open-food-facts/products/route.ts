@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logEvent } from "@/lib/observability/logger";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 import {
     ingredientToCacheData,
     productFromCachedIngredient,
@@ -159,12 +160,15 @@ export async function POST(request: NextRequest) {
         throw error;
     }
 
-    const contentLength = Number(request.headers.get("content-length") || 0);
-    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 4096) {
-        return json({ product: null, error: "Solicitação inválida." }, 413);
+    const body = await readBoundedJsonRequest(request, 4096);
+    if (!body.ok) {
+        return json(
+            { product: null, error: "Solicitação inválida." },
+            body.error === "TOO_LARGE" ? 413 : 400,
+        );
     }
 
-    const parsedBody = importBodySchema.safeParse(await request.json().catch(() => null));
+    const parsedBody = importBodySchema.safeParse(body.value);
     if (!parsedBody.success) {
         return json({ product: null, error: "Código de barras inválido." }, 400);
     }

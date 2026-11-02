@@ -14,6 +14,7 @@ import {
   consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 import { getClientAddress, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
 import { passwordResetTokenSchema } from "@/lib/validation/identifiers";
 
@@ -33,12 +34,12 @@ export async function POST(request: NextRequest) {
   const originError = rejectCrossOriginRequest(request);
   if (originError) return originError;
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (!Number.isFinite(contentLength) || contentLength > 4096) {
+  const body = await readBoundedJsonRequest(request, 4096);
+  if (!body.ok) {
     return json({ error: "Solicitação inválida." }, 400);
   }
 
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = requestSchema.safeParse(body.value);
   if (!parsed.success) return json({ error: "Token inválido ou expirado." }, 400);
 
   const hashedToken = createHash("sha256").update(parsed.data.token).digest("hex");

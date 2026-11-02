@@ -24,6 +24,7 @@ import {
   rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
 import { getRuntimeRequestBodyLimitBytes, getRuntimeResponseBodyLimitBytes } from "@/lib/security/request-body-limit";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 
 type SheetType = (typeof EXPORT_SHEET_TYPES)[number];
 
@@ -561,8 +562,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    const requestBodyLimit = getRuntimeRequestBodyLimitBytes(2);
     const contentLength = Number(req.headers.get("content-length") || 0);
-    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > getRuntimeRequestBodyLimitBytes(2)) {
+    if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > requestBodyLimit) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 413 });
     }
 
@@ -576,7 +578,14 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    const parsedRequest = authoritativeExportRequestSchema.safeParse(await req.json().catch(() => null));
+    const requestBody = await readBoundedJsonRequest(req, requestBodyLimit);
+    if (!requestBody.ok) {
+      return NextResponse.json(
+        { error: "Payload de exportação inválido." },
+        { status: requestBody.error === "TOO_LARGE" ? 413 : 400 },
+      );
+    }
+    const parsedRequest = authoritativeExportRequestSchema.safeParse(requestBody.value);
     if (!parsedRequest.success) {
       return NextResponse.json({ error: "Payload de exportação inválido." }, { status: 400 });
     }

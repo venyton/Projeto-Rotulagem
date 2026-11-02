@@ -25,9 +25,8 @@ export default async function proxy(request: NextRequest) {
     if (process.env.NODE_ENV === "production" && (!authSecret || authSecret.length < 32)) {
       return new NextResponse("Serviço indisponível", { status: 503 });
     }
-    const secureCookie = process.env.SESSION_COOKIE_SECURE
-      ? process.env.SESSION_COOKIE_SECURE === "true"
-      : process.env.NODE_ENV === "production";
+    const secureCookie = process.env.NODE_ENV === "production"
+      || process.env.SESSION_COOKIE_SECURE === "true";
     const token = await getToken({
       req: request,
       secret: authSecret,
