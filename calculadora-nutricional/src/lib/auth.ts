@@ -14,14 +14,16 @@ import {
     consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
 import { getClientAddress, getRequestRateLimit } from "@/lib/security/request-rate-limit";
-import { decryptTotpSecret, verifyTotpCode } from "@/lib/security/totp";
+import { readBoundedBytesResponse } from "@/lib/security/request-body";
+import { decryptTotpSecret, verifyTotpCodeWithReplay } from "@/lib/security/totp";
 import { MAX_PASSWORD_LENGTH } from "@/lib/security/password";
 import {
     ensureDefaultWorkspaceForUser,
     ensureOrganizationEntitlementsForUser,
 } from "@/features/saas/services/workspaces";
 import { logEvent } from "@/lib/observability/logger";
-import { normalizeEmail } from "@/lib/validation/contacts";
+import { emailSchema, normalizeEmail } from "@/lib/validation/contacts";
+import { verifiedOAuthEmail } from "@/lib/security/oauth-identity";
 import { LEGAL_DOCUMENT_VERSION } from "@/lib/legal";
 
 const DUMMY_PASSWORD_HASH = "$2b$10$E/sb7/5hCDw.Gg9UVayjV.VQLXXbbHDTd8N9Ste5adR46HA8QUsKy";
@@ -29,9 +31,8 @@ const authSecret = process.env.NEXTAUTH_SECRET;
 if (process.env.NODE_ENV === "production" && (!authSecret || authSecret.length < 32)) {
     throw new Error("NEXTAUTH_SECRET deve ter pelo menos 32 caracteres em produção.");
 }
-const useSecureCookies = process.env.SESSION_COOKIE_SECURE
-    ? process.env.SESSION_COOKIE_SECURE === "true"
-    : process.env.NODE_ENV === "production";
+const useSecureCookies = process.env.NODE_ENV === "production"
+    || process.env.SESSION_COOKIE_SECURE === "true";
 
 function configuredOAuthProviders() {
     const providers = [];
@@ -57,6 +58,31 @@ function configuredOAuthProviders() {
             clientId: microsoftClientId,
             clientSecret: microsoftClientSecret,
             tenantId: process.env.MICROSOFT_ENTRA_TENANT_ID || "common",
+            // Preserve the optional avatar while bounding the fixed Graph request.
+            profile: async (profile, tokens) => {
+                let image: string | null = null;
+                try {
+                    const response = await fetch("https://graph.microsoft.com/v1.0/me/photos/48x48/$value", {
+                        headers: { Authorization: `Bearer ${tokens.access_token}` },
+                        redirect: "error",
+                        signal: AbortSignal.timeout(2_500),
+                    });
+                    const mediaType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+                    if (response.ok && mediaType === "image/jpeg") {
+                        const photo = await readBoundedBytesResponse(response, 64 * 1024);
+                        if (photo.ok) image = `data:image/jpeg;base64,${Buffer.from(photo.value).toString("base64")}`;
+                    }
+                } catch {
+                    // The photo is optional; network failure must not block login.
+                }
+
+                return {
+                    id: profile.sub,
+                    name: profile.name,
+                    email: profile.email,
+                    image,
+                };
+            },
         }));
     }
 
@@ -143,6 +169,7 @@ export const authOptions: NextAuthOptions = {
                     }
 
                     if (!user.password) {
+                        await compare(password, DUMMY_PASSWORD_HASH);
                         recordLoginFailure(rateLimitKey);
                         return null;
                     }
@@ -168,17 +195,34 @@ export const authOptions: NextAuthOptions = {
                         }
 
                         const secret = decryptTotpSecret(user.twoFactorSecret);
-                        const isTwoFactorValid = await verifyTotpCode(secret, twoFactorCode);
+                        const twoFactorResult = await verifyTotpCodeWithReplay(
+                            secret,
+                            twoFactorCode,
+                            user.twoFactorLastUsedStep,
+                        );
 
-                        if (!isTwoFactorValid) {
+                        if (!twoFactorResult.valid) {
                             recordLoginFailure(rateLimitKey);
                             throw new Error("2FA_INVALID");
                         }
 
-                        await prisma.user.update({
-                            where: { id: user.id },
-                            data: { twoFactorLastUsedAt: new Date() },
+                        const claimedTimeStep = await prisma.user.updateMany({
+                            where: {
+                                id: user.id,
+                                OR: [
+                                    { twoFactorLastUsedStep: null },
+                                    { twoFactorLastUsedStep: { lt: twoFactorResult.timeStep } },
+                                ],
+                            },
+                            data: {
+                                twoFactorLastUsedAt: new Date(),
+                                twoFactorLastUsedStep: twoFactorResult.timeStep,
+                            },
                         });
+                        if (claimedTimeStep.count !== 1) {
+                            recordLoginFailure(rateLimitKey);
+                            throw new Error("2FA_INVALID");
+                        }
                     }
 
                     clearLoginFailures(rateLimitKey);
@@ -215,55 +259,94 @@ export const authOptions: NextAuthOptions = {
         async signIn({ user, account, profile }) {
             if (!account || account.provider === "credentials") return true;
 
-            const email = normalizeEmail(user.email || (profile as { email?: string } | undefined)?.email || "");
-            if (!email) return false;
+            const providerAccountId = account.providerAccountId.trim();
+            if (!providerAccountId || providerAccountId.length > 255) return false;
 
-            const acceptedAt = new Date();
-            let dbUser = await prisma.user.upsert({
-                where: { email },
-                create: {
-                    email,
-                    name: user.name || email.split("@")[0],
-                    password: null,
-                    termsAcceptedAt: acceptedAt,
-                    privacyAcceptedAt: acceptedAt,
-                    legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
+            const identity = await prisma.externalIdentity.findUnique({
+                where: {
+                    provider_providerAccountId: {
+                        provider: account.provider,
+                        providerAccountId,
+                    },
                 },
-                update: {
-                    name: user.name || undefined,
-                },
-                select: {
-                    id: true,
-                    email: true,
-                    name: true,
-                    termsAcceptedAt: true,
-                    privacyAcceptedAt: true,
-                    legalDocumentVersion: true,
-                },
+                select: { userId: true },
             });
+            let dbUser = identity
+                ? await prisma.user.findUnique({
+                    where: { id: identity.userId },
+                    select: { id: true, email: true, twoFactorEnabled: true },
+                })
+                : null;
 
-            if (
-                !dbUser.termsAcceptedAt ||
-                !dbUser.privacyAcceptedAt ||
-                dbUser.legalDocumentVersion !== LEGAL_DOCUMENT_VERSION
-            ) {
-                dbUser = await prisma.user.update({
-                    where: { id: dbUser.id },
-                    data: {
-                        termsAcceptedAt: acceptedAt,
-                        privacyAcceptedAt: acceptedAt,
-                        legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
-                    },
-                    select: {
-                        id: true,
-                        email: true,
-                        name: true,
-                        termsAcceptedAt: true,
-                        privacyAcceptedAt: true,
-                        legalDocumentVersion: true,
-                    },
+            if (!identity) {
+                const verifiedEmail = emailSchema.safeParse(
+                    verifiedOAuthEmail(profile, user.email) ?? "",
+                );
+
+                // Only link an unknown provider identity by email when the
+                // provider explicitly asserts that the address is verified.
+                if (!verifiedEmail.success) return false;
+
+                const email = normalizeEmail(verifiedEmail.data);
+                dbUser = await prisma.user.findUnique({
+                    where: { email },
+                    select: { id: true, email: true, twoFactorEnabled: true },
                 });
+
+                if (dbUser?.twoFactorEnabled) return false;
+
+                if (!dbUser) {
+                    const acceptedAt = new Date();
+                    try {
+                        dbUser = await prisma.user.create({
+                            data: {
+                                email,
+                                name: user.name || email.split("@")[0],
+                                password: null,
+                                termsAcceptedAt: acceptedAt,
+                                privacyAcceptedAt: acceptedAt,
+                                legalDocumentVersion: LEGAL_DOCUMENT_VERSION,
+                            },
+                            select: { id: true, email: true, twoFactorEnabled: true },
+                        });
+                    } catch {
+                        // A concurrent verified sign-in may have created this user.
+                        dbUser = await prisma.user.findUnique({
+                            where: { email },
+                            select: { id: true, email: true, twoFactorEnabled: true },
+                        });
+                    }
+                }
+
+                if (!dbUser || dbUser.twoFactorEnabled) return false;
+
+                try {
+                    await prisma.externalIdentity.create({
+                        data: {
+                            provider: account.provider,
+                            providerAccountId,
+                            userId: dbUser.id,
+                        },
+                    });
+                } catch {
+                    // Only continue if a concurrent callback linked this exact
+                    // provider identity to the same account.
+                    const concurrentIdentity = await prisma.externalIdentity.findUnique({
+                        where: {
+                            provider_providerAccountId: {
+                                provider: account.provider,
+                                providerAccountId,
+                            },
+                        },
+                        select: { userId: true },
+                    });
+                    if (concurrentIdentity?.userId !== dbUser.id) return false;
+                }
             }
+
+            // Credentials enforces TOTP in authorize(); OAuth has no equivalent
+            // step-up flow and must not bypass a user's enabled second factor.
+            if (!dbUser || dbUser.twoFactorEnabled) return false;
 
             await ensureDefaultWorkspaceForUser(dbUser);
             await ensureOrganizationEntitlementsForUser(dbUser.id);
