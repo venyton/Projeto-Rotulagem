@@ -309,7 +309,7 @@ export function TechnicalSheetExtractionReview({
                 helpText={NUTRIENT_HELP[field.key]}
                 inReview={isFieldInReview(field.key)}
                 reviewExplanation={getReviewExplanation(field.key)}
-                labelClass="text-[10px] text-muted-foreground uppercase tracking-wider"
+                labelClass="type-caption text-muted-foreground uppercase tracking-wider"
               >
                 <Input
                   name={field.key}
@@ -321,7 +321,7 @@ export function TechnicalSheetExtractionReview({
                   onChange={() => handleFieldChange(field.key)}
                   className={
                     isFieldInReview(field.key)
-                      ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]"
+                      ? "border-destructive ring-1 ring-destructive/25"
                       : ""
                   }
                 />
@@ -476,7 +476,7 @@ export function TechnicalSheetExtractionReview({
                   <dl className="flex flex-col gap-2 text-sm">
                     {group.items.map((entry) => (
                       <div key={`${group.title}-${entry.label}`}>
-                        <dt className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        <dt className="type-caption text-muted-foreground uppercase tracking-wider">
                           {entry.label}
                         </dt>
                         <dd className="whitespace-pre-wrap">{entry.value || "-"}</dd>
@@ -584,7 +584,7 @@ function OptionalNutrientInput({
       helpText={FIELD_HELP.annexIiOptional}
       inReview={inReview}
       reviewExplanation={reviewExplanation}
-      labelClass="text-[10px] text-muted-foreground uppercase tracking-wider"
+      labelClass="type-caption text-muted-foreground uppercase tracking-wider"
     >
       <Input
         name={field.key}
@@ -594,7 +594,7 @@ function OptionalNutrientInput({
         placeholder={nutrientUnit(data, field.key, field.unit)}
         onChange={onChange}
         className={
-          inReview ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]" : ""
+          inReview ? "border-destructive ring-1 ring-destructive/25" : ""
         }
       />
     </FieldContainer>
@@ -701,7 +701,7 @@ function FieldContainer({
     <div
       data-slot="field"
       className={`space-y-2 rounded-md p-2 transition-colors ${
-        inReview ? "bg-red-50/60 ring-1 ring-red-200" : ""
+        inReview ? "bg-destructive-subtle ring-1 ring-destructive-border" : ""
       }`}
     >
       <div className="flex items-center gap-1.5">
@@ -755,7 +755,7 @@ function EditableField({
         required={required}
         onChange={onChange}
         className={
-          inReview ? "border-red-500 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]" : ""
+          inReview ? "border-destructive ring-1 ring-destructive/25" : ""
         }
       />
     </FieldContainer>

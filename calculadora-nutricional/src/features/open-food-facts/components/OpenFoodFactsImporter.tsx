@@ -31,9 +31,9 @@ const completenessLabel = {
 } as const;
 
 const completenessClass = {
-    high: "text-emerald-700 dark:text-emerald-300",
-    medium: "text-amber-700 dark:text-amber-300",
-    low: "text-red-700 dark:text-red-300",
+    high: "text-success",
+    medium: "text-warning",
+    low: "text-destructive",
 } as const;
 
 function nutrientSummary(product: OpenFoodFactsProduct) {
@@ -104,9 +104,9 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
     }
 
     return (
-        <section className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3 dark:border-emerald-900/70 dark:bg-emerald-950/20">
+        <section className="rounded-lg border border-information-border bg-information-subtle p-3">
             <div className="mb-3 flex items-start gap-2">
-                <div className="mt-0.5 rounded-md bg-emerald-600 p-1.5 text-white">
+                <div className="mt-0.5 rounded-md bg-information p-1.5 text-primary-foreground">
                     <Barcode className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
@@ -122,7 +122,7 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Ex: 3017620422003 ou Nutella"
-                    className="h-10 bg-background"
+                    className="h-10"
                 />
                 <Button type="submit" disabled={!canSearch} className="h-10 shrink-0">
                     <Search className="h-4 w-4" />
@@ -131,14 +131,14 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
             </form>
 
             {error && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive-border bg-destructive-subtle px-3 py-2 text-xs text-destructive">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     {error}
                 </div>
             )}
 
             {!loading && !error && lastQuery && products.length === 0 && (
-                <div className="mt-3 rounded-lg border border-dashed border-emerald-300 bg-background/80 px-3 py-3 text-center text-xs text-muted-foreground">
+                <div className="mt-3 rounded-lg border border-dashed border-information-border bg-input-background px-3 py-3 text-center text-xs text-muted-foreground">
                     Nenhum produto encontrado para &quot;{lastQuery}&quot;.
                 </div>
             )}
@@ -148,7 +148,7 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                     {products.map((product) => (
                         <article
                             key={product.code}
-                            className="grid gap-3 rounded-lg border border-border/70 bg-background p-3 shadow-sm sm:grid-cols-[4rem_1fr]"
+                            className="elevation-bordered grid gap-3 rounded-lg bg-input-background p-3 sm:grid-cols-[4rem_1fr]"
                         >
                             <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/40">
                                 {product.imageUrl ? (
@@ -167,7 +167,7 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
                                             {[product.brands, product.quantity, product.code].filter(Boolean).join(" • ")}
                                         </p>
                                     </div>
-                                    <span className={cn("inline-flex w-fit items-center gap-1 text-[11px] font-medium", completenessClass[product.completeness])}>
+                                    <span className={cn("type-caption inline-flex w-fit items-center gap-1 font-medium", completenessClass[product.completeness])}>
                                         <span className="h-1.5 w-1.5 rounded-full bg-current" />
                                         {completenessLabel[product.completeness]}
                                     </span>
@@ -175,14 +175,14 @@ export function OpenFoodFactsImporter({ onSelect }: OpenFoodFactsImporterProps) 
 
                                 <div className="flex flex-wrap gap-1.5">
                                     {nutrientSummary(product).map((item) => (
-                                        <span key={item} className="text-[11px] text-muted-foreground">
+                                        <span key={item} className="type-caption text-muted-foreground">
                                             {item}
                                         </span>
                                     ))}
                                 </div>
 
                                 {product.missingNutrients.length > 0 && (
-                                    <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                                    <p className="type-caption leading-5 text-warning">
                                         Conferir no rotulo: {product.missingNutrients.slice(0, 4).join(", ")}.
                                     </p>
                                 )}

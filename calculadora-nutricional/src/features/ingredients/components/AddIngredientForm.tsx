@@ -241,32 +241,32 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                                 </div>
 
                                 {showMicros && (
-                                    <div className="flex flex-col gap-4 rounded-lg border bg-muted/35 p-4">
+                                    <div className="elevation-sunken flex flex-col gap-4 rounded-lg bg-muted/35 p-4">
                                         <ToggleGroup type="single" value={microViewMode} onValueChange={(value) => value && setMicroViewMode(value as MicroViewMode)} variant="outline" className="w-full">
                                             <ToggleGroupItem value="grouped" className="flex-1">Por tipo</ToggleGroupItem>
                                             <ToggleGroupItem value="az" className="flex-1">A a Z</ToggleGroupItem>
                                         </ToggleGroup>
                                         {microViewMode === "grouped" ? (
                                             MICRONUTRIENT_GROUPS.map((group) => (
-                                                <section key={group.title} className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3">
+                                                <section key={group.title} className="elevation-bordered space-y-3 rounded-lg bg-input-background p-3">
                                                     <h4 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">{group.title}</h4>
                                                     <div className={nutrientGridClass}>{group.items.map(renderNutrientField)}</div>
                                                 </section>
                                             ))
                                         ) : (
-                                            <section className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3">
+                                            <section className="elevation-bordered space-y-3 rounded-lg bg-input-background p-3">
                                                 <h4 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">Micronutrientes A a Z</h4>
                                                 <div className={nutrientGridClass}>{MICRONUTRIENTS_A_TO_Z.map(renderNutrientField)}</div>
                                             </section>
                                         )}
 
-                                        <section className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3 mt-4">
+                                        <section className="elevation-bordered mt-4 space-y-3 rounded-lg bg-input-background p-3">
                                             <h4 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground">Outros (Linha Dinâmica)</h4>
                                             <p className="text-xs text-muted-foreground">Adicione constituintes customizados (ex: Polióis, Cafeína, Creatina) que não estão na lista padrão.</p>
                                             
                                             <div className="space-y-2">
                                                 {Object.entries(customNutrients).map(([key, data]) => (
-                                                    <div key={key} className="flex items-center gap-2 bg-background p-2 rounded-md border">
+                                                    <div key={key} className="flex items-center gap-2 bg-input-background p-2 rounded-md border">
                                                         <span className="flex-1 text-sm font-medium">{key}</span>
                                                         <span className="text-sm text-muted-foreground">{data.value} {data.unit}</span>
                                                         <Button type="button" variant="destructive" size="icon" className="h-6 w-6" onClick={() => removeCustomNutrient(key)}><X className="h-4 w-4" /></Button>
@@ -324,10 +324,10 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                         </Tabs>
 
                         {!initialData && <p className="text-xs text-muted-foreground mt-4">Valores por 100g de alimento.</p>}
-                        {initialData && <p className="text-xs text-stone-600 dark:text-stone-400 mt-4">Atenção: As alterações afetam todas as tabelas associadas.</p>}
+                        {initialData && <p className="mt-4 text-xs text-warning">Atenção: As alterações afetam todas as tabelas associadas.</p>}
                     </div>
 
-                    <div className="flex flex-col gap-3 border-t border-border/70 bg-background px-6 py-4">
+                    <div className="flex flex-col gap-3 border-t border-border/70 bg-input-background px-6 py-4">
                         <Button type="submit" className="w-full" disabled={pending}>
                             {pending ? <Spinner data-icon="inline-start" /> : null}
                             {pending ? "Salvando..." : "Salvar ingrediente"}

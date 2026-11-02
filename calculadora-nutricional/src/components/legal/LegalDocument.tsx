@@ -28,7 +28,7 @@ export function LegalDocument({
 }: LegalDocumentProps) {
   return (
     <main className="app-page-loose">
-      <div className="mx-auto max-w-6xl">
+      <div className="app-grid-wide">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -44,10 +44,10 @@ export function LegalDocument({
             </Badge>
             <span className="text-xs text-muted-foreground">Vigente desde {LEGAL_DOCUMENT_DATE}</span>
           </div>
-          <h1 className="mt-5 max-w-4xl text-balance text-4xl font-semibold tracking-[-0.035em] sm:text-5xl lg:text-6xl">
+          <h1 className="type-heading-xxlarge mt-5 max-w-4xl text-balance">
             {title}
           </h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg">
+          <p className="type-body-large mt-5 max-w-3xl text-muted-foreground">
             {description}
           </p>
         </header>
@@ -77,7 +77,7 @@ export function LegalDocument({
             </nav>
           </aside>
 
-          <article className="min-w-0 max-w-3xl text-[0.95rem] leading-7 text-foreground/90 [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-primary/80 [&_h2]:scroll-mt-28 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h3]:mt-7 [&_h3]:text-base [&_h3]:font-semibold [&_li]:pl-1 [&_ol]:space-y-3 [&_p]:mt-4 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-5">
+          <article className="type-body min-w-0 max-w-3xl text-foreground/90 [&_a]:font-medium [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-primary/80 [&_h2]:scroll-mt-28 [&_h2]:type-heading-small [&_h3]:mt-7 [&_h3]:type-heading-xxsmall [&_li]:pl-1 [&_ol]:space-y-3 [&_p]:mt-4 [&_ul]:list-disc [&_ul]:space-y-3 [&_ul]:pl-5">
             {children}
           </article>
         </div>

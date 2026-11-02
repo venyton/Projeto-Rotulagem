@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
 import { getServerSession } from "next-auth";
 import {
   ArrowRight,
@@ -59,16 +58,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const titleFont = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
-const bodyFont = Manrope({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "SoIZI | Rotulagem nutricional sem retrabalho",
@@ -185,7 +174,7 @@ export default async function Home() {
   const secondaryLabel = isLoggedIn && canUseTables ? "Nova tabela" : isLoggedIn ? "Voltar ao painel" : "Já tenho conta";
 
   return (
-    <div className={`${bodyFont.className} bg-background text-foreground`}>
+    <div className="bg-background text-foreground">
       <section
         id="inicio"
         className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden sm:min-h-[calc(100svh-4.5rem)]"
@@ -205,11 +194,11 @@ export default async function Home() {
           <div className="app-enter max-w-4xl text-white">
             <Badge className="mb-6">SoIZI · Sistema de rotulagem</Badge>
             <h1
-              className={`${titleFont.className} max-w-4xl text-balance text-4xl leading-[0.94] sm:text-6xl lg:text-8xl`}
+              className="type-heading-xxlarge max-w-4xl text-balance"
             >
               Da formulação ao rótulo, sem perder o fio.
             </h1>
-            <p className="app-enter app-enter-delay-1 mt-6 max-w-2xl text-balance text-base leading-7 text-white/90 sm:text-lg">
+            <p className="type-body-large app-enter app-enter-delay-1 mt-6 max-w-2xl text-balance text-white/90">
               Organize ingredientes, calcule a informação nutricional e prepare a entrega em um fluxo claro para toda a equipe.
             </p>
             <div className="app-enter app-enter-delay-2 mt-8 flex flex-wrap gap-3">
@@ -234,7 +223,7 @@ export default async function Home() {
         >
           <div className="lg:sticky lg:top-28">
             <Eyebrow>O fluxo</Eyebrow>
-            <h2 className={`${titleFont.className} mt-5 text-balance text-4xl leading-tight sm:text-5xl lg:text-6xl`}>
+            <h2 className="type-heading-xlarge mt-5 text-balance">
               Um processo que mostra onde você está.
             </h2>
             <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">
@@ -242,15 +231,15 @@ export default async function Home() {
             </p>
             <div className="mt-8 grid grid-cols-3 gap-4">
               <div>
-                <p className={`${titleFont.className} text-3xl font-semibold`}>100 g</p>
+                <p className="type-heading-medium">100 g</p>
                 <p className="mt-1 text-xs text-muted-foreground">Base de cálculo</p>
               </div>
               <div>
-                <p className={`${titleFont.className} text-3xl font-semibold`}>%VD</p>
+                <p className="type-heading-medium">%VD</p>
                 <p className="mt-1 text-xs text-muted-foreground">Leitura nutricional</p>
               </div>
               <div>
-                <p className={`${titleFont.className} text-3xl font-semibold`}>PNG</p>
+                <p className="type-heading-medium">PNG</p>
                 <p className="mt-1 text-xs text-muted-foreground">Entrega visual</p>
               </div>
             </div>
@@ -362,10 +351,10 @@ export default async function Home() {
                 <Globe2 aria-hidden="true" />
                 Novos mercados
               </Badge>
-              <h2 className={`${titleFont.className} mt-6 max-w-4xl text-balance text-4xl leading-tight sm:text-5xl lg:text-7xl`}>
+              <h2 className="type-heading-xlarge mt-6 max-w-4xl text-balance">
                 O idioma deixa de ser uma barreira para crescer.
               </h2>
-              <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+              <p className="type-body-large mt-6 max-w-2xl text-slate-300">
                 Use a plataforma em português, inglês, espanhol ou francês para aproximar equipes, parceiros e clientes, explorar mercados antes distantes e preparar sua operação para novas oportunidades internacionais.
               </p>
             </div>
@@ -387,7 +376,7 @@ export default async function Home() {
                   <span className="w-10 text-xs font-semibold tracking-[0.18em] text-slate-500 transition-colors group-hover:text-emerald-300">
                     {language.code}
                   </span>
-                  <span className={`${titleFont.className} text-3xl text-white sm:text-4xl`}>
+                  <span className="type-heading-large text-white">
                     {language.label}
                   </span>
                 </div>
@@ -412,7 +401,7 @@ export default async function Home() {
 
           <div className="lg:order-2">
             <Eyebrow>Sobre a SoIZI</Eyebrow>
-            <h2 className={`${titleFont.className} mt-5 text-balance text-4xl leading-tight sm:text-5xl lg:text-6xl`}>
+            <h2 className="type-heading-xlarge mt-5 text-balance">
               Tecnologia com repertório de indústria.
             </h2>
             <p className="mt-5 text-base leading-7 text-muted-foreground">
@@ -440,7 +429,7 @@ export default async function Home() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <Eyebrow>Feito para equipes reais</Eyebrow>
-                <h2 className={`${titleFont.className} mt-5 text-4xl leading-tight sm:text-5xl`}>
+                <h2 className="type-heading-xlarge mt-5">
                   Diferentes rotinas. O mesmo fio condutor.
                 </h2>
               </div>
@@ -481,7 +470,7 @@ export default async function Home() {
 
           <div>
             <Eyebrow>Conhecimento aplicado</Eyebrow>
-            <h2 className={`${titleFont.className} mt-5 text-balance text-4xl leading-tight sm:text-5xl lg:text-6xl`}>
+            <h2 className="type-heading-xlarge mt-5 text-balance">
               Experiência técnica transformada em ferramenta.
             </h2>
             <p className="mt-5 text-base leading-7 text-muted-foreground">
@@ -528,7 +517,7 @@ export default async function Home() {
         <section className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:px-8 lg:py-24">
           <div>
             <Eyebrow>Dúvidas frequentes</Eyebrow>
-            <h2 className={`${titleFont.className} mt-5 text-4xl leading-tight sm:text-5xl`}>
+            <h2 className="type-heading-xlarge mt-5">
               Antes de começar.
             </h2>
             <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
@@ -560,7 +549,7 @@ export default async function Home() {
             <div className="absolute inset-0 bg-black/62" />
             <div className="relative flex min-h-[28rem] flex-col items-start justify-end p-6 text-white sm:p-10 lg:p-14">
               <Badge className="mb-5">Seu próximo rótulo começa aqui</Badge>
-              <h2 className={`${titleFont.className} max-w-3xl text-balance text-4xl leading-tight sm:text-6xl`}>
+              <h2 className="type-heading-xlarge max-w-3xl text-balance">
                 Menos retrabalho. Mais clareza em cada entrega.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-6 text-white/90 sm:text-base">

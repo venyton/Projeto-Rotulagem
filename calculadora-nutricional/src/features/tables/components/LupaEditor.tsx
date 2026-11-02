@@ -243,7 +243,7 @@ export function LupaEditor({
         <Button variant="outline" asChild><Link href={`/dashboard/edit/${tableId}`}>Voltar para a tabela</Link></Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="elevation-bordered overflow-hidden rounded-lg bg-card">
         <div className="grid min-h-[46rem] xl:grid-cols-[21rem_minmax(0,1fr)]">
           <aside className="border-b bg-muted/15 xl:border-r xl:border-b-0">
             <div className="border-b px-5 py-5">
@@ -324,7 +324,7 @@ export function LupaEditor({
                         className={previewMode === "fit" ? "w-full max-w-md" : "shrink-0 transition-[width] duration-200 ease-out"}
                         style={previewMode === "proportional" ? { width: `${proportionalPreviewWidth}px` } : undefined}
                       >
-                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="elevation-raised rounded-lg bg-white p-5">
                           <LupaSvg geometry={geometry} nutrients={activeNutrients} />
                         </div>
                       </div>
@@ -354,7 +354,7 @@ export function LupaEditor({
                   </div>
                 </div>
                 <div className="min-h-[38rem] overflow-auto bg-muted/25 p-4 sm:p-6 dark:bg-black/15">
-                  {geometry ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><LupaTechnicalSvg geometry={geometry} nutrients={activeNutrients} className="min-w-[58rem]" /></div> : <EmptyCalculation calculation={calculation} />}
+                  {geometry ? <div className="elevation-raised rounded-lg bg-white p-5"><LupaTechnicalSvg geometry={geometry} nutrients={activeNutrients} className="min-w-[58rem]" /></div> : <EmptyCalculation calculation={calculation} />}
                 </div>
               </TabsContent>
             </Tabs>
@@ -377,11 +377,11 @@ function Metric({ label, value }: { label: string; value: string }) {
 function CalculationStatus({ calculation }: { calculation: LupaCalculation }) {
   const adjusted = calculation.status === "adjusted-minimum" || calculation.status === "adjusted-maximum";
   const styles = adjusted
-    ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-100"
+    ? "border-warning-border bg-warning-subtle text-warning"
     : calculation.status === "calculated"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100"
+      ? "border-success-border bg-success-subtle text-success"
       : calculation.status === "optional"
-        ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-800 dark:bg-sky-950/60 dark:text-sky-100"
+        ? "border-information-border bg-information-subtle text-information"
         : "border-border bg-muted/40 text-muted-foreground";
   const Icon = adjusted ? ShieldCheck : calculation.status === "calculated" ? CheckCircle2 : calculation.status === "optional" ? Info : calculation.status === "not-applicable" ? ScanSearch : CircleAlert;
 
@@ -395,21 +395,21 @@ function CalculationDecision({ calculation }: { calculation: LupaCalculation }) 
         title: calculation.status === "adjusted-maximum" ? "Limite máximo aplicado" : "Limite mínimo aplicado",
         description: `${calculation.messages[0]} A lupa continua válida e foi gerada com o limite previsto pela RDC nº 429/2020.`,
         icon: ShieldCheck,
-        className: "border-amber-300 bg-amber-50/70 text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100",
+        className: "border-warning-border bg-warning-subtle text-warning",
       }
     : calculation.status === "calculated"
       ? {
           title: "Cálculo dentro dos limites normativos",
           description: `O percentual de ${format(calculation.requiredPercent)}% resultou em ${format(calculation.fontPt)} pt, sem necessidade de ajuste pelo mínimo ou máximo.`,
           icon: CheckCircle2,
-          className: "border-emerald-200 bg-emerald-50/60 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100",
+          className: "border-success-border bg-success-subtle text-success",
         }
       : calculation.status === "optional"
         ? {
             title: "Declaração opcional para este painel",
             description: calculation.messages[0] ?? "A lupa não é obrigatória nesta faixa de área.",
             icon: Info,
-            className: "border-sky-200 bg-sky-50/70 text-sky-950 dark:border-sky-800 dark:bg-sky-950/35 dark:text-sky-100",
+            className: "border-information-border bg-information-subtle text-information",
           }
         : calculation.status === "not-applicable"
           ? {
@@ -493,7 +493,7 @@ function EmptyCalculation({ calculation }: { calculation: LupaCalculation }) {
   return (
     <div className="flex min-h-[24rem] w-full items-center justify-center text-center">
       <div className="max-w-sm">
-        {optional ? <Info className="mx-auto size-8 text-sky-600 dark:text-sky-400" /> : <ScanSearch className="mx-auto size-8 text-muted-foreground" />}
+        {optional ? <Info className="mx-auto size-8 text-information" /> : <ScanSearch className="mx-auto size-8 text-muted-foreground" />}
         <p className="mt-3 text-sm font-medium">{optional ? "A lupa não é obrigatória" : notApplicable ? "Nenhuma lupa aplicável" : "Aguardando um dimensionamento válido"}</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{optional ? "O painel possui menos de 35 cm². Consulte a memória acima para ver a justificativa oficial." : notApplicable ? "A tabela não possui nutrientes classificados em alto teor." : "Revise altura e largura para continuar."}</p>
       </div>

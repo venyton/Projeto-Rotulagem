@@ -68,14 +68,14 @@ export function useSiteLanguage() {
     };
 }
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
     const { language, copy, setLanguage } = useSiteLanguage();
     const activeLanguage = SITE_LANGUAGES.find((item) => item.value === language) || SITE_LANGUAGES[0];
 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-9 gap-2 px-2.5 text-[13px]">
+                <Button variant={compact ? "ghost" : "outline"} size={compact ? "icon-sm" : "default"} className={compact ? "gap-0 px-0" : "gap-2 px-2.5 text-sm"} aria-label={copy.language}>
                     <Image
                         src={activeLanguage.flagSrc}
                         alt={activeLanguage.flagAlt}
@@ -84,7 +84,7 @@ export function LanguageSwitcher() {
                         unoptimized
                         className="h-auto w-[22px] rounded-[2px] object-cover shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
                     />
-                    <span className="hidden sm:inline">{activeLanguage.shortLabel}</span>
+                    {!compact && <span className="hidden sm:inline">{activeLanguage.shortLabel}</span>}
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56" data-i18n-skip>

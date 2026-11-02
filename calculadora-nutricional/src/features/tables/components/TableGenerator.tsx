@@ -223,22 +223,22 @@ const REGULATORY_CATEGORY_OPTIONS: Array<{ value: RegulatoryCategory; label: str
 const CLAIM_STATUS_STYLES: Record<NutritionClaimStatus, { label: string; className: string }> = {
     allowed: {
         label: "Pode",
-        className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300",
+        className: "border-success-border bg-success-subtle text-success",
     },
     attention: {
         label: "Atenção",
-        className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300",
+        className: "border-warning-border bg-warning-subtle text-warning",
     },
     blocked: {
         label: "Não pode",
-        className: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300",
+        className: "border-destructive-border bg-destructive-subtle text-destructive",
     },
 };
 
 const INGREDIENT_QUANTITY_STEP = "0.0000001";
-const PANEL_CLASS = "app-panel";
-const PANEL_MUTED_CLASS = "app-panel-muted";
-const PANEL_HEADER_CLASS = "app-panel-header";
+const PANEL_CLASS = "editor-form-group";
+const PANEL_MUTED_CLASS = "editor-advanced-group";
+const PANEL_HEADER_CLASS = "editor-section-header";
 const PANEL_EYEBROW_CLASS = "app-eyebrow";
 
 function normalizeText(value: string) {
@@ -1718,7 +1718,7 @@ export function TableGenerator({
 
     return (
         <div className="min-w-0 space-y-5">
-            <div className="app-panel px-4 py-4 sm:px-5">
+            <div className="editor-table-overview px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                         <p className={PANEL_EYEBROW_CLASS}>Editor de tabela nutricional</p>
@@ -1727,15 +1727,15 @@ export function TableGenerator({
                         </h1>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs lg:flex lg:flex-wrap lg:justify-end">
-                        <div className="app-metric">
+                        <div className="editor-table-metric">
                             <div className="app-metric-label">Porção</div>
                             <div className="mt-0.5 font-semibold text-foreground">{formatWeight(portionSize)} g</div>
                         </div>
-                        <div className="app-metric">
+                        <div className="editor-table-metric">
                             <div className="app-metric-label">Ingredientes</div>
                             <div className="mt-0.5 font-semibold text-foreground">{ingredients.length}</div>
                         </div>
-                        <div className={`app-metric ${shouldShowFopSeal ? "border-warning/55 bg-warning/15 text-warning dark:border-warning/70 dark:bg-warning/20" : "text-muted-foreground"}`}>
+                        <div className={`editor-table-metric ${shouldShowFopSeal ? "border border-warning/55 bg-warning/15 text-warning dark:border-warning/70 dark:bg-warning/20" : "text-muted-foreground"}`}>
                             <div className={`app-metric-label ${shouldShowFopSeal ? "text-warning" : ""}`}>Lupa</div>
                             <div className={`mt-0.5 font-semibold ${shouldShowFopSeal ? "text-warning" : ""}`}>{shouldShowFopSeal ? "Ativa" : effectiveHasFopSeal ? "Desativada" : "Inativa"}</div>
                         </div>
@@ -1743,15 +1743,28 @@ export function TableGenerator({
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(22rem,0.82fr)_minmax(34rem,1.18fr)] lg:items-start">
-            <div className="space-y-5">
-                <Card className="app-panel overflow-hidden">
-                    <CardHeader className="app-panel-header px-5 py-4">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(23rem,30rem)_minmax(0,1fr)] lg:items-start">
+            <aside className="editor-workbench-rail" aria-label="Dados para montar a tabela nutricional">
+                <div className="editor-workbench-intro">
+                    <div>
+                        <p className={PANEL_EYEBROW_CLASS}>Área de entrada</p>
+                        <h2 className="mt-1 text-base font-semibold text-foreground">Monte a tabela por etapas</h2>
+                        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Defina o produto, monte a formulação e só então inclua informações complementares.</p>
+                    </div>
+                    <ol className="editor-workbench-steps" aria-label="Etapas da formulação">
+                        <li><span>1</span> Produto</li>
+                        <li><span>2</span> Formulação</li>
+                        <li><span>3</span> Detalhes</li>
+                    </ol>
+                </div>
+
+                <Card className="editor-workbench-section overflow-hidden">
+                    <CardHeader className="editor-workbench-section-header px-5 py-4">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className={PANEL_EYEBROW_CLASS}>Etapa principal</p>
                                 <CardTitle className="mt-1 text-base font-semibold text-foreground">
-                                    Dados do Produto
+                                    Produto e formulação
                                 </CardTitle>
                             </div>
                             <Badge variant="secondary">
@@ -1759,7 +1772,7 @@ export function TableGenerator({
                             </Badge>
                         </div>
                     </CardHeader>
-                    <CardContent className="flex flex-col gap-5 bg-muted/20 p-4 sm:p-5">
+                    <CardContent className="editor-workbench-section-body flex flex-col gap-5 p-4 sm:p-5">
 
                         <div className={`${PANEL_CLASS} space-y-2 p-4`}>
                             <Label className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Denominação de venda</Label>
@@ -1803,13 +1816,13 @@ export function TableGenerator({
                                         <HelpTip>Quantidade de alimento usada como referência no rótulo. Ela aparece na tabela e define o cálculo por porção.</HelpTip>
                                     </Label>
                                     {isUsingIndividualPackagePortion ? (
-                                        <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600/80" />
+                                        <span className="type-caption inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 font-medium text-muted-foreground">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-success" />
                                             Embalagem individual
                                         </span>
                                     ) : isUsingSuggestedPortion && (
-                                        <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600/80" />
+                                        <span className="type-caption inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 font-medium text-muted-foreground">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-success" />
                                             Padrão oficial
                                         </span>
                                     )}
@@ -1818,10 +1831,10 @@ export function TableGenerator({
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            className="h-auto rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/60"
+                                            className="type-caption h-auto rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 font-medium text-muted-foreground hover:bg-muted/60"
                                             onClick={() => setPortionSize(currentMeasureSuggestedPortion)}
                                         >
-                                            <span className="mr-1 h-1.5 w-1.5 rounded-full bg-red-600/80" />
+                                            <span className="mr-1 h-1.5 w-1.5 rounded-full bg-information" />
                                             Usar padrão ({currentMeasureSuggestedPortion} g)
                                         </Button>
                                     )}
@@ -1864,7 +1877,7 @@ export function TableGenerator({
                                         placeholder="Digite a medida caseira (ex: 2 colheres rasas)"
                                     />
                                 )}
-                                <div className="rounded-lg border bg-card p-3">
+                                <div className="elevation-bordered rounded-lg bg-card p-3">
                                     <div className="flex items-start gap-2">
                                         <Checkbox
                                             id="unit-fraction-measure"
@@ -1900,10 +1913,10 @@ export function TableGenerator({
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-auto w-full justify-start rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/60"
+                                                className="type-caption h-auto w-full justify-start rounded-md border border-border/70 bg-muted/40 px-2 py-1 font-medium text-muted-foreground hover:bg-muted/60"
                                                 onClick={() => applySuggestedMeasureForCurrentPortion(suggestion)}
                                             >
-                                                <span className="mr-1 h-1.5 w-1.5 rounded-full bg-red-600/80" />
+                                                <span className="mr-1 h-1.5 w-1.5 rounded-full bg-information" />
                                                 Sugerir medida: {suggestion.label} ({suggestion.suggestedPortion} g)
                                             </Button>
                                         ))}
@@ -1911,7 +1924,7 @@ export function TableGenerator({
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            className="h-auto w-full justify-start px-1.5 py-0.5 text-[11px] text-muted-foreground/90 hover:bg-transparent hover:text-foreground"
+                                            className="type-caption h-auto w-full justify-start px-1.5 py-0.5 text-muted-foreground/90 hover:bg-transparent hover:text-foreground"
                                             onClick={() => setMeasureSuggestionsExpanded(false)}
                                         >
                                             Recolher sugestões
@@ -1923,7 +1936,7 @@ export function TableGenerator({
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        className="h-auto w-full justify-start rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/40"
+                                        className="type-caption h-auto w-full justify-start rounded-md border border-border/70 bg-muted/20 px-2 py-1 font-medium text-muted-foreground hover:bg-muted/40"
                                         onClick={() => setMeasureSuggestionsExpanded(true)}
                                     >
                                         Mostrar sugestões de medida ({suggestedMeasuresForCurrentPortion.length})
@@ -1949,7 +1962,7 @@ export function TableGenerator({
                                     placeholder="ex: 500"
                                 />
                             </div>
-                            <div className="space-y-2 rounded-lg border bg-card p-3 md:col-span-2">
+                            <div className="elevation-bordered space-y-2 rounded-lg bg-card p-3 md:col-span-2">
                                 <div className="flex items-start gap-2">
                                     <Checkbox
                                         id="individual-package-portion"
@@ -1996,14 +2009,14 @@ export function TableGenerator({
                                         placeholder='ex: Cerca de 3'
                                     />
                                 ) : (
-                                    <div className="rounded-lg border bg-card px-3 py-2 text-sm">
+                                    <div className="elevation-bordered rounded-lg bg-card px-3 py-2 text-sm">
                                         {servingsPerPackageAuto}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/10">
+                        <div className="elevation-bordered space-y-4 rounded-lg border-information-border bg-information-subtle p-4">
                             <div className="flex items-center justify-between gap-2">
                                 <Label className="inline-flex items-center gap-1.5 text-sm font-semibold">
                                     Conformidade ANVISA
@@ -2102,7 +2115,7 @@ export function TableGenerator({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="flex flex-col justify-between gap-3 rounded-lg border bg-card px-3 py-2 text-xs">
+                                <div className="elevation-bordered flex flex-col justify-between gap-3 rounded-lg bg-card px-3 py-2 text-xs">
                                     <span>{effectiveHasFopSeal ? "Lupa disponível para este produto." : "Lupa não aplicável para este produto."}</span>
                                     <div className="flex items-center justify-between gap-3">
                                         <label htmlFor="enable-fop-lupa" className="cursor-pointer font-medium text-foreground">Exibir lupa frontal</label>
@@ -2117,7 +2130,7 @@ export function TableGenerator({
                             </div>
 
                             {fopReferenceMode === "prepared" && enablePreparationSimulator && result && (
-                                <div className="grid grid-cols-1 gap-3 rounded-lg border bg-card p-3 text-xs md:grid-cols-3">
+                                <div className="elevation-bordered grid grid-cols-1 gap-3 rounded-lg bg-card p-3 text-xs md:grid-cols-3">
                                     <div>
                                         <div className="font-semibold text-foreground">Açúcares adicionados</div>
                                         <div className="mt-1 text-muted-foreground">{formatWeight(result.per100g.sugarAdded)} g/100 g pronto</div>
@@ -2134,7 +2147,7 @@ export function TableGenerator({
                             )}
 
                             {fopReferenceMode === "prepared" && !enablePreparationSimulator && (
-                                <div className="grid grid-cols-1 gap-4 rounded-lg border bg-card p-3 md:grid-cols-3">
+                                <div className="elevation-bordered grid grid-cols-1 gap-4 rounded-lg bg-card p-3 md:grid-cols-3">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="prepared-sugar">Açúcares adicionados (g/100)</Label>
                                         <Input
@@ -2188,7 +2201,7 @@ export function TableGenerator({
                             )}
 
                             {enableStrictCompliance && complianceWarnings.length > 0 && (
-                                <div className="space-y-1 rounded-lg border border-stone-300 bg-stone-50 p-3 text-xs text-stone-700 dark:border-stone-700 dark:bg-stone-950/20 dark:text-stone-300">
+                                <div className="space-y-1 rounded-lg border border-warning-border bg-warning-subtle p-3 text-xs text-warning">
                                     {complianceWarnings.map((warning) => (
                                         <p key={warning}>- {warning}</p>
                                     ))}
@@ -2196,7 +2209,7 @@ export function TableGenerator({
                             )}
                         </div>
 
-                        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                        <div className="elevation-bordered overflow-hidden rounded-lg bg-card">
                             <div className={PANEL_HEADER_CLASS}>
                                 <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <h3 className="inline-flex min-w-0 items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]">
@@ -2227,7 +2240,7 @@ export function TableGenerator({
                                     {ingredients.map((item, idx) => (
                                         <div
                                             key={idx}
-                                            className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-3 sm:flex sm:items-end"
+                                            className="elevation-sunken grid min-w-0 gap-3 rounded-lg bg-muted/30 p-3 sm:flex sm:items-end"
                                         >
                                             <div className="flex-1 space-y-1">
                                                 <div className="break-words text-sm font-medium [overflow-wrap:anywhere]">{item.ingredient.name}</div>
@@ -2273,13 +2286,13 @@ export function TableGenerator({
                                         </div>
                                     ))}
                                     {ingredients.length === 0 && (
-                                        <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
+                                        <div className="elevation-bordered rounded-lg border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                             Adicione ingredientes para começar.
                                         </div>
                                     )}
                                 </div>
                                 {ingredients.length > 0 && (
-                                    <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+                                    <div className="elevation-sunken mt-4 flex items-center justify-between rounded-lg bg-muted/30 p-4">
                                         <span className="font-semibold text-sm">Peso Total dos Ingredientes:</span>
                                         <span className="font-bold text-lg text-primary">{formatWeight(ingredients.reduce((acc, item) => acc + (item.quantity || 0), 0))} g</span>
                                     </div>
@@ -2378,7 +2391,7 @@ export function TableGenerator({
                                                 onChange={(event) => setPreparationPowderPortionSize(event.target.value)}
                                                 placeholder={calculatedPowderPortion > 0 ? formatWeight(calculatedPowderPortion) : "ex: 29"}
                                             />
-                                            <div className="text-[11px] text-muted-foreground">
+                                            <div className="type-caption text-muted-foreground">
                                                 {calculatedPowderPortion > 0
                                                     ? `Automático: ${formatWeight(calculatedPowderPortion)} g de pó para ${formatWeight(preparationReadyPortion)} g pronto.`
                                                     : "Se vazio, calcula pelo pó usado, porção pronta e rendimento final."}
@@ -2386,7 +2399,7 @@ export function TableGenerator({
                                         </div>
                                     </div>
 
-                                    <div className="rounded-lg border bg-card p-3">
+                                    <div className="elevation-bordered rounded-lg bg-card p-3">
                                         <div className="mb-3 flex items-center justify-between gap-2">
                                             <div className="text-sm font-semibold">Ingredientes adicionados no preparo</div>
                                             <Button
@@ -2404,7 +2417,7 @@ export function TableGenerator({
                                             {preparationIngredients.map((item, idx) => (
                                                 <div
                                                     key={`prep-${idx}`}
-                                                    className="flex items-end gap-3 rounded-lg border bg-muted/30 p-3"
+                                                    className="elevation-sunken flex items-end gap-3 rounded-lg bg-muted/30 p-3"
                                                 >
                                                     <div className="flex-1 space-y-1">
                                                         <div className="font-medium text-sm">{item.ingredient.name}</div>
@@ -2443,14 +2456,14 @@ export function TableGenerator({
                                                 </div>
                                             ))}
                                             {preparationIngredients.length === 0 && (
-                                                <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
+                                                <div className="elevation-bordered rounded-lg border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                                     Adicione ovo, leite, manteiga, água ou outros ingredientes do preparo.
                                                 </div>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-3 rounded-lg border bg-card p-3 text-xs md:grid-cols-2">
+                                    <div className="elevation-bordered grid grid-cols-1 gap-3 rounded-lg bg-card p-3 text-xs md:grid-cols-2">
                                         <div>
                                             <div className="font-semibold text-foreground">Memorial de cálculo</div>
                                             <div className="mt-1 text-muted-foreground">
@@ -2529,7 +2542,7 @@ export function TableGenerator({
                                             placeholder={result ? result.per100g.protein.toFixed(2) : "ex: 18,5"}
                                         />
                                     </div>
-                                    <div className="rounded-lg border bg-card px-3 py-2 text-xs">
+                                    <div className="elevation-bordered rounded-lg bg-card px-3 py-2 text-xs">
                                         <div className="font-semibold text-foreground">{aminoAcidProfileStatus}</div>
                                         <div className="mt-1 text-muted-foreground">
                                             Base: {aminoAcidProteinPer100g > 0 ? `${aminoAcidProteinPer100g.toFixed(2)} g de proteína/100 g` : "sem proteína calculada"}
@@ -2737,8 +2750,8 @@ export function TableGenerator({
                     </CardContent>
                 </Card>
 
-                <Card className="overflow-hidden">
-                    <CardHeader className="border-b bg-card px-5 py-4">
+                <Card className="editor-workbench-section overflow-hidden">
+                    <CardHeader className="editor-workbench-section-header px-5 py-4">
                         <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="inline-flex min-w-0 items-center gap-2">
                                 <Button
@@ -2768,12 +2781,12 @@ export function TableGenerator({
                         </div>
                     </CardHeader>
                     {micronutrientsSectionOpen && (
-                    <CardContent className="max-h-96 overflow-y-auto bg-muted/20 pt-3">
+                    <CardContent className="editor-workbench-section-body max-h-96 overflow-y-auto pt-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {MICRONUTRIENTS_A_TO_Z.map(m => {
                                 const isSelected = selectedNutrients.includes(m.name);
                                 return (
-                                <div key={m.name} className={`rounded-md px-2 py-1.5 transition-colors ${isSelected ? "bg-background shadow-sm" : ""}`}>
+                                <div key={m.name} className={`rounded-md px-2 py-1.5 transition-colors ${isSelected ? "bg-input-background shadow-sm" : ""}`}>
                                     <div className="flex items-center space-x-2">
                                         <Checkbox
                                             id={`micro-${m.name}`}
@@ -2798,7 +2811,7 @@ export function TableGenerator({
                                                 aria-label={`Valor manual de ${m.label} por 100 g ou ml`}
                                                 className="h-8 text-sm"
                                             />
-                                            <span className="text-[11px] whitespace-nowrap text-muted-foreground">por 100 g/ml</span>
+                                            <span className="type-caption whitespace-nowrap text-muted-foreground">por 100 g/ml</span>
                                         </div>
                                     )}
                                 </div>
@@ -2809,8 +2822,8 @@ export function TableGenerator({
                     )}
                 </Card>
 
-                <Card className="overflow-hidden">
-                    <CardHeader className="border-b bg-card px-5 py-4">
+                <Card className="editor-workbench-section overflow-hidden">
+                    <CardHeader className="editor-workbench-section-header px-5 py-4">
                         <div className="flex items-center justify-between gap-2">
                             <div className="inline-flex min-w-0 items-center gap-2">
                                 <Button
@@ -2841,14 +2854,14 @@ export function TableGenerator({
                         </div>
                     </CardHeader>
                     {extraConstituentsSectionOpen && (
-                    <CardContent className="space-y-3 bg-muted/20 p-4">
+                    <CardContent className="editor-workbench-section-body space-y-3 p-4">
                         {extraConstituents.length === 0 && (
-                            <div className="rounded-lg border border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
+                            <div className="elevation-bordered rounded-lg border-dashed bg-card py-4 text-center text-sm text-muted-foreground">
                                 Use para lactose, galactose, creatina, cafeína, probióticos, enzimas e substâncias bioativas.
                             </div>
                         )}
                         {extraConstituents.map((item) => (
-                            <div key={item.id} className="grid grid-cols-1 items-end gap-2 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_7rem_6rem_2.5rem]">
+                            <div key={item.id} className="elevation-sunken grid grid-cols-1 items-end gap-2 rounded-lg bg-muted/30 p-3 sm:grid-cols-[1fr_7rem_6rem_2.5rem]">
                                 <div className="space-y-1">
                                     <Label className="text-xs">Nome</Label>
                                     <Input
@@ -2934,11 +2947,11 @@ export function TableGenerator({
                     )}
                 </Card>
 
-            </div>
+            </aside>
 
             <div className="space-y-5 lg:sticky lg:self-start" style={{ top: "4rem" }}>
                 <Card className="overflow-hidden">
-                    <CardHeader className="border-b bg-card px-5 py-4">
+                    <CardHeader className="bg-card px-5 py-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <p className={PANEL_EYEBROW_CLASS}>Saída</p>
@@ -3002,7 +3015,7 @@ export function TableGenerator({
                                     </div>
                                 </div>
                                 {mandatoryStatements.length > 0 && (
-                                    <div className="w-full max-w-[64rem] rounded-md border border-border/70 bg-background px-3 py-2 text-[11px] leading-snug">
+                                    <div className="w-full max-w-[64rem] rounded-md border border-border/70 bg-input-background px-3 py-2 text-[11px] leading-snug">
                                         {mandatoryStatements.map((statement) => (
                                             <p key={`preview-statement-${statement}`}>{statement}</p>
                                         ))}
@@ -3018,7 +3031,7 @@ export function TableGenerator({
 
                     {result && shouldShowFopSeal && fopStatus && (
                         <div className="flex w-full shrink-0 flex-col items-center gap-3 bg-muted/[0.25] px-4 py-4">
-                            <div className="inline-flex max-w-full justify-center rounded-lg border bg-background p-3 leading-none">
+                            <div className="inline-flex max-w-full justify-center rounded-lg border bg-input-background p-3 leading-none">
                                 <MagnifyingGlassLabel
                                     id="nutrition-fop-seal-preview"
                                     highSugar={!!fopStatus.highSugar}

@@ -50,15 +50,15 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
     if (pathname.startsWith("/dashboard")) return null;
 
     return (
-        <header className="site-header sticky top-0 z-40 border-b shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur-xl">
-            <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center gap-2 px-3 sm:h-18 sm:gap-3 sm:px-6 lg:px-8">
-                <Link href={isLoggedIn ? "/dashboard" : "/"} className="relative h-10 w-32 shrink-0 rounded-md outline-none ring-ring focus-visible:ring-2 sm:h-12 sm:w-40">
-                    <Image src="/logo.png" alt="SoIZI" fill sizes="(max-width: 639px) 128px, 160px" priority className="object-contain dark:hidden" />
-                    <Image src="/logo-branco.png" alt="SoIZI" fill sizes="(max-width: 639px) 128px, 160px" priority className="hidden object-contain dark:block" />
+        <header className="site-header sticky top-0 z-40 border-b backdrop-blur-xl">
+            <div className="mx-auto flex h-14 w-full max-w-none items-center gap-1 px-2 sm:gap-2 sm:px-4">
+                <Link href={isLoggedIn ? "/dashboard" : "/"} className="relative h-7 w-[76px] shrink-0 rounded-md outline-none ring-ring focus-visible:ring-2 sm:w-[84px]">
+                    <Image src="/logo.png" alt="SoIZI" fill sizes="(max-width: 639px) 76px, 84px" priority className="object-contain object-left dark:hidden" />
+                    <Image src="/logo-branco.png" alt="SoIZI" fill sizes="(max-width: 639px) 76px, 84px" priority className="hidden object-contain object-left dark:block" />
                 </Link>
 
                 {isHome ? (
-                    <NavigationMenu viewport={false} className="ml-3 hidden lg:flex" aria-label="Seções da página">
+                    <NavigationMenu viewport={false} className="ml-1 hidden lg:flex" aria-label="Seções da página">
                         <NavigationMenuList>
                             {HOME_SECTIONS.map((section) => (
                                 <NavigationMenuItem key={section.id}>
@@ -76,7 +76,7 @@ export function Header({ isLoggedIn = false }: HeaderProps) {
                 ) : null}
 
                 <div className="ml-auto flex items-center gap-2">
-                    <div className="hidden items-center gap-2 sm:flex">
+                    <div className="hidden items-center gap-1 sm:flex">
                         {(pathname === "/login" || pathname === "/register") ? (
                             <Button asChild variant="ghost"><Link href={isLoggedIn ? "/dashboard" : "/"}>{isLoggedIn ? "Minhas tabelas" : "Início"}</Link></Button>
                         ) : null}

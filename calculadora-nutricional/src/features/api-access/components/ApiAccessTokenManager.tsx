@@ -54,7 +54,7 @@ export function ApiAccessTokenManager({ tokens }: { tokens: TokenSummary[] }) {
               </Field>
               <Field>
                 <FieldLabel htmlFor="api-token-expiration">Validade</FieldLabel>
-                <select id="api-token-expiration" name="expirationDays" defaultValue="90" className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+                <select id="api-token-expiration" name="expirationDays" defaultValue="90" className="h-9 w-full rounded-md border bg-input-background px-3 text-sm">
                   <option value="30">30 dias</option>
                   <option value="90">90 dias</option>
                   <option value="365">1 ano</option>
@@ -69,10 +69,10 @@ export function ApiAccessTokenManager({ tokens }: { tokens: TokenSummary[] }) {
 
           {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
           {state.token ? (
-            <div className="rounded-lg border border-success/40 bg-success/10 p-4">
+            <div className="elevation-bordered rounded-lg border-success/40 bg-success/10 p-4">
               <p className="mb-2 text-sm font-medium">Copie agora:</p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-background px-3 py-2 text-xs">{state.token}</code>
+                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-input-background px-3 py-2 text-xs">{state.token}</code>
                 <Button type="button" variant="outline" onClick={copyToken}>
                   <Copy data-icon="inline-start" />Copiar
                 </Button>
@@ -90,7 +90,7 @@ export function ApiAccessTokenManager({ tokens }: { tokens: TokenSummary[] }) {
         <CardContent className="grid gap-3">
           {tokens.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum token emitido.</p> : null}
           {tokens.map((token) => (
-            <div key={token.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div key={token.id} className="elevation-bordered flex flex-col gap-3 rounded-lg bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
                 <KeyRound className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                 <div className="min-w-0">
