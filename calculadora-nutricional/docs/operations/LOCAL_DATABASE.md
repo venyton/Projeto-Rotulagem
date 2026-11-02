@@ -28,3 +28,15 @@ npm run db:local:down
 O banco local começa vazio. Não há cópia de usuários, dados ou migrations de
 produção; o bootstrap registra as migrations existentes somente no banco local
 recém-criado.
+
+Para habilitar o primeiro proprietário da plataforma em desenvolvimento local,
+crie a conta de teste, ative e confirme o 2FA e execute:
+
+```bash
+npm run bootstrap:local-owner -- --email teste@teste.com
+```
+
+Esse comando só aceita o PostgreSQL local em `127.0.0.1:54329`, exige uma conta
+existente com 2FA confirmado e não substitui o fluxo de produção. Ele cria apenas
+o primeiro proprietário local e registra a operação na auditoria; concessões
+posteriores continuam exigindo sessão privilegiada e aprovação independente.
