@@ -11,7 +11,7 @@ import {
     decryptTotpSecret,
     encryptTotpSecret,
     formatTotpSecret,
-    verifyTotpCode,
+    verifyTotpCodeWithReplay,
 } from "@/lib/security/totp";
 import {
     clearPersistentRateLimit,
@@ -82,7 +82,19 @@ async function validateUserTwoFactorCode(user: CurrentUser, code: string) {
 
     try {
         const secret = decryptTotpSecret(user.twoFactorSecret);
-        return (await verifyTotpCode(secret, code)) ? null : "Código 2FA inválido.";
+        const result = await verifyTotpCodeWithReplay(secret, code, user.twoFactorLastUsedStep);
+        if (!result.valid) return "Código 2FA inválido, expirado ou já utilizado.";
+        const claimed = await prisma.user.updateMany({
+            where: {
+                id: user.id,
+                OR: [
+                    { twoFactorLastUsedStep: null },
+                    { twoFactorLastUsedStep: { lt: result.timeStep } },
+                ],
+            },
+            data: { twoFactorLastUsedAt: new Date(), twoFactorLastUsedStep: result.timeStep },
+        });
+        return claimed.count === 1 ? null : "Código 2FA já utilizado.";
     } catch {
         return "2FA inconsistente. Desative e configure novamente.";
     }
@@ -253,7 +265,8 @@ export async function confirmTwoFactorSetup(
 
     try {
         const secret = decryptTotpSecret(user.twoFactorPendingSecret);
-        if (!(await verifyTotpCode(secret, code))) {
+        const verification = await verifyTotpCodeWithReplay(secret, code, null);
+        if (!verification.valid) {
             return { error: "Código 2FA inválido." };
         }
 
@@ -264,6 +277,8 @@ export async function confirmTwoFactorSetup(
                 twoFactorSecret: user.twoFactorPendingSecret,
                 twoFactorPendingSecret: null,
                 twoFactorConfirmedAt: new Date(),
+                twoFactorLastUsedAt: new Date(),
+                twoFactorLastUsedStep: verification.timeStep,
             },
         });
 
@@ -306,6 +321,7 @@ export async function disableTwoFactor(
             twoFactorPendingSecret: null,
             twoFactorConfirmedAt: null,
             twoFactorLastUsedAt: null,
+            twoFactorLastUsedStep: null,
         },
     });
 

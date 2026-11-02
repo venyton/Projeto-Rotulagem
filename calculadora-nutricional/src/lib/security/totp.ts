@@ -70,18 +70,30 @@ export function decryptTotpSecret(payload: string) {
 }
 
 export async function verifyTotpCode(secret: string, code: string) {
+  const result = await verifyTotpCodeWithReplay(secret, code, null);
+  return result.valid;
+}
+
+export async function verifyTotpCodeWithReplay(
+  secret: string,
+  code: string,
+  afterTimeStep: number | null,
+): Promise<{ valid: false } | { valid: true; timeStep: number }> {
   const token = code.replace(/\s+/g, "");
-  if (!totpCodeSchema.safeParse(token).success) return false;
+  if (!totpCodeSchema.safeParse(token).success) return { valid: false };
 
   const result = await verify({
     secret,
     token,
     digits: 6,
     period: 30,
-    epochTolerance: 30,
+    epochTolerance: [30, 0],
+    ...(afterTimeStep === null ? {} : { afterTimeStep }),
   });
 
-  return result.valid;
+  return result.valid && "timeStep" in result
+    ? { valid: true, timeStep: result.timeStep }
+    : { valid: false };
 }
 
 export function formatTotpSecret(secret: string) {
