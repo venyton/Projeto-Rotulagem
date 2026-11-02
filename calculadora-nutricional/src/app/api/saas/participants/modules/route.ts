@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
@@ -32,8 +33,7 @@ export async function GET() {
   const context = await getManageableContext();
   if (!context) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
 
-  const [members, entitlements] = await Promise.all([
-    prisma.organizationMember.findMany({
+  const members = await prisma.organizationMember.findMany({
       where: { organizationId: context.organization.id, active: true },
       orderBy: { createdAt: "asc" },
       select: {
@@ -49,12 +49,7 @@ export async function GET() {
         },
         moduleGrants: { select: { moduleKey: true, enabled: true, expiresAt: true } },
       },
-    }),
-    prisma.organizationEntitlement.findMany({
-      where: { organizationId: context.organization.id },
-      select: { moduleKey: true, enabled: true, expiresAt: true },
-    }),
-  ]);
+    });
 
   const memberDtos = members.map((member) => ({
     id: member.id,
@@ -63,7 +58,7 @@ export async function GET() {
     user: member.user,
     effectiveModules: ALL_SAAS_MODULES.filter((moduleKey) => hasEffectiveModuleAccess({
       moduleKey,
-      organizationEntitlements: entitlements,
+      organizationEntitlements: context.organization.effectiveModuleEntitlements,
       profilePermissions: member.profile?.permissions,
       hasProfile: Boolean(member.profileId),
       role: member.role,
@@ -73,7 +68,7 @@ export async function GET() {
   }));
 
   return NextResponse.json(
-    { members: memberDtos, organization: { entitlements } },
+    { members: memberDtos, organization: { entitlements: context.organization.effectiveModuleEntitlements } },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -85,12 +80,12 @@ export async function POST(request: NextRequest) {
   const context = await getManageableContext();
   if (!context) return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 16_384) {
-    return NextResponse.json({ error: "Dados inválidos." }, { status: 413 });
+  const body = await readBoundedJsonRequest(request, 16_384);
+  if (!body.ok) {
+    return NextResponse.json({ error: "Dados inválidos." }, { status: body.error === "TOO_LARGE" ? 413 : 400 });
   }
 
-  const parsed = moduleSchema.safeParse(await request.json().catch(() => null));
+  const parsed = moduleSchema.safeParse(body.value);
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
 
   const requestLimit = await consumeRequestRateLimit(

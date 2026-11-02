@@ -7,7 +7,8 @@ import { OrganizationRole, Prisma, SaaSModuleKey } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ALL_SAAS_MODULES, type SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
+import { type SaaSModuleKey as AppModuleKey } from "@/features/saas/domain/modules";
+import { resolveOrganizationModuleEntitlements } from "@/features/saas/services/feature-entitlements";
 import { getCurrentInternalMaster } from "@/features/master/services/master-access";
 import { isProfilePermissionModule } from "@/features/settings/domain/profile-permissions";
 import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
@@ -74,11 +75,15 @@ async function loadCurrentSaaSContext() {
       organization: {
         select: {
           id: true,
+          status: true,
+          entitlementPolicyVersion: true,
           lupaStyleConfig: true,
           entitlements: {
             select: {
               moduleKey: true,
               enabled: true,
+              usageLimit: true,
+              source: true,
               expiresAt: true,
             },
           },
@@ -112,8 +117,10 @@ async function loadCurrentSaaSContext() {
         organization: {
           select: {
             id: true,
+            status: true,
+            entitlementPolicyVersion: true,
             lupaStyleConfig: true,
-            entitlements: { select: { moduleKey: true, enabled: true, expiresAt: true } },
+            entitlements: { select: { moduleKey: true, enabled: true, usageLimit: true, source: true, expiresAt: true } },
           },
         },
       },
@@ -127,17 +134,14 @@ async function loadCurrentSaaSContext() {
     return null;
   }
 
-  const entitlementKeys = new Set(member.organization.entitlements.map((item) => item.moduleKey));
-  const missingEntitlements = ALL_SAAS_MODULES
-    .filter((moduleKey) => !entitlementKeys.has(moduleKey))
-    .map((moduleKey) => ({ moduleKey: moduleKey as SaaSModuleKey, enabled: true, expiresAt: null }));
+  const effectiveModuleEntitlements = await resolveOrganizationModuleEntitlements(member.organization.id);
 
   return {
     user: member.user,
     member,
     organization: {
       ...member.organization,
-      entitlements: [...member.organization.entitlements, ...missingEntitlements],
+      effectiveModuleEntitlements,
     },
   };
 }
@@ -175,7 +179,7 @@ export type SaaSContext = Awaited<ReturnType<typeof loadCurrentSaaSContext>>;
 export function contextHasModuleAccess(context: NonNullable<SaaSContext>, moduleKey: AppModuleKey) {
   return hasEffectiveModuleAccess({
     moduleKey,
-    organizationEntitlements: context.organization.entitlements,
+    organizationEntitlements: context.organization.effectiveModuleEntitlements,
     profilePermissions: context.member.profile?.permissions,
     hasProfile: Boolean(context.member.profileId),
     role: context.member.role,

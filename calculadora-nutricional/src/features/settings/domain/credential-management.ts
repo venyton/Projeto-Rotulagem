@@ -1,4 +1,7 @@
-export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
+// BILLING is a historical tenant role preserved by the migration baseline. It
+// deliberately falls through to the least-privileged branch in every policy
+// below; preserving the database value must not recreate broad authority.
+export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER" | "BILLING";
 
 export function canManageOrganizationMember(input: {
     hasGlobalAuthority: boolean;

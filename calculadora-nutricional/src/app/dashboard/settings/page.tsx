@@ -87,10 +87,12 @@ const userErrorMessages: Record<string, string> = {
     not_found: "Não existe um usuário cadastrado com este email.",
     organization: "Selecione uma organização válida.",
     rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+    seat_limit: "O limite de usuários ativos do plano foi atingido. Aumente o plano ou solicite um grant antes de adicionar outro usuário.",
 };
 
 const settingsErrorMessages: Record<string, string> = {
     rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+    seat_limit: "O limite de usuários ativos do plano foi atingido. Nenhum usuário foi ativado.",
     invalid: "Verifique os dados informados.",
     cnpj: "Informe um CNPJ válido.",
     cnpj_exists: "Este CNPJ já está vinculado a outra organização.",
@@ -261,7 +263,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             <CardDescription>Busque pelo nome, razão social, nome fantasia ou pelos quatro últimos dígitos do CPF/CNPJ.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4">
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Cadastrar organização</summary>
                                 <form action={createManagedOrganization} className="mt-4">
                                     <FieldGroup className="grid gap-3 lg:grid-cols-4">
@@ -358,7 +360,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             </div>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4">
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Editar dados da organização</summary>
                                 <form action={updateOrganizationIdentity} className="mt-4">
                                     <input type="hidden" name="organizationId" value={selectedOrganizationData.id} />
@@ -379,7 +381,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                 </form>
                             </details>
 
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Adicionar usuário à organização</summary>
                                 <form action={createOrganizationUser} className="mt-4">
                                     <input type="hidden" name="organizationId" value={selectedOrganizationData.id} />
@@ -566,7 +568,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                         </CardHeader>
                         <CardContent className="min-w-0">
                             <form action={createOrganizationUser}>
-                              <FieldGroup className="grid gap-3 lg:grid-cols-2">
+                              <FieldGroup className="grid gap-3 lg:grid-cols-2 lg:items-end">
                                 <Field>
                                     <FieldLabel htmlFor="new-user-name">Nome</FieldLabel>
                                     <Input id="new-user-name"

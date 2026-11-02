@@ -6,6 +6,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hasEffectiveModuleAccess } from "@/features/saas/domain/module-access";
 import { SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
+import { resolveOrganizationModuleEntitlements } from "@/features/saas/services/feature-entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 
 export const API_TOKEN_PREFIX = "soizi_";
@@ -60,19 +61,15 @@ export async function authenticateApiRequest(
           permissions: { select: { moduleKey: true, enabled: true } },
         },
       },
-      organization: {
-        select: {
-          entitlements: { select: { moduleKey: true, enabled: true, expiresAt: true } },
-        },
-      },
     },
   });
   if (!member) return null;
 
+  const organizationEntitlements = await resolveOrganizationModuleEntitlements(token.organizationId);
   const allowed = [SAAS_MODULES.API_ACCESS, ...requiredModules].every((moduleKey) =>
     hasEffectiveModuleAccess({
       moduleKey,
-      organizationEntitlements: member.organization.entitlements,
+      organizationEntitlements,
       profilePermissions: member.profile?.permissions,
       hasProfile: Boolean(member.profileId),
       role: member.role,

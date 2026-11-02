@@ -93,3 +93,26 @@ test("delegado só pode atribuir um subconjunto das próprias permissões", () =
         requestedPermissions: ["TABLES", "EXPORTS"],
     }), false);
 });
+
+test("papel histórico de billing não recebe autoridade administrativa", () => {
+    assert.equal(canManageOrganizationMember({
+        hasGlobalAuthority: false,
+        sameOrganization: true,
+        isSelf: false,
+        actorRole: "BILLING",
+        targetRole: "ADMIN",
+    }), false);
+    assert.equal(canResetManagedMemberPassword({
+        hasGlobalAuthority: false,
+        sameOrganization: true,
+        isSelf: false,
+        actorRole: "BILLING",
+        targetRole: "MEMBER",
+    }), false);
+    assert.equal(canGrantManagedProfilePermissions({
+        hasGlobalAuthority: false,
+        actorRole: "BILLING",
+        actorPermissions: ["SETTINGS"],
+        requestedPermissions: ["SETTINGS", "EXPORTS"],
+    }), false);
+});

@@ -4,13 +4,14 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { hash } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { OrganizationKind, OrganizationRole, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/client";
+import { OrganizationKind, OrganizationRole, Prisma, SaaSModuleKey as PrismaSaaSModuleKey } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { PASSWORD_HASH_ROUNDS, validatePasswordStrength } from "@/lib/security/password";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isSaaSModuleKey } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
+import { lockAndRequireSeatCapacity, SeatCapacityError } from "@/features/saas/services/seat-capacity";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import {
     canManageAllOrganizationUsers,
@@ -255,39 +256,47 @@ export async function createOrganizationUser(formData: FormData) {
 
     const hashedPassword = await hash(password, PASSWORD_HASH_ROUNDS);
 
-    const user = await prisma.user.create({
-        data: {
-            name,
-            email,
-            password: hashedPassword,
-            cpfHash,
-            cpfLastFour: lastFourDigits(cpf),
-            organizationMemberships: {
-                create: {
-                    organizationId,
-                    role: OrganizationRole.MEMBER,
-                    profileId: profile.id,
-                    active: true,
+    try {
+        await prisma.$transaction(async (tx) => {
+            await lockAndRequireSeatCapacity(tx, organizationId);
+            const createdUser = await tx.user.create({
+                data: {
+                    name,
+                    email,
+                    password: hashedPassword,
+                    cpfHash,
+                    cpfLastFour: lastFourDigits(cpf),
+                    organizationMemberships: {
+                        create: {
+                            organizationId,
+                            role: OrganizationRole.MEMBER,
+                            profileId: profile.id,
+                            active: true,
+                        },
+                    },
                 },
-            },
-        },
-        select: { id: true },
-    });
-
-    await prisma.securityAuditLog.create({
-        data: {
-            organizationId,
-            userId: context.user.id,
-            action: "settings.user.created",
-            riskLevel: "INFO",
-            metadata: settingsAuditMetadata({
-                targetUserId: user.id,
-                email,
-                profileId: profile.id,
-                profileName: profile.name,
-            }),
-        },
-    });
+                select: { id: true },
+            });
+            await tx.securityAuditLog.create({
+                data: {
+                    organizationId,
+                    userId: context.user.id,
+                    action: "settings.user.created",
+                    riskLevel: "INFO",
+                    metadata: settingsAuditMetadata({
+                        targetUserId: createdUser.id,
+                        email,
+                        profileId: profile.id,
+                        profileName: profile.name,
+                    }),
+                },
+            });
+            return createdUser;
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    } catch (error) {
+        if (error instanceof SeatCapacityError) redirectUserError("seat_limit");
+        throw error;
+    }
 
     revalidatePath("/dashboard/settings");
     managementRedirect(tab, {
@@ -324,7 +333,7 @@ export async function linkExistingOrganizationUser(formData: FormData) {
 
     const existingMembership = await prisma.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId, userId: user.id } },
-        select: { id: true, role: true },
+        select: { id: true, role: true, active: true },
     });
     if (user.id === context.user.id || (existingMembership && !canManageOrganizationMember({
         hasGlobalAuthority: canManageAllOrganizationUsers(context),
@@ -336,41 +345,49 @@ export async function linkExistingOrganizationUser(formData: FormData) {
         redirectUserError("forbidden");
     }
 
-    const member = await prisma.organizationMember.upsert({
-        where: {
-            organizationId_userId: {
-                organizationId,
-                userId: user.id,
-            },
-        },
-        create: {
-            organizationId,
-            userId: user.id,
-            profileId: profile.id,
-            role: OrganizationRole.MEMBER,
-            active: true,
-        },
-        update: {
-            profileId: profile.id,
-            active: true,
-        },
-        select: { id: true },
-    });
-
-    await prisma.securityAuditLog.create({
-        data: {
-            organizationId,
-            userId: context.user.id,
-            action: "settings.member.linked",
-            riskLevel: "INFO",
-            metadata: settingsAuditMetadata({
-                organizationMemberId: member.id,
-                targetUserId: user.id,
-                profileId: profile.id,
-                profileName: profile.name,
-            }),
-        },
-    });
+    try {
+        await prisma.$transaction(async (tx) => {
+            if (!existingMembership?.active) await lockAndRequireSeatCapacity(tx, organizationId);
+            const linkedMember = await tx.organizationMember.upsert({
+                where: {
+                    organizationId_userId: {
+                        organizationId,
+                        userId: user.id,
+                    },
+                },
+                create: {
+                    organizationId,
+                    userId: user.id,
+                    profileId: profile.id,
+                    role: OrganizationRole.MEMBER,
+                    active: true,
+                },
+                update: {
+                    profileId: profile.id,
+                    active: true,
+                },
+                select: { id: true },
+            });
+            await tx.securityAuditLog.create({
+                data: {
+                    organizationId,
+                    userId: context.user.id,
+                    action: "settings.member.linked",
+                    riskLevel: "INFO",
+                    metadata: settingsAuditMetadata({
+                        organizationMemberId: linkedMember.id,
+                        targetUserId: user.id,
+                        profileId: profile.id,
+                        profileName: profile.name,
+                    }),
+                },
+            });
+            return linkedMember;
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    } catch (error) {
+        if (error instanceof SeatCapacityError) redirectUserError("seat_limit");
+        throw error;
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/settings");
@@ -666,16 +683,24 @@ export async function setOrganizationMemberActive(formData: FormData) {
         redirectSettingsError("users", "protected_member");
     }
 
-    await prisma.organizationMember.update({ where: { id: member.id }, data: { active } });
-    await prisma.securityAuditLog.create({
-        data: {
-            organizationId: member.organizationId,
-            userId: context.user.id,
-            action: active ? "settings.member.activated" : "settings.member.inactivated",
-            riskLevel: "WARN",
-            metadata: settingsAuditMetadata({ targetUserId: member.userId, organizationMemberId: member.id }),
-        },
-    });
+    try {
+        await prisma.$transaction(async (tx) => {
+            if (active && !member.active) await lockAndRequireSeatCapacity(tx, member.organizationId);
+            await tx.organizationMember.update({ where: { id: member.id }, data: { active } });
+            await tx.securityAuditLog.create({
+                data: {
+                    organizationId: member.organizationId,
+                    userId: context.user.id,
+                    action: active ? "settings.member.activated" : "settings.member.inactivated",
+                    riskLevel: "WARN",
+                    metadata: settingsAuditMetadata({ targetUserId: member.userId, organizationMemberId: member.id }),
+                },
+            });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    } catch (error) {
+        if (error instanceof SeatCapacityError) redirectSettingsError("users", "seat_limit");
+        throw error;
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/settings");

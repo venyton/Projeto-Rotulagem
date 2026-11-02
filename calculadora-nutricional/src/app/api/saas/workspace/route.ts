@@ -5,6 +5,7 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 import { ACTIVE_ORGANIZATION_COOKIE } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit, rateLimitResponse } from "@/lib/security/request-rate-limit";
 import { databaseIdSchema } from "@/lib/validation/identifiers";
@@ -22,12 +23,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (!Number.isFinite(contentLength) || contentLength <= 0 || contentLength > 4096) {
-    return NextResponse.json({ error: "Workspace inválido" }, { status: 413 });
+  const body = await readBoundedJsonRequest(request, 4096);
+  if (!body.ok) {
+    return NextResponse.json({ error: "Workspace inválido" }, { status: body.error === "TOO_LARGE" ? 413 : 400 });
   }
 
-  const parsed = workspaceSchema.safeParse(await request.json().catch(() => null));
+  const parsed = workspaceSchema.safeParse(body.value);
   if (!parsed.success) {
     return NextResponse.json({ error: "Workspace inválido" }, { status: 400 });
   }
