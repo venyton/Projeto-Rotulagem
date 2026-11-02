@@ -41,6 +41,8 @@ import {
 } from "@/features/technical-sheets/services/technical-sheet-file-service";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { USAGE_METRICS } from "@/features/saas/domain/usage-metering";
+import { recordServerUsage } from "@/features/saas/services/usage-metering";
 import {
   consumePersistentRateLimit,
 } from "@/lib/security/persistent-rate-limit";
@@ -159,6 +161,14 @@ async function processTechnicalSheetFile(
   });
 
   try {
+    await recordServerUsage({
+      organizationId,
+      userId,
+      metricKey: USAGE_METRICS.AI_IMPORTS,
+      idempotencyKey: `technical-document:${document.id}`,
+      source: "technical_sheet.import",
+      enforceEntitlement: true,
+    });
     const aiJson = await extractTechnicalSheetWithGemini(file, userId);
     const normalized = normalizeTechnicalSheetExtraction(aiJson);
     const fieldsForReview = new Set(normalized.fieldsForReview);

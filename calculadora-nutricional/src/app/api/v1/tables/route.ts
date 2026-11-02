@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateApiRequest } from "@/features/api-access/services/api-token-auth";
@@ -5,9 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import {
   consumeRequestRateLimit,
+  getClientAddress,
   getRequestRateLimit,
   rateLimitResponse,
 } from "@/lib/security/request-rate-limit";
+import { USAGE_METRICS } from "@/features/saas/domain/usage-metering";
+import { recordServerUsage } from "@/features/saas/services/usage-metering";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +26,15 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
+  const ipLimit = await consumeRequestRateLimit(
+    "api.authentication.ip",
+    getClientAddress(request),
+    getRequestRateLimit("apiTables"),
+  );
+  if (!ipLimit.allowed) {
+    return rateLimitResponse(ipLimit, { error: "Limite temporário da API atingido." }, CORS_HEADERS);
+  }
+
   const apiContext = await authenticateApiRequest(request, [SAAS_MODULES.TABLES]);
   if (!apiContext) {
     return NextResponse.json(
@@ -78,6 +91,14 @@ export async function GET(request: NextRequest) {
         },
       },
     },
+  });
+
+  await recordServerUsage({
+    organizationId: apiContext.organizationId,
+    userId: apiContext.userId,
+    metricKey: USAGE_METRICS.API_REQUESTS,
+    idempotencyKey: `api-request:${randomUUID()}`,
+    source: "api.v1.tables",
   });
 
   return NextResponse.json(
