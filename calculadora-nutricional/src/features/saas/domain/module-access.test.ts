@@ -17,10 +17,9 @@ const baseInput: ModuleAccessInput = {
 
 test("catálogo, perfil e workspace cobrem todos os módulos existentes", () => {
   const expected = new Set(Object.values(SAAS_MODULES));
-  const exposedModules = new Set(Object.values(SAAS_MODULES).filter((moduleKey) => moduleKey !== SAAS_MODULES.API_ACCESS));
   assert.deepEqual(new Set(ALL_SAAS_MODULES), expected);
   assert.deepEqual(new Set(DEFAULT_WORKSPACE_MODULES), expected);
-  assert.deepEqual(new Set(MODULE_CATALOG.map((module) => module.key)), exposedModules);
+  assert.deepEqual(new Set(MODULE_CATALOG.map((module) => module.key)), expected);
   assert.equal(
     MODULE_CATALOG.filter((module) => module.surface === "navigation").every((module) => Boolean(module.href)),
     true,

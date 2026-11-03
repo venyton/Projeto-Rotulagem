@@ -32,6 +32,7 @@ import { canResetManagedMemberPassword } from "@/features/settings/domain/creden
 import {
     canGrantManagedProfilePermissions,
     canManageOrganizationMember,
+    roleForAssignableProfile,
 } from "@/features/settings/domain/credential-management";
 
 async function requireSettingsContext() {
@@ -64,7 +65,12 @@ function canGrantProfilePermissions(
         hasGlobalAuthority: canManageAllOrganizationUsers(context),
         actorRole: context.member.role,
         actorPermissions: actorProfilePermissions(context),
-        requestedPermissions: permissions.filter((permission) => permission.enabled).map((permission) => permission.moduleKey),
+        requestedPermissions: permissions
+            .filter((permission) => permission.enabled && context.organization.effectiveModuleEntitlements.some(
+                (entitlement) => entitlement.moduleKey === permission.moduleKey && entitlement.enabled
+                    && (!entitlement.expiresAt || entitlement.expiresAt > new Date()),
+            ))
+            .map((permission) => permission.moduleKey),
     });
 }
 
@@ -246,13 +252,14 @@ export async function createOrganizationUser(formData: FormData) {
             select: {
                 id: true,
                 name: true,
+                systemKey: true,
                 permissions: { select: { moduleKey: true, enabled: true } },
             },
         }),
     ]);
 
     if (existingUser || existingCpf) redirectUserError("exists");
-    if (!profile || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
+    if (!profile || !roleForAssignableProfile(profile.systemKey) || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
 
     const hashedPassword = await hash(password, PASSWORD_HASH_ROUNDS);
 
@@ -269,7 +276,7 @@ export async function createOrganizationUser(formData: FormData) {
                     organizationMemberships: {
                         create: {
                             organizationId,
-                            role: OrganizationRole.MEMBER,
+                            role: roleForAssignableProfile(profile.systemKey)!,
                             profileId: profile.id,
                             active: true,
                         },
@@ -324,18 +331,19 @@ export async function linkExistingOrganizationUser(formData: FormData) {
             select: {
                 id: true,
                 name: true,
+                systemKey: true,
                 permissions: { select: { moduleKey: true, enabled: true } },
             },
         }),
     ]);
     if (!user) redirectUserError("not_found");
-    if (!profile || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
+    if (!profile || !roleForAssignableProfile(profile.systemKey) || !canGrantProfilePermissions(context, profile.permissions)) redirectUserError("profile");
 
     const existingMembership = await prisma.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId, userId: user.id } },
         select: { id: true, role: true, active: true },
     });
-    if (user.id === context.user.id || (existingMembership && !canManageOrganizationMember({
+    if (user.id === context.user.id || existingMembership?.role === OrganizationRole.OWNER || (existingMembership && !canManageOrganizationMember({
         hasGlobalAuthority: canManageAllOrganizationUsers(context),
         sameOrganization: organizationId === context.organization.id,
         isSelf: existingMembership.id === context.member.id,
@@ -359,11 +367,12 @@ export async function linkExistingOrganizationUser(formData: FormData) {
                     organizationId,
                     userId: user.id,
                     profileId: profile.id,
-                    role: OrganizationRole.MEMBER,
+                    role: roleForAssignableProfile(profile.systemKey)!,
                     active: true,
                 },
                 update: {
                     profileId: profile.id,
+                    role: roleForAssignableProfile(profile.systemKey)!,
                     active: true,
                 },
                 select: { id: true },
@@ -520,11 +529,12 @@ export async function updateMemberProfile(formData: FormData) {
         select: {
             id: true,
             name: true,
+            systemKey: true,
             permissions: { select: { moduleKey: true, enabled: true } },
         },
     });
 
-    if (!targetMember || !targetProfile) return;
+    if (!targetMember || !targetProfile || targetMember.role === OrganizationRole.OWNER || !roleForAssignableProfile(targetProfile.systemKey)) return;
     if (!canManageOrganizationMember({
         hasGlobalAuthority: canManageAllUsers,
         sameOrganization: targetMember.organizationId === context.organization.id,
@@ -536,7 +546,10 @@ export async function updateMemberProfile(formData: FormData) {
 
     await prisma.organizationMember.update({
         where: { id: targetMember.id },
-        data: { profileId: targetProfile.id },
+        data: {
+            profileId: targetProfile.id,
+            role: roleForAssignableProfile(targetProfile.systemKey)!,
+        },
     });
 
     await prisma.securityAuditLog.create({
@@ -960,7 +973,7 @@ export async function updateOrganizationProfile(formData: FormData) {
     const effectiveSelectedModules = profile.systemKey === "ADMIN"
         ? new Set(PROFILE_PERMISSION_MODULES)
         : selectedModules;
-    if (!canGrantSelectedModules(context, effectiveSelectedModules)) redirectSettingsError(tab, "forbidden");
+    if (profile.systemKey !== "ADMIN" && !canGrantSelectedModules(context, effectiveSelectedModules)) redirectSettingsError(tab, "forbidden");
 
     await prisma.$transaction(async (tx) => {
         await tx.organizationProfile.update({

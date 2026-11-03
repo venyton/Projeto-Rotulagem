@@ -182,7 +182,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
     const profileData = profileSettingsData ?? data;
 
-    const enabledOrganizationModules = new Set(
+    const enabledOrganizationModules = new Set<string>(
         profileData.entitlements.filter((entitlement) => entitlement.enabled).map((entitlement) => entitlement.moduleKey),
     );
     const selectedProfile =
@@ -194,12 +194,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         : [];
     const isAdministratorProfile = selectedProfile?.systemKey === "ADMIN";
     const actorProfilePermissions = PROFILE_PERMISSION_MODULES.filter((moduleKey) => contextHasModuleAccess(context, moduleKey));
-    const assignableProfiles = data.profiles.filter((profile) => canGrantManagedProfilePermissions({
+    const assignableProfiles = data.profiles.filter((profile) => profile.systemKey !== "OWNER" && canGrantManagedProfilePermissions({
         hasGlobalAuthority: canManageAllUsers,
         actorRole: context.member.role,
         actorPermissions: actorProfilePermissions,
         requestedPermissions: profile.permissions
-            .filter((permission) => permission.enabled)
+            .filter((permission) => permission.enabled && enabledOrganizationModules.has(permission.moduleKey))
             .map((permission) => permission.moduleKey),
     }));
     const defaultNewUserProfile = assignableProfiles.find((profile) => profile.systemKey === "MEMBER") ?? assignableProfiles[0] ?? selectedProfile;
@@ -208,7 +208,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             hasGlobalAuthority: canManageAllUsers,
             actorRole: context.member.role,
             actorPermissions: actorProfilePermissions,
-            requestedPermissions: selectedProfilePermissions,
+            requestedPermissions: selectedProfilePermissions.filter((moduleKey) => enabledOrganizationModules.has(moduleKey)),
         }) && !(
             context.member.role === "MEMBER" &&
             (selectedProfile.systemKey === "OWNER" || selectedProfile.systemKey === "ADMIN")
@@ -394,7 +394,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                         <Field>
                                             <FieldLabel htmlFor="selected-user-profile">Perfil</FieldLabel>
                                             <NativeSelect id="selected-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>
-                                                {selectedOrganizationData.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}
+                                                {selectedOrganizationData.profiles.filter((profile) => profile.systemKey !== "OWNER").map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}
                                             </NativeSelect>
                                         </Field>
                                         <Button type="submit"><Plus data-icon="inline-start" />Criar usuário</Button>
@@ -405,7 +405,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <input type="hidden" name="managementTab" value="organizations" />
                                     <FieldGroup className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem_auto] lg:items-end">
                                         <Field><FieldLabel htmlFor="selected-existing-user-email">Vincular usuário existente</FieldLabel><Input id="selected-existing-user-email" name="email" type="email" required placeholder="colaborador@empresa.com" /></Field>
-                                        <Field><FieldLabel htmlFor="selected-existing-user-profile">Perfil</FieldLabel><NativeSelect id="selected-existing-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>{selectedOrganizationData.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field>
+                                        <Field><FieldLabel htmlFor="selected-existing-user-profile">Perfil</FieldLabel><NativeSelect id="selected-existing-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>{selectedOrganizationData.profiles.filter((profile) => profile.systemKey !== "OWNER").map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field>
                                         <Button type="submit" variant="outline"><Link2 data-icon="inline-start" />Vincular</Button>
                                     </FieldGroup>
                                 </form>

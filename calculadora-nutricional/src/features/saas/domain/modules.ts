@@ -43,8 +43,7 @@ export const MODULE_CATALOG: SaaSModuleDefinition[] = [
     name: "Fichas técnicas",
     description: "Upload, extração, revisão e reaproveitamento de fichas técnicas.",
     category: "growth",
-    surface: "navigation",
-    href: "/dashboard/ingredients/technical-sheets",
+    surface: "embedded",
   },
   {
     key: SAAS_MODULES.OPEN_FOOD_FACTS,
@@ -55,7 +54,7 @@ export const MODULE_CATALOG: SaaSModuleDefinition[] = [
   },
   {
     key: SAAS_MODULES.ENTERPRISE_LABELS,
-    name: "Enterprise internacional",
+    name: "Internacional",
     description: "Projetos, versões, aprovação e rótulos internacionais.",
     category: "enterprise",
     surface: "navigation",
@@ -73,6 +72,13 @@ export const MODULE_CATALOG: SaaSModuleDefinition[] = [
     name: "IA de importação",
     description: "Uso de IA para interpretar documentos técnicos.",
     category: "growth",
+    surface: "embedded",
+  },
+  {
+    key: SAAS_MODULES.API_ACCESS,
+    name: "Acesso à API",
+    description: "Criação e uso de credenciais da API da organização.",
+    category: "security",
     surface: "embedded",
   },
   {

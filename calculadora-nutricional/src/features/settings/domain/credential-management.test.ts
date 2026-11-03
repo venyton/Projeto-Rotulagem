@@ -5,7 +5,15 @@ import {
     canGrantManagedProfilePermissions,
     canManageOrganizationMember,
     canResetManagedMemberPassword,
+    roleForAssignableProfile,
 } from "./credential-management";
+
+test("somente o perfil administrativo da organização concede papel administrativo", () => {
+    assert.equal(roleForAssignableProfile("ADMIN"), "ADMIN");
+    assert.equal(roleForAssignableProfile("MEMBER"), "MEMBER");
+    assert.equal(roleForAssignableProfile("CUSTOM_example"), "MEMBER");
+    assert.equal(roleForAssignableProfile("OWNER"), null);
+});
 
 test("impede escalada por redefinição de credencial", () => {
     assert.equal(canResetManagedMemberPassword({
@@ -79,19 +87,31 @@ test("impede troca do próprio perfil e gerenciamento acima da hierarquia", () =
     }), true);
 });
 
-test("delegado só pode atribuir um subconjunto das próprias permissões", () => {
+test("somente administradores podem atribuir perfis e apenas dentro das próprias permissões", () => {
     assert.equal(canGrantManagedProfilePermissions({
         hasGlobalAuthority: false,
         actorRole: "MEMBER",
         actorPermissions: ["SETTINGS", "TABLES"],
         requestedPermissions: ["TABLES"],
-    }), true);
+    }), false);
     assert.equal(canGrantManagedProfilePermissions({
         hasGlobalAuthority: false,
         actorRole: "MEMBER",
         actorPermissions: ["SETTINGS", "TABLES"],
         requestedPermissions: ["TABLES", "EXPORTS"],
     }), false);
+    assert.equal(canGrantManagedProfilePermissions({
+        hasGlobalAuthority: false,
+        actorRole: "ADMIN",
+        actorPermissions: ["SETTINGS", "TABLES"],
+        requestedPermissions: ["TABLES", "EXPORTS"],
+    }), false);
+    assert.equal(canGrantManagedProfilePermissions({
+        hasGlobalAuthority: false,
+        actorRole: "ADMIN",
+        actorPermissions: ["SETTINGS", "TABLES"],
+        requestedPermissions: ["TABLES"],
+    }), true);
 });
 
 test("papel histórico de billing não recebe autoridade administrativa", () => {
