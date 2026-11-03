@@ -18,6 +18,73 @@ export function constituentLabel(name: string) {
   return EXTRA_CONSTITUENTS.find((item) => constituentKey(item) === constituentKey(name)) || name.trim();
 }
 
+export type HistoricalConstituent = { name: string; amount: string | number; unit: string };
+
+/** Values saved by older editors were amounts per portion, not ingredient data. */
+export function reconcileHistoricalConstituents(
+  values: HistoricalConstituent[],
+  ingredientNutrients: readonly unknown[],
+  preparationEnabled: boolean,
+) {
+  const accepted: HistoricalConstituent[] = [];
+  const issues: string[] = [];
+  const seen = new Set<string>();
+  const ingredientKeys = new Set(ingredientNutrients.flatMap((nutrients) =>
+    nutrients && typeof nutrients === "object" && !Array.isArray(nutrients)
+      ? Object.keys(nutrients).map(constituentKey) : []));
+  const polyols = new Set(["poliois totais", "maltitol", "lactitol", "xilitol", "sorbitol", "manitol", "isomalte", "eritritol"]);
+  const massUnits = new Set(["g", "mg", "µg", "mcg", "ug", "μg"]);
+  const energyKeys = new Set([...polyols, "tagatose", "polidextrose"]);
+  for (const value of values) {
+    const raw = String(value.amount ?? "").trim();
+    if (!raw) continue;
+    const key = constituentKey(typeof value.name === "string" ? value.name : "");
+    const numeric = /^\d+(?:[.,]\d+)?$/.test(raw) ? Number(raw.replace(",", ".")) : NaN;
+    const unit = typeof value.unit === "string" ? value.unit.trim() || "g" : "g";
+    const energyComponent = [...energyKeys].some((item) => key.includes(item));
+    const polyol = [...polyols].some((item) => key.includes(item));
+    if (!key || !Number.isFinite(numeric) || numeric < 0 || (energyComponent && !massUnits.has(unit.toLowerCase()))) {
+      issues.push(`${value.name || "Constituinte"}: valor antigo ou unidade inválida; revise antes de exportar.`);
+    } else if (preparationEnabled) {
+      issues.push(`${value.name}: revise o valor antigo para a tabela com preparo antes de exportar.`);
+    } else if (seen.has(key) || ingredientKeys.has(key) || (polyol && [...ingredientKeys].some((item) => [...polyols].some((part) => item.includes(part))))) {
+      issues.push(`${value.name}: há mais de uma fonte para este constituinte; revise antes de exportar.`);
+    } else {
+      accepted.push({ name: value.name, amount: numeric, unit });
+    }
+    if (key) seen.add(key);
+  }
+  const toGrams = (value: HistoricalConstituent) => {
+    const unit = value.unit.toLowerCase();
+    return Number(value.amount) / (unit === "mg" ? 1_000 : ["µg", "μg", "mcg", "ug"].includes(unit) ? 1_000_000 : 1);
+  };
+  const totalPolyols = accepted.filter((value) => constituentKey(value.name) === "poliois totais").reduce((sum, value) => sum + toGrams(value), 0);
+  const specificPolyols = accepted.filter((value) => {
+    const key = constituentKey(value.name);
+    return key !== "poliois totais" && [...polyols].some((item) => key.includes(item));
+  }).reduce((sum, value) => sum + toGrams(value), 0);
+  if (totalPolyols > 0 && Math.abs(totalPolyols - specificPolyols) > 1e-9) {
+    issues.push("Polióis antigos: revise os tipos e quantidades para que correspondam ao total antes de exportar.");
+  }
+  return { accepted, issues };
+}
+
+export function includeHistoricalConstituents<T extends { per100g: CalculatedNutrients; perPortion: CalculatedNutrients }>(
+  calculation: T,
+  values: HistoricalConstituent[],
+  portionSize: number,
+): T {
+  if (!values.length || portionSize <= 0) return calculation;
+  const per100g = { ...calculation.per100g, customNutrients: { ...calculation.per100g.customNutrients } };
+  const perPortion = { ...calculation.perPortion, customNutrients: { ...calculation.perPortion.customNutrients } };
+  for (const value of values) {
+    const amount = Number(value.amount);
+    perPortion.customNutrients[value.name] = { value: amount, unit: value.unit };
+    per100g.customNutrients[value.name] = { value: amount * 100 / portionSize, unit: value.unit };
+  }
+  return { ...calculation, per100g, perPortion };
+}
+
 export function selectedConstituentRows(
   selection: Array<{ name?: string }>,
   per100: Pick<CalculatedNutrients, "customNutrients">,

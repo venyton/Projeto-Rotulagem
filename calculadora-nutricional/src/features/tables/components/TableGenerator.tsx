@@ -1,6 +1,6 @@
 'use client'
 
-import { EXTRA_CONSTITUENTS, constituentKey, constituentLabel } from "@/features/tables/domain/extra-constituents";
+import { EXTRA_CONSTITUENTS, constituentKey, constituentLabel, includeHistoricalConstituents, reconcileHistoricalConstituents } from "@/features/tables/domain/extra-constituents";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -52,12 +52,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     AlertDialog,
+    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
     DropdownMenu,
@@ -575,10 +577,15 @@ export function TableGenerator({
     const requiresIodizedSaltStatement = complianceRules.requiresIodizedSaltStatement;
     const requiresFlourStatement = complianceRules.requiresFlourStatement;
     const showDailyValue = shouldShowDailyValue(regulatoryCategory);
-    const energyIssues = React.useMemo(() => getEnergyCalculationIssues(
-        enablePreparationSimulator ? [...ingredients, ...preparationIngredients] : ingredients,
-        regulatoryCategory,
-    ), [enablePreparationSimulator, ingredients, preparationIngredients, regulatoryCategory]);
+    const historicalConstituents = React.useMemo(() => reconcileHistoricalConstituents(
+        extraConstituents,
+        (enablePreparationSimulator ? [...ingredients, ...preparationIngredients] : ingredients).map(({ ingredient }) => ingredient.customNutrients),
+        enablePreparationSimulator,
+    ), [extraConstituents, enablePreparationSimulator, ingredients, preparationIngredients]);
+    const energyIssues = React.useMemo(() => [
+        ...getEnergyCalculationIssues(enablePreparationSimulator ? [...ingredients, ...preparationIngredients] : ingredients, regulatoryCategory),
+        ...historicalConstituents.issues,
+    ], [enablePreparationSimulator, ingredients, preparationIngredients, regulatoryCategory, historicalConstituents]);
 
     const fopStatus = fopReference ? checkFOP(fopReference, fopFoodType) : null;
     const hasFopSeal = !!(fopStatus && (fopStatus.highSugar || fopStatus.highFat || fopStatus.highSodium));
@@ -1024,11 +1031,12 @@ export function TableGenerator({
             return;
         }
 
-        const res = calculateRecipe(ingredients, portionSize, [], regulatoryCategory);
-        setResult(applyManualMicronutrientOverrides(res, manualMicronutrients, portionSize));
+        const res = calculateRecipe(ingredients, portionSize, historicalConstituents.accepted, regulatoryCategory);
+        setResult(includeHistoricalConstituents(applyManualMicronutrientOverrides(res, manualMicronutrients, portionSize), historicalConstituents.accepted, portionSize));
     }, [
         enablePreparationSimulator,
         extraConstituents,
+        historicalConstituents,
         fopReferenceMode,
         ingredients,
         portionSize,
@@ -2889,8 +2897,31 @@ export function TableGenerator({
                     {extraConstituentsSectionOpen && (
                     <CardContent className="editor-workbench-section-body flex flex-col gap-3 p-4">
                         <p className="text-sm text-muted-foreground">Selecione os constituintes que devem aparecer na tabela. Informe as quantidades dos ingredientes na formulação e seus constituintes no cadastro do ingrediente. Um traço na tabela indica valor indisponível.</p>
-                        {extraConstituents.some((item) => item.amount?.trim()) && (
-                            <p className="text-sm text-muted-foreground">Valores por porção informados anteriormente não são usados. Confira os constituintes cadastrados nos ingredientes da formulação.</p>
+                        {extraConstituents.some((item) => String(item.amount ?? "").trim()) && (
+                            <Alert>
+                                <AlertTitle>Valores antigos por porção</AlertTitle>
+                                <AlertDescription>Valores sem outra fonte são preservados. Quando houver conflito, revise os ingredientes antes de exportar. Remover um valor antigo só será permanente ao salvar a tabela.</AlertDescription>
+                                <div className="mt-3 flex flex-col gap-2">
+                                    {extraConstituents.filter((item) => String(item.amount ?? "").trim()).map((item) => (
+                                        <div key={item.id} className="flex flex-wrap items-center gap-2 text-sm">
+                                            <span>{item.name}: {item.amount} {item.unit} por porção</span>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild><Button type="button" variant="outline" size="sm">Remover valor antigo de {item.name}</Button></AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Remover valor antigo de {item.name}?</AlertDialogTitle>
+                                                        <AlertDialogDescription>O valor {item.amount} {item.unit} por porção deixará de ser usado. A remoção será permanente quando você salvar a tabela. Confira o cadastro dos ingredientes antes de continuar.</AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => setExtraConstituents((current) => current.map((entry) => entry.id === item.id ? { ...entry, amount: "" } : entry))}>Remover valor</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Alert>
                         )}
                         <fieldset className="flex flex-wrap gap-x-5 gap-y-3">
                             <legend className="sr-only">Constituintes exibidos na tabela nutricional</legend>
@@ -2898,7 +2929,7 @@ export function TableGenerator({
                                 const checked = extraConstituents.some((item) => constituentKey(item.name) === constituentKey(name));
                                 const id = `extra-${constituentKey(name).replace(/[^a-z0-9]/g, "-")}`;
                                 return <div key={id} className="flex items-center gap-2">
-                                    <Checkbox id={id} checked={checked} onCheckedChange={() => toggleExtraConstituent(name)} />
+                                    <Checkbox id={id} checked={checked} disabled={extraConstituents.some((item) => constituentKey(item.name) === constituentKey(name) && String(item.amount ?? "").trim() !== "")} onCheckedChange={() => toggleExtraConstituent(name)} />
                                     <Label htmlFor={id} className="cursor-pointer">{name}</Label>
                                 </div>;
                             })}

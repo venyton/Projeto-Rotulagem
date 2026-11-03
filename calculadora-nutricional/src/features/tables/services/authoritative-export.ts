@@ -25,6 +25,7 @@ import {
 import { isSafeResourceId } from "@/lib/validation/identifiers";
 import { isValidExactQuantity } from "@/features/tables/domain/exact-quantity";
 import { decimalText } from "@/features/tables/domain/decimal-display";
+import { includeHistoricalConstituents, reconcileHistoricalConstituents } from "@/features/tables/domain/extra-constituents";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -177,7 +178,9 @@ export async function loadAuthoritativeTableCalculation(tableId: string, organiz
   const powderPortionSize = readPositiveNumber(uiState.preparationPowderPortionSize) || table.portion;
   const usePreparation = uiState.enablePreparationSimulator === true && preparationIngredients.length > 0 && powderBatchWeight > 0 && readyPortionSize > 0 && finalYield > 0;
   const category = isRegulatoryCategory(uiState.regulatoryCategory) ? uiState.regulatoryCategory : uiState.isSupplement === true ? "supplement" : "general-food";
-  const energyIssues = getEnergyCalculationIssues(usePreparation ? [...ingredients, ...preparationIngredients] : ingredients, category);
+  const calculationIngredients = usePreparation ? [...ingredients, ...preparationIngredients] : ingredients;
+  const historical = reconcileHistoricalConstituents(extraConstituents.map((item) => ({ ...item, unit: item.unit ?? "g" })), calculationIngredients.map(({ ingredient }) => ingredient.customNutrients), uiState.enablePreparationSimulator === true);
+  const energyIssues = [...getEnergyCalculationIssues(calculationIngredients, category), ...historical.issues];
   if (energyIssues.length) return { ok: false, error: `Não foi possível determinar o valor energético: ${energyIssues.join(" ")}` } as const;
   const calculated = usePreparation
     ? calculatePreparedProduct({
@@ -190,8 +193,8 @@ export async function loadAuthoritativeTableCalculation(tableId: string, organiz
         preparationInstructions: readText(uiState.preparationInstructions, 2_000),
         category,
       })
-    : calculateRecipe(ingredients, table.portion, [], category);
-  const result = applyManualMicronutrientOverrides(calculated, uiState.manualMicronutrients, table.portion);
+    : calculateRecipe(ingredients, table.portion, historical.accepted, category);
+  const result = includeHistoricalConstituents(applyManualMicronutrientOverrides(calculated, uiState.manualMicronutrients, table.portion), historical.accepted, table.portion);
 
   return {
     ok: true,
