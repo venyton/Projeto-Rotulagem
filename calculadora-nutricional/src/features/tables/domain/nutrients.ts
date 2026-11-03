@@ -1,13 +1,15 @@
 import type { IngredientDto } from "../../ingredients/domain/ingredient-dto";
 import { MICRO_KEYS, type MicronutrientKey } from "./micronutrients";
+import BigNumber from "bignumber.js";
+import { formatAnnexIvNutrientPair, roundMacro } from "./anvisa";
+import type { RegulatoryCategory } from "./regulatory-declarations";
 
-type IngredientWithAddedSugar = IngredientDto & {
-    sugarAdded?: number | null;
-};
+const NutritionDecimal = BigNumber.clone({ DECIMAL_PLACES: 400, ROUNDING_MODE: BigNumber.ROUND_HALF_UP });
 
 export interface SelectedIngredient {
     ingredient: IngredientDto;
     quantity: number; // g
+    quantityExact?: string; // g, decimal serializável
     isAddedSugar: boolean;
 }
 
@@ -115,7 +117,7 @@ const ADDED_SUGAR_NAME_PATTERNS = [
 ];
 
 const ENERGY_COMPONENT_FACTORS = [
-    { aliases: ["polidextrose", "polide xtrose"], factor: 1, subtractFromCarbs: true },
+    { aliases: ["polidextrose", "polide xtrose"], factor: 1, subtractFromCarbs: false },
     { aliases: ["maltitol"], factor: 2.1, subtractFromCarbs: true },
     { aliases: ["lactitol"], factor: 2, subtractFromCarbs: true },
     { aliases: ["xilitol", "xylitol"], factor: 2.4, subtractFromCarbs: true },
@@ -123,7 +125,7 @@ const ENERGY_COMPONENT_FACTORS = [
     { aliases: ["manitol", "mannitol"], factor: 1.6, subtractFromCarbs: true },
     { aliases: ["isomalt", "isomalte"], factor: 2, subtractFromCarbs: true },
     { aliases: ["eritritol", "erythritol"], factor: 0, subtractFromCarbs: true },
-    { aliases: ["tagatose"], factor: 1.5, subtractFromCarbs: true },
+    { aliases: ["tagatose"], factor: 3, subtractFromCarbs: true },
     { aliases: ["poliois", "poliol", "polyols", "polyol"], factor: 2.4, subtractFromCarbs: true },
     { aliases: ["alcool", "etanol", "alcohol"], factor: 7, subtractFromCarbs: false },
     { aliases: ["acidos organicos", "acido organico", "organic acids", "organic acid"], factor: 3, subtractFromCarbs: false },
@@ -199,6 +201,43 @@ function normalizeEnergyComponentName(value: string) {
     return normalizeIngredientName(value).replace(/\s+/g, " ").trim();
 }
 
+/** Pendências que impedem determinar energia sem presumir a composição. */
+export function getEnergyCalculationIssues(ingredients: SelectedIngredient[], category: RegulatoryCategory = "general-food"): string[] {
+    const issues = new Set<string>();
+    if (category !== "general-food" && category !== "supplement") {
+        issues.add("A categoria selecionada exige validação específica das regras de declaração antes da exportação.");
+    }
+    for (const { ingredient, quantity } of ingredients) {
+        if (quantity <= 0) continue;
+        const entries = Object.entries(ingredient.customNutrients || {});
+        const soluble = entries.filter(([name]) => ["fibra soluvel", "fibras soluveis", "fibra alimentar soluvel", "fibras alimentares soluveis"].includes(normalizeEnergyComponentName(name)));
+        if ((ingredient.fiber || 0) > 0 && soluble.length === 0) {
+            issues.add(`${ingredient.name}: informe a quantidade de fibra alimentar solúvel, inclusive zero quando aplicável.`);
+        }
+        const massUnit = /^(g|grama|gramas|mg|miligrama|miligramas|mcg|ug|µg|μg|micrograma|microgramas)$/;
+        for (const [name, data] of entries) {
+            if ((getEnergyComponent(name) || soluble.some(([label]) => label === name)) && !massUnit.test(normalizeEnergyComponentName(data.unit))) {
+                issues.add(`${ingredient.name}: use uma unidade de massa para ${name}.`);
+            }
+        }
+        const solubleAmount = soluble.reduce((sum, [, data]) => sum + amountToGrams(data.value, data.unit), 0);
+        if (solubleAmount > (ingredient.fiber || 0) + 1e-9) issues.add(`${ingredient.name}: a fibra solúvel excede a fibra alimentar total.`);
+        let total = 0;
+        let specific = 0;
+        for (const [name, data] of entries) {
+            const component = getEnergyComponent(name);
+            if (!component) continue;
+            const grams = amountToGrams(data.value, data.unit);
+            if (component.aliases.some((alias) => alias === "poliois")) total += grams;
+            else if (component.aliases.some((alias) => ["maltitol", "lactitol", "xilitol", "sorbitol", "manitol", "isomalt", "eritritol"].includes(alias))) specific += grams;
+        }
+        if (total > specific + 1e-9) issues.add(`${ingredient.name}: informe a composição dos polióis por tipo e quantidade.`);
+        if (total > 0 && specific > total + 1e-9) issues.add(`${ingredient.name}: a soma dos polióis específicos excede o total informado.`);
+        if (Math.max(total, specific) > (ingredient.carbs || 0) + 1e-9) issues.add(`${ingredient.name}: os polióis excedem os carboidratos informados.`);
+    }
+    return [...issues];
+}
+
 function getEnergyComponent(name: string) {
     const normalized = normalizeEnergyComponentName(name);
     return ENERGY_COMPONENT_FACTORS.find((component) =>
@@ -218,6 +257,7 @@ function amountToGrams(value: string | number, unit?: string) {
         normalizedUnit === "mcg" ||
         normalizedUnit === "ug" ||
         normalizedUnit === "µg" ||
+        normalizedUnit === "μg" ||
         normalizedUnit === "micrograma" ||
         normalizedUnit === "microgramas"
     ) {
@@ -227,19 +267,42 @@ function amountToGrams(value: string | number, unit?: string) {
     return amount;
 }
 
+function convertCustomAmount(value: number, from: string, to: string): number {
+    const massUnits = /^(g|grama|gramas|mg|miligrama|miligramas|mcg|ug|µg|μg|micrograma|microgramas)$/;
+    if (massUnits.test(normalizeEnergyComponentName(from)) && massUnits.test(normalizeEnergyComponentName(to))) {
+        return amountToGrams(value, from) / amountToGrams(1, to);
+    }
+    return value;
+}
+
 function calculateEnergyFromComposition(nutrients: CalculatedNutrients, extraConstituents: EnergyConstituentInput[] = []) {
     let carbSubtractions = 0;
     let componentEnergy = 0;
+    let totalPolyols = 0;
+    let specificPolyols = 0;
+    let solubleFiber = 0;
+    let polydextrose = 0;
 
     for (const [name, data] of Object.entries(nutrients.customNutrients)) {
+        const normalizedName = normalizeEnergyComponentName(name);
+        if (normalizedName === "fibra soluvel" || normalizedName === "fibras soluveis" || normalizedName === "fibra alimentar soluvel" || normalizedName === "fibras alimentares soluveis") {
+            solubleFiber += Number(roundMacro(amountToGrams(data.value, data.unit)).replace(",", "."));
+            continue;
+        }
         const component = getEnergyComponent(name);
         if (!component) continue;
 
-        const grams = amountToGrams(data.value, data.unit);
+        const grams = Number(roundMacro(amountToGrams(data.value, data.unit)).replace(",", "."));
         if (grams <= 0) continue;
+        if (component.aliases.some((alias) => alias === "polidextrose")) polydextrose += grams;
 
+        if (component.aliases.some((alias) => alias === "poliois")) {
+            totalPolyols += grams;
+            continue;
+        }
         if (component.subtractFromCarbs) {
             carbSubtractions += grams;
+            if (component.aliases.some((alias) => ["maltitol", "lactitol", "xilitol", "sorbitol", "manitol", "isomalt", "eritritol"].includes(alias))) specificPolyols += grams;
         }
         componentEnergy += grams * component.factor;
     }
@@ -248,61 +311,103 @@ function calculateEnergyFromComposition(nutrients: CalculatedNutrients, extraCon
         const component = getEnergyComponent(item.name);
         if (!component) continue;
 
-        const grams = amountToGrams(item.amount, item.unit);
+        const grams = Number(roundMacro(amountToGrams(item.amount, item.unit)).replace(",", "."));
         if (grams <= 0) continue;
+        if (component.aliases.some((alias) => alias === "polidextrose")) polydextrose += grams;
 
+        if (component.aliases.some((alias) => alias === "poliois")) {
+            totalPolyols += grams;
+            continue;
+        }
         if (component.subtractFromCarbs) {
             carbSubtractions += grams;
+            if (component.aliases.some((alias) => ["maltitol", "lactitol", "xilitol", "sorbitol", "manitol", "isomalt", "eritritol"].includes(alias))) specificPolyols += grams;
         }
         componentEnergy += grams * component.factor;
     }
 
-    const availableCarbs = Math.max(0, nutrients.carbs - nutrients.fiber - carbSubtractions);
+    const unspecifiedPolyols = Math.max(0, totalPolyols - specificPolyols);
+    carbSubtractions += unspecifiedPolyols;
+    componentEnergy += Math.max(0, solubleFiber - polydextrose) * 2;
+    const availableCarbs = Math.max(0, nutrients.carbs - carbSubtractions);
 
     return (
         availableCarbs * 4 +
         nutrients.protein * 4 +
         nutrients.fatTotal * 9 +
-        nutrients.fiber * 2 +
         componentEnergy
     );
 }
 
-export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: number, extraConstituents: EnergyConstituentInput[] = []): {
+function applyDeclaredEnergy(per100g: CalculatedNutrients, perPortion: CalculatedNutrients, extraConstituents: EnergyConstituentInput[] = [], portionSize = 100, category: RegulatoryCategory = "general-food") {
+    const values = { per100g, perPortion };
+    const declared = (nutrients: CalculatedNutrients, basis: "per100Value" | "portionValue") => ({
+        ...nutrients,
+        carbs: formatAnnexIvNutrientPair("carbs", values, { isSupplement: category === "supplement" })[basis],
+        protein: formatAnnexIvNutrientPair("protein", values, { isSupplement: category === "supplement" })[basis],
+        fatTotal: formatAnnexIvNutrientPair("fatTotal", values, { isSupplement: category === "supplement" })[basis],
+    });
+    perPortion.energy = calculateEnergyFromComposition(declared(perPortion, "portionValue"), extraConstituents);
+    per100g.energy = calculateEnergyFromComposition(declared(per100g, "per100Value"), portionSize > 0
+        ? extraConstituents.map((item) => ({ ...item, amount: amountToGrams(item.amount, item.unit) * 100 / portionSize, unit: "g" }))
+        : []);
+}
+
+export function calculateRecipe(ingredients: SelectedIngredient[], portionSize: number, extraConstituents: EnergyConstituentInput[] = [], category: RegulatoryCategory = "general-food"): {
     per100g: CalculatedNutrients;
     perPortion: CalculatedNutrients;
     totalWeight: number;
 } {
-    const totals = createEmptyNutrients();
-
-    let totalWeight = 0;
+    const totals = new Map<string, BigNumber>();
+    const customTotals = new Map<string, { value: BigNumber; unit: string }>();
+    let totalWeight = new NutritionDecimal(0);
 
     for (const item of ingredients) {
         const qty = item.quantity;
         if (qty <= 0) continue;
 
-        totalWeight += qty;
-        addIngredientNutrients(totals, item, qty / 100);
+        const quantity = new NutritionDecimal(item.quantityExact ?? qty);
+        totalWeight = totalWeight.plus(quantity);
+        const source = item.ingredient;
+        const add = (key: string, value: number) => {
+            const previous = totals.get(key) ?? new NutritionDecimal(0);
+            totals.set(key, previous.plus(quantity.multipliedBy(value)));
+        };
+        for (const key of ["carbs", "protein", "fatTotal", "fatSat", "fatTrans", "fiber", "sodium", ...MICRO_KEYS] as const) {
+            add(key, source[key] || 0);
+        }
+        const totalSugar = source.sugarTotal || 0;
+        const addedSugar = item.isAddedSugar ? (source.sugarTotal || source.carbs || 0) : (source.sugarAdded || 0);
+        add("sugarTotal", Math.max(totalSugar, addedSugar));
+        add("sugarAdded", addedSugar);
+        const custom = source.customNutrients as Record<string, { value: number; unit: string }> | null;
+        if (custom && typeof custom === "object" && !Array.isArray(custom)) {
+            for (const [key, data] of Object.entries(custom)) {
+                const previous = customTotals.get(key) ?? { value: new NutritionDecimal(0), unit: data.unit };
+                const value = convertCustomAmount(data.value || 0, data.unit, previous.unit);
+                customTotals.set(key, { ...previous, value: previous.value.plus(quantity.multipliedBy(value)) });
+            }
+        }
     }
 
-    const f100 = totalWeight > 0 ? 100 / totalWeight : 0;
-    const per100g = scaleNutrients(totals, f100);
+    const resultForPortion = (portion: number) => {
+        const result = createEmptyNutrients();
+        if (totalWeight.isZero()) return result;
+        const numerator = new NutritionDecimal(portion);
+        const denominator = totalWeight.multipliedBy(100);
+        for (const [key, value] of totals) {
+            if (key in result && key !== "customNutrients") {
+                result[key as Exclude<keyof CalculatedNutrients, "customNutrients">] = value.multipliedBy(numerator).dividedBy(denominator).toNumber();
+            }
+        }
+        for (const [key, data] of customTotals) result.customNutrients[key] = { value: data.value.multipliedBy(numerator).dividedBy(denominator).toNumber(), unit: data.unit };
+        return result;
+    };
+    const per100g = resultForPortion(100);
+    const perPortion = resultForPortion(portionSize);
+    applyDeclaredEnergy(per100g, perPortion, extraConstituents, portionSize, category);
 
-    const fPortion = totalWeight > 0 ? portionSize / totalWeight : 0;
-    const perPortion = scaleNutrients(totals, fPortion);
-    perPortion.energy = calculateEnergyFromComposition(perPortion, extraConstituents);
-    per100g.energy = calculateEnergyFromComposition(
-        per100g,
-        portionSize > 0
-            ? extraConstituents.map((item) => ({
-                ...item,
-                amount: amountToGrams(item.amount, item.unit) * (100 / portionSize),
-                unit: "g",
-            }))
-            : []
-    );
-
-    return { per100g, perPortion, totalWeight };
+    return { per100g, perPortion, totalWeight: totalWeight.toNumber() };
 }
 
 export function calculatePreparedProduct(input: {
@@ -314,14 +419,19 @@ export function calculatePreparedProduct(input: {
     finalYield: number;
     preparationInstructions: string;
     extraConstituents?: EnergyConstituentInput[];
+    category?: RegulatoryCategory;
 }): PreparedProductCalculation {
     const powderPortionSize = input.powderPortionSize > 0 ? input.powderPortionSize : 0;
-    const powderRecipe = calculateRecipe(input.powderIngredients, powderPortionSize, input.extraConstituents);
+    const powderRecipe = calculateRecipe(input.powderIngredients, powderPortionSize, input.extraConstituents, input.category);
     const powderBatch = scaleNutrients(powderRecipe.per100g, input.powderBatchWeight > 0 ? input.powderBatchWeight / 100 : 0);
-    const addedIngredientsWeight = input.preparationIngredients.reduce((sum, item) => sum + Math.max(0, item.quantity || 0), 0);
+    const addedIngredientsWeight = input.preparationIngredients.reduce(
+        (sum, item) => item.quantity > 0 ? sum.plus(item.quantityExact ?? item.quantity) : sum,
+        new NutritionDecimal(0),
+    ).toNumber();
     const addedRecipe = calculateRecipe(input.preparationIngredients, addedIngredientsWeight);
     const preparedBatch = addNutrients(powderBatch, addedRecipe.perPortion);
     const per100g = scaleNutrients(preparedBatch, input.finalYield > 0 ? 100 / input.finalYield : 0);
+    applyDeclaredEnergy(per100g, powderRecipe.perPortion, [], 100, input.category);
     const totalBeforePreparation = Math.max(0, input.powderBatchWeight) + addedIngredientsWeight;
     const preparationLoss = Math.max(0, totalBeforePreparation - Math.max(0, input.finalYield));
     const powderPortionRatio = input.readyPortionSize > 0 ? powderPortionSize / input.readyPortionSize : 0;
@@ -365,47 +475,12 @@ function createEmptyNutrients(): CalculatedNutrients {
     };
 }
 
-function addIngredientNutrients(totals: CalculatedNutrients, item: SelectedIngredient, scale: number) {
-    totals.carbs += (item.ingredient.carbs || 0) * scale;
-    totals.protein += (item.ingredient.protein || 0) * scale;
-    totals.fatTotal += (item.ingredient.fatTotal || 0) * scale;
-    totals.fatSat += (item.ingredient.fatSat || 0) * scale;
-    totals.fatTrans += (item.ingredient.fatTrans || 0) * scale;
-    totals.fiber += (item.ingredient.fiber || 0) * scale;
-    totals.sodium += (item.ingredient.sodium || 0) * scale;
-
-    for (const key of MICRO_KEYS) {
-        const val = item.ingredient[key] || 0;
-        totals[key] += val * scale;
-    }
-
-    const ingredient = item.ingredient as IngredientWithAddedSugar;
-    const totalSugar = (ingredient.sugarTotal || 0) * scale;
-    const declaredAddedSugar = (ingredient.sugarAdded || 0) * scale;
-    const addedSugar = item.isAddedSugar
-        ? (ingredient.sugarTotal ? totalSugar : (ingredient.carbs || 0) * scale)
-        : declaredAddedSugar;
-
-    totals.sugarTotal += Math.max(totalSugar, addedSugar);
-    totals.sugarAdded += addedSugar;
-
-    const customObj = item.ingredient.customNutrients as Record<string, { value: number; unit: string }> | null;
-    if (customObj && typeof customObj === "object" && !Array.isArray(customObj)) {
-        for (const [cKey, cData] of Object.entries(customObj)) {
-            if (!totals.customNutrients[cKey]) {
-                totals.customNutrients[cKey] = { value: 0, unit: cData.unit };
-            }
-            totals.customNutrients[cKey].value += (cData.value || 0) * scale;
-        }
-    }
-}
-
 function addNutrients(a: CalculatedNutrients, b: CalculatedNutrients): CalculatedNutrients {
     const total = createEmptyNutrients();
 
     for (const key of Object.keys(total) as Array<keyof CalculatedNutrients>) {
         if (key === "customNutrients") continue;
-        (total[key] as number) = ((a[key] as number) || 0) + ((b[key] as number) || 0);
+        (total[key] as number) = new NutritionDecimal((a[key] as number) || 0).plus((b[key] as number) || 0).toNumber();
     }
 
     for (const source of [a.customNutrients, b.customNutrients]) {
@@ -413,7 +488,7 @@ function addNutrients(a: CalculatedNutrients, b: CalculatedNutrients): Calculate
             if (!total.customNutrients[cKey]) {
                 total.customNutrients[cKey] = { value: 0, unit: cData.unit };
             }
-            total.customNutrients[cKey].value += cData.value || 0;
+            total.customNutrients[cKey].value = new NutritionDecimal(total.customNutrients[cKey].value).plus(convertCustomAmount(cData.value || 0, cData.unit, total.customNutrients[cKey].unit)).toNumber();
         }
     }
 
@@ -424,13 +499,13 @@ function scaleNutrients(n: CalculatedNutrients, factor: number): CalculatedNutri
     const scaled = { ...n };
     for (const key of Object.keys(scaled) as Array<keyof CalculatedNutrients>) {
         if (key === "customNutrients") continue;
-        (scaled[key] as number) *= factor;
+        (scaled[key] as number) = new NutritionDecimal(scaled[key] as number).multipliedBy(factor).toNumber();
     }
     
     scaled.customNutrients = {};
     for (const [cKey, cData] of Object.entries(n.customNutrients)) {
         scaled.customNutrients[cKey] = {
-            value: cData.value * factor,
+            value: new NutritionDecimal(cData.value).multipliedBy(factor).toNumber(),
             unit: cData.unit
         };
     }

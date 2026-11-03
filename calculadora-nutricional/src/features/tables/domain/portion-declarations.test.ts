@@ -22,3 +22,10 @@ test("gera fração irredutível preservando o comportamento da interface", () =
     assert.equal(formatUnitFraction(75, 50), "1 1/2 unidade");
     assert.equal(formatUnitFraction(0, 50), "");
 });
+
+test("expressa a porção como fração irredutível da unidade", () => {
+    assert.equal(formatUnitFraction(25, 30), "5/6 unidade");
+    assert.equal(formatUnitFraction(25, 50), "1/2 unidade");
+    assert.equal(formatUnitFraction(30, 15), "2 unidades");
+    assert.equal(formatUnitFraction(40, 30), "1 1/3 unidade");
+});

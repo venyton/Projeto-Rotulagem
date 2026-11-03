@@ -2,6 +2,7 @@ export type Product = {
     name: string;
     portion: number;
     measure: string;
+    portionDescription?: string;
 };
 
 export type FoodGroup = {
@@ -170,8 +171,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Pós para preparar flans e sobremesas",
-                "portion": 120,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 120 g"
             },
             {
                 "name": "Sagu",
@@ -205,28 +207,33 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Mistura para sopa paraguaia y chipaguazú",
-                "portion": 150,
-                "measure": "Fatias"
+                "portion": 0,
+                "measure": "Fatias",
+                "portionDescription": "Quantidade suficiente para preparar 150 g"
             },
             {
                 "name": "Pré-mistura para preparar bori-bori",
-                "portion": 80,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 80 g"
             },
             {
                 "name": "Pré-mistura para preparar chipa paraguaia e mbeyu e outros pães",
-                "portion": 50,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 50 g"
             },
             {
                 "name": "Preparado desidratados para purês de tubérculos",
-                "portion": 150,
-                "measure": "Colheres de sopa ou xícaras"
+                "portion": 0,
+                "measure": "Colheres de sopa ou xícaras",
+                "portionDescription": "Quantidade suficiente para 150 g"
             },
             {
                 "name": "Pós para preparar bolos e tortas",
-                "portion": 60,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 60 g"
             }
         ]
     },
@@ -275,8 +282,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Vegetais desidratados para purê",
-                "portion": 150,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 150 g"
             },
             {
                 "name": "Vegetais em conserva (alcachofra, aspargo, cogumelos, pimentão, pepino e palmito) em salmoura, vinagre e azeite",
@@ -300,8 +308,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
         "products": [
             {
                 "name": "Polpa de frutas para refresco, sucos concentrados de frutas e desidratados",
-                "portion": 200,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 200 ml"
             },
             {
                 "name": "Polpa de frutas para sobremesas",
@@ -350,8 +359,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Leite evaporado",
-                "portion": 200,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 200 ml"
             },
             {
                 "name": "Queijo ralado",
@@ -370,8 +380,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Leite em pó",
-                "portion": 200,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 200 ml"
             },
             {
                 "name": "Sobremesas lácteas",
@@ -380,13 +391,15 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Pós para preparar sobremesas lácteas",
-                "portion": 120,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 120 g"
             },
             {
                 "name": "Pós para preparar sorvetes",
-                "portion": 50,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 50 g"
             }
         ]
     },
@@ -466,7 +479,8 @@ export const FOOD_GROUPS: FoodGroup[] = [
             {
                 "name": "Ovo",
                 "portion": 0,
-                "measure": "Unidades"
+                "measure": "Unidades",
+                "portionDescription": "Quantidade que corresponda a 1 unidade"
             }
         ]
     },
@@ -575,8 +589,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Pó para gelatina",
-                "portion": 120,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 120 g"
             },
             {
                 "name": "Sobremesa de gelatina pronta",
@@ -610,13 +625,15 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Sorvetes de massa",
-                "portion": 60,
-                "measure": "Bolas ou unidades"
+                "portion": 0,
+                "measure": "Bolas ou unidades",
+                "portionDescription": "60 g ou 130 ml"
             },
             {
                 "name": "Sorvetes individuais",
-                "portion": 60,
-                "measure": "Unidades"
+                "portion": 0,
+                "measure": "Unidades",
+                "portionDescription": "60 g ou 130 ml"
             },
             {
                 "name": "Barra de cereais com mais de 10% de gorduras, torrones, pé de moleque e paçoca",
@@ -630,8 +647,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Pós para preparo de refresco",
-                "portion": 200,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 200 ml"
             },
             {
                 "name": "Biscoito doce, com ou sem recheio",
@@ -685,8 +703,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
         "products": [
             {
                 "name": "Caldo (carne, galinha, legumes etc) e pós para sopa incluindo (bori-bori, pirá caldo, shoyo)",
-                "portion": 250,
-                "measure": "Unidades, colheres de sopa ou frações"
+                "portion": 0,
+                "measure": "Unidades, colheres de sopa ou frações",
+                "portionDescription": "Quantidade suficiente para 250 ml"
             },
             {
                 "name": "Catchup e mostarda",
@@ -696,17 +715,20 @@ export const FOOD_GROUPS: FoodGroup[] = [
             {
                 "name": "Molhos a base de soja ou vinagre",
                 "portion": 0,
-                "measure": "Colheres de sopa"
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade que corresponda a 1 colher de sopa"
             },
             {
                 "name": "Molhos a base de produtos lácteos ou caldos",
                 "portion": 0,
-                "measure": "Colheres de sopa"
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade que corresponda a 2 colheres de sopa"
             },
             {
                 "name": "Pós para preparar molhos",
-                "portion": 2,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para preparar 2 colheres de sopa"
             },
             {
                 "name": "Misso",
@@ -715,8 +737,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Missoshiro",
-                "portion": 200,
-                "measure": "Colheres de sopa"
+                "portion": 0,
+                "measure": "Colheres de sopa",
+                "portionDescription": "Quantidade suficiente para 200 ml"
             },
             {
                 "name": "Extrato de soja",
@@ -735,8 +758,9 @@ export const FOOD_GROUPS: FoodGroup[] = [
             },
             {
                 "name": "Bebidas alcoólicas",
-                "portion": 10,
-                "measure": "Unidades ou copos"
+                "portion": 0,
+                "measure": "Unidades ou copos",
+                "portionDescription": "Quantidade equivalente a 10 g de etanol"
             }
         ]
     }
