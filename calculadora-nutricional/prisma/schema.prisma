@@ -453,6 +453,8 @@ model Organization {
   apiAccessTokens           ApiAccessToken[]
   customIngredients         CustomIngredient[]
   tables                    GeneratedTable[]
+  productTechnicalSheets    ProductTechnicalSheet[]
+  productLegislations       ProductLegislation[]
   technicalDocuments        TechnicalDocument[]
   technicalSheetExtractions TechnicalSheetExtraction[]
   enterpriseLabelProjects   EnterpriseLabelProject[]
@@ -1381,6 +1383,7 @@ model GeneratedTable {
   suggestedProduct   String?
   uiState            Json?
   items              TableItem[]
+  productTechnicalSheet ProductTechnicalSheet?
   enterpriseProjects EnterpriseLabelProject[]
   enterpriseVersions EnterpriseLabelVersion[]
   createdAt          DateTime                 @default(now())
@@ -1402,6 +1405,7 @@ model TableItem {
   name         String
   source       String?
   quantity     Float // g
+  quantityExact String? @db.Text // decimal em gramas; null para versões legadas
   isAddedSugar Boolean @default(false)
 
   // Snapshotted nutritional values (per 100g)
@@ -1739,4 +1743,29 @@ model EnterpriseExport {
   @@index([versionId])
   @@index([userId])
   @@index([exportType])
+}
+
+model ProductTechnicalSheet {
+  id             String @id @default(cuid())
+  tableId        String @unique
+  table          GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ProductLegislation {
+  id             String @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String
+  title          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
 }
