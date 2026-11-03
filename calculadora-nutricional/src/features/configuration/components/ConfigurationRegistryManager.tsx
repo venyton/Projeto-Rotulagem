@@ -39,7 +39,7 @@ type ConfigurationDefinition = {
   }>;
 };
 
-type Props = { definitions: ConfigurationDefinition[]; canManage?: boolean; canManageBilling?: boolean; globalScopeOnly?: boolean };
+type Props = { definitions: ConfigurationDefinition[]; canManage?: boolean; canManageBilling?: boolean; globalScopeOnly?: boolean; organizationScopeOnly?: boolean };
 
 const CATEGORY_LABELS: Record<string, string> = {
   VISUAL: "Visão e experiência",
@@ -82,12 +82,13 @@ function parseValue(definition: ConfigurationDefinition, value: unknown) {
     if (typeof value !== "string") return value;
     return JSON.parse(value) as unknown;
   }
-  if (definition.valueType === "INTEGER") return Number(value);
-  if (definition.valueType === "DECIMAL") return Number(value);
+  if (definition.valueType === "INTEGER" || definition.valueType === "DECIMAL") {
+    return typeof value === "string" && value.trim() === "" ? NaN : Number(value);
+  }
   return value;
 }
 
-export function ConfigurationRegistryManager({ definitions, canManage = true, canManageBilling = false, globalScopeOnly = false }: Props) {
+export function ConfigurationRegistryManager({ definitions, canManage = true, canManageBilling = false, globalScopeOnly = false, organizationScopeOnly = false }: Props) {
   const router = useRouter();
   const [scope, setScope] = useState<ConfigurationScope>("GLOBAL");
   const [organizationId, setOrganizationId] = useState("");
@@ -171,6 +172,7 @@ export function ConfigurationRegistryManager({ definitions, canManage = true, ca
         return next;
       });
       toast.success(`Valor de “${definition.label}” removido deste escopo.`);
+      router.refresh();
     });
   };
 
@@ -189,7 +191,7 @@ export function ConfigurationRegistryManager({ definitions, canManage = true, ca
               <NativeSelect id="configuration-scope" value={scope} onChange={(event) => setScope(event.target.value as ConfigurationScope)} disabled={globalScopeOnly}>
                 <NativeSelectOption value="GLOBAL">Toda a plataforma</NativeSelectOption>
                 <NativeSelectOption value="ORGANIZATION">Uma organização</NativeSelectOption>
-                <NativeSelectOption value="USER">Uma pessoa</NativeSelectOption>
+                {!organizationScopeOnly ? <NativeSelectOption value="USER">Uma pessoa</NativeSelectOption> : null}
               </NativeSelect>
             </Field>
             {!globalScopeOnly && scope === "ORGANIZATION" ? (
@@ -213,7 +215,7 @@ export function ConfigurationRegistryManager({ definitions, canManage = true, ca
       {canManage && !canManageBilling && definitions.some((definition) => definition.key.startsWith("business.billing.asaas.") || definition.key === "business.billing.environment") ? (
         <Alert><AlertTitle>Credenciais Asaas: acesso somente para leitura</AlertTitle><AlertDescription>A edição exige a permissão “Configurar integração financeira”.</AlertDescription></Alert>
       ) : null}
-      {scope !== "GLOBAL" ? <Alert><AlertTitle>Credenciais e parâmetros do Asaas usam somente o escopo global.</AlertTitle></Alert> : null}
+      {scope !== "GLOBAL" && definitions.some((definition) => definition.key.startsWith("business.billing.asaas.")) ? <Alert><AlertTitle>Credenciais e parâmetros do Asaas usam somente o escopo global.</AlertTitle></Alert> : null}
 
       {groupedDefinitions.map(([category, categoryDefinitions]) => (
         <section key={category} className="flex flex-col gap-4" aria-labelledby={`configuration-category-${category}`}>

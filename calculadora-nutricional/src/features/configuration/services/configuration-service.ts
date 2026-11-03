@@ -8,6 +8,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { isDatabaseId } from "@/lib/validation/identifiers";
+import { INGREDIENT_QUANTITY_PRECISION_KEY, isValidIngredientPrecision } from "@/features/configuration/domain/ingredient-precision";
 import { decryptSecret, encryptSecret } from "@/lib/security/secret-encryption";
 import {
   isDashboardNavigationKey,
@@ -351,6 +352,8 @@ export async function setConfigurationValue(input: {
   if (!definition.editable) return { ok: false as const, code: "READ_ONLY", message: "Esta configuração é somente leitura." };
   const scopeKey = scopeKeyFor(input.scope);
   if (!scopeKey) return { ok: false as const, code: "INVALID_SCOPE", message: "Escopo de configuração inválido." };
+  if (input.key === INGREDIENT_QUANTITY_PRECISION_KEY && input.scope.scope === ConfigurationScope.USER) return { ok: false as const, code: "INVALID_SCOPE", message: "Esta configuração aceita apenas escopo global ou de organização." };
+  if (input.key === INGREDIENT_QUANTITY_PRECISION_KEY && !isValidIngredientPrecision(input.value)) return { ok: false as const, code: "INVALID_VALUE", message: "Informe entre 0 e 15 casas decimais." };
   if (requiresGlobalConfigurationScope(input.key) && input.scope.scope !== ConfigurationScope.GLOBAL) {
     return { ok: false as const, code: "INVALID_SCOPE", message: "A configuração global de billing só pode ser alterada no escopo global." };
   }
@@ -381,14 +384,15 @@ export async function setConfigurationValue(input: {
     if (!user) return { ok: false as const, code: "NOT_FOUND", message: "Usuário não encontrado." };
   }
 
-  const existing = await prisma.configurationValue.findUnique({
-    where: { definitionId_scopeKey: { definitionId: definition.id, scopeKey } },
-    select: { id: true },
-  });
   const persistedValue = definition.sensitive
     ? encryptSecret(String(input.value))
     : input.value;
-  const persisted = await prisma.configurationValue.upsert({
+  const persisted = await prisma.$transaction(async (tx) => {
+  const existing = await tx.configurationValue.findUnique({
+    where: { definitionId_scopeKey: { definitionId: definition.id, scopeKey } },
+    select: { id: true, value: true },
+  });
+  const result = await tx.configurationValue.upsert({
     where: { definitionId_scopeKey: { definitionId: definition.id, scopeKey } },
     create: {
       definitionId: definition.id,
@@ -408,7 +412,7 @@ export async function setConfigurationValue(input: {
     select: { id: true, scope: true, scopeKey: true },
   });
 
-  await prisma.securityAuditLog.create({
+  await tx.securityAuditLog.create({
     data: {
       userId: input.updatedById,
       privilegedSessionId: input.privilegedSessionId ?? null,
@@ -417,11 +421,14 @@ export async function setConfigurationValue(input: {
       metadata: {
         key: definition.key,
         category: definition.category,
-        scope: persisted.scope,
-        scopeKey: persisted.scopeKey,
+        scope: result.scope,
+        scopeKey: result.scopeKey,
+        ...(input.key === INGREDIENT_QUANTITY_PRECISION_KEY ? { previousValue: existing?.value ?? null, newValue: input.value } : {}),
       } as Prisma.InputJsonValue,
     },
   });
+  return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
   return { ok: true as const, data: persisted };
 }
@@ -437,24 +444,29 @@ export async function resetConfigurationValue(input: {
   if (!definition.editable) return { ok: false as const, code: "READ_ONLY", message: "Esta configuração é somente leitura." };
   const scopeKey = scopeKeyFor(input.scope);
   if (!scopeKey) return { ok: false as const, code: "INVALID_SCOPE", message: "Escopo de configuração inválido." };
+  if (input.key === INGREDIENT_QUANTITY_PRECISION_KEY && input.scope.scope === ConfigurationScope.USER) return { ok: false as const, code: "INVALID_SCOPE", message: "Esta configuração aceita apenas escopo global ou de organização." };
   if (requiresGlobalConfigurationScope(input.key) && input.scope.scope !== ConfigurationScope.GLOBAL) {
     return { ok: false as const, code: "INVALID_SCOPE", message: "A configuração global de billing só pode ser alterada no escopo global." };
   }
 
-  const deleted = await prisma.configurationValue.deleteMany({
+  const deleted = await prisma.$transaction(async (tx) => {
+  const existing = await tx.configurationValue.findUnique({ where: { definitionId_scopeKey: { definitionId: definition.id, scopeKey } }, select: { value: true } });
+  const result = await tx.configurationValue.deleteMany({
     where: { definitionId: definition.id, scopeKey },
   });
-  if (deleted.count > 0) {
-    await prisma.securityAuditLog.create({
+  if (result.count > 0) {
+    await tx.securityAuditLog.create({
       data: {
         userId: input.updatedById,
         privilegedSessionId: input.privilegedSessionId ?? null,
         action: "configuration.reset",
         riskLevel: requiresGlobalConfigurationScope(input.key) ? "HIGH" : "INFO",
-        metadata: { key: definition.key, category: definition.category, scope: input.scope.scope, scopeKey } as Prisma.InputJsonValue,
+        metadata: { key: definition.key, category: definition.category, scope: input.scope.scope, scopeKey, ...(input.key === INGREDIENT_QUANTITY_PRECISION_KEY ? { previousValue: existing?.value ?? null } : {}) } as Prisma.InputJsonValue,
       },
     });
   }
+  return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return { ok: true as const, data: { deleted: deleted.count > 0 } };
 }
 
