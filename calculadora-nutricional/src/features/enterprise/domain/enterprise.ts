@@ -200,7 +200,7 @@ export const INTERNATIONAL_MARKETS: MarketRules[] = [
         languageRequirement: "Inglês; espanhol pode complementar quando aplicável.",
         frontSystem: "Não há selo frontal federal obrigatório geral equivalente à lupa brasileira.",
         mandatory: ["Calories", "Total Fat", "Saturated Fat", "Trans Fat", "Cholesterol", "Sodium", "Total Carbohydrate", "Dietary Fiber", "Total Sugars", "Added Sugars", "Protein", "Vitamin D", "Calcium", "Iron", "Potassium"],
-        notes: ["Serving size precisa ser conferido pela categoria oficial.", "Vitamin D, cálcio, ferro e potássio exigem dados que hoje não entram no resumo enterprise."],
+        notes: ["Serving size precisa ser conferido pela categoria oficial.", "Vitamin D, cálcio, ferro e potássio exigem dados que hoje não entram no resumo nutricional."],
     },
     {
         value: "eu",
@@ -477,7 +477,7 @@ export function validateEnterpriseTable(
             title: "Micronutrientes obrigatórios FDA",
             detail: legalData.mandatoryMicronutrients?.trim()
                 ? "Micronutrientes obrigatórios declarados para revisão."
-                : "Vitamina D, cálcio, ferro e potássio não estão completos no resumo enterprise atual. Não liberar arte dos EUA sem esses dados.",
+                : "Vitamina D, cálcio, ferro e potássio não estão completos no resumo nutricional atual. Não liberar arte dos EUA sem esses dados.",
         });
     }
 
@@ -584,7 +584,7 @@ export function getReformulationSuggestions(
     if (suggestions.length === 0) {
         suggestions.push({
             title: "Produto bem posicionado",
-            detail: "Usar fluxo de aprovação e passaporte digital para capturar valor com clientes enterprise.",
+            detail: "Usar o fluxo de aprovação e o passaporte digital para apoiar operações internacionais.",
             impact: "Sem gatilho nutricional crítico nos limites principais.",
         });
     }

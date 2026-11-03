@@ -105,7 +105,7 @@ type LegalFieldDefinition = {
 
 const ENTERPRISE_COPY = {
     "pt-BR": {
-        firstTableTitle: "Enterprise",
+        firstTableTitle: "Internacional",
         heading: "Adaptar rótulo por país",
         subheading: "Trabalhe em uma cópia local, confira o formato oficial e exporte sem tocar no rótulo brasileiro.",
         newProduct: "Novo produto",
@@ -162,7 +162,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versão persistida no banco.",
     },
     "en-US": {
-        firstTableTitle: "Enterprise",
+        firstTableTitle: "International",
         heading: "Adapt label by country",
         subheading: "Work on a local copy, check the official format, and export without changing the Brazilian label.",
         newProduct: "New product",
@@ -219,7 +219,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Version persisted in the database.",
     },
     "es-MX": {
-        firstTableTitle: "Empresarial",
+        firstTableTitle: "Internacional",
         heading: "Adaptar etiqueta por país",
         subheading: "Trabaje en una copia local, revise el formato oficial y exporte sin alterar la etiqueta brasileña.",
         newProduct: "Nuevo producto",
@@ -276,7 +276,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versión persistida en la base de datos.",
     },
     "es-CL": {
-        firstTableTitle: "Empresarial",
+        firstTableTitle: "Internacional",
         heading: "Adaptar etiqueta por país",
         subheading: "Trabaje en una copia local, revise el formato oficial y exporte sin alterar la etiqueta brasileña.",
         newProduct: "Nuevo producto",
@@ -333,7 +333,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versión persistida en la base de datos.",
     },
     "fr-CA": {
-        firstTableTitle: "Entreprise",
+        firstTableTitle: "International",
         heading: "Adapter l’étiquette par pays",
         subheading: "Travaillez sur une copie locale, vérifiez le format officiel et exportez sans modifier l’étiquette brésilienne.",
         newProduct: "Nouveau produit",
@@ -583,7 +583,7 @@ export function EnterpriseWorkspace({
             });
 
             if (result.error || !result.project) {
-                toast.error(result.error || "Não foi possível salvar a versão Enterprise.");
+                toast.error(result.error || "Não foi possível salvar a versão internacional.");
                 return;
             }
 

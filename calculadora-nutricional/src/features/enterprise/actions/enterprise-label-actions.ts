@@ -331,7 +331,7 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
         },
     });
 
-    if (!project) return { error: "Projeto Enterprise não encontrado." };
+    if (!project) return { error: "Projeto internacional não encontrado." };
     if (project.currentVersionId !== input.versionId) {
         return { error: "Salve a versão atual antes de registrar a exportação." };
     }
@@ -347,7 +347,7 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
             approvalStatus: true,
         },
     });
-    if (!version) return { error: "Versão Enterprise inválida." };
+    if (!version) return { error: "Versão internacional inválida." };
 
     const createdExport = await prisma.enterpriseExport.create({
         data: {
