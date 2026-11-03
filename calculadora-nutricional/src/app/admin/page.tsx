@@ -8,10 +8,8 @@ import { getGlobalSaaSMetrics } from "@/features/saas/services/saas-metrics";
 import { PlatformManagementOverview } from "@/features/admin/components/PlatformManagementOverview";
 
 export default async function AdminPage() {
-  const [access, navigationOverrides] = await Promise.all([
-    resolveCurrentPlatformAccess(PLATFORM_PERMISSIONS.ACCESS),
-    getAdminNavigationConfiguration(),
-  ]);
+  const access = await resolveCurrentPlatformAccess(PLATFORM_PERMISSIONS.ACCESS);
+  const navigationOverrides = access.allowed ? await getAdminNavigationConfiguration() : [];
   let metrics: Awaited<ReturnType<typeof getGlobalSaaSMetrics>> | null = null;
 
   if (

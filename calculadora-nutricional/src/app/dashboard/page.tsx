@@ -49,10 +49,10 @@ const workspaceGuide = [
         moduleKey: SAAS_MODULES.TECHNICAL_SHEETS,
     },
     {
-        title: "Enterprise",
+        title: "Internacional",
         description: "Mercados internacionais, versões, aprovações e entregáveis.",
         href: "/dashboard/enterprise",
-        action: "Abrir Enterprise",
+        action: "Abrir Internacional",
         icon: Globe2,
         moduleKey: SAAS_MODULES.ENTERPRISE_LABELS,
     },

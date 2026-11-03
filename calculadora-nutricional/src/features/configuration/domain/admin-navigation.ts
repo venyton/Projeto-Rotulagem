@@ -10,6 +10,7 @@ export const ADMIN_NAVIGATION_KEYS = [
   "operators",
   "audit",
   "settings",
+  "internal-settings",
 ] as const;
 
 export type AdminNavigationKey = (typeof ADMIN_NAVIGATION_KEYS)[number];

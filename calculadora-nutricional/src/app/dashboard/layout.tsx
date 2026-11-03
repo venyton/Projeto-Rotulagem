@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { connection } from "next/server";
 import { ALL_SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 import {
     contextHasModuleAccess,
@@ -17,6 +18,7 @@ export default async function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
+    await connection();
     const context = await getCurrentSaaSContext();
     const accessibleModules: SaaSModuleKey[] = context
         ? ALL_SAAS_MODULES.filter((moduleKey) =>

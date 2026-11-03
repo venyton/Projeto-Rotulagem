@@ -23,8 +23,8 @@ const featureTypeLabel = { BOOLEAN: "Sim ou não", QUOTA: "Limite contratado", M
 const organizationState = { ACTIVE: "Ativa", SUSPENDED: "Suspensa", ARCHIVED: "Arquivada" } as const;
 
 export default async function GrantsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [access, data, feedback] = await Promise.all([
-    requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.ENTITLEMENTS_READ, action: "platform.commercial.grants.viewed", targetId: "/admin/commercial/grants" }),
+  const access = await requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.ENTITLEMENTS_READ, action: "platform.commercial.grants.viewed", targetId: "/admin/commercial/grants" });
+  const [data, feedback] = await Promise.all([
     listCommercialBenefits(), searchParams,
   ]);
   const canOverride = access.permissionKeys.includes(PLATFORM_PERMISSIONS.ENTITLEMENTS_OVERRIDE);

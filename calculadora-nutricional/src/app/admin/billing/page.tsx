@@ -38,8 +38,8 @@ function billingState(value: string) {
 export default async function BillingOperationsPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [access, data, feedback] = await Promise.all([
-    requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.BILLING_READ, action: "platform.billing.operations.viewed", targetId: "/admin/billing" }),
+  const access = await requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.BILLING_READ, action: "platform.billing.operations.viewed", targetId: "/admin/billing" });
+  const [data, feedback] = await Promise.all([
     listBillingOperationsForAdministration(),
     searchParams,
   ]);

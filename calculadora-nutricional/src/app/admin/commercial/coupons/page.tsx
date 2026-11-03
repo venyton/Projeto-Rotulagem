@@ -24,8 +24,8 @@ function displayDiscount(coupon: { discountType: string; discountValue: number; 
 const statusLabel = { DRAFT: "Rascunho", ACTIVE: "Ativo", INACTIVE: "Inativo", ARCHIVED: "Arquivado" } as const;
 
 export default async function CouponsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [access, data, feedback] = await Promise.all([
-    requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.CATALOG_READ, action: "platform.commercial.coupons.viewed", targetId: "/admin/commercial/coupons" }),
+  const access = await requirePlatformPagePermission({ permission: PLATFORM_PERMISSIONS.CATALOG_READ, action: "platform.commercial.coupons.viewed", targetId: "/admin/commercial/coupons" });
+  const [data, feedback] = await Promise.all([
     listCommercialBenefits(), searchParams,
   ]);
   const canManage = access.permissionKeys.includes(PLATFORM_PERMISSIONS.CATALOG_MANAGE);

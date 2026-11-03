@@ -14,7 +14,6 @@ import {
     CreditCard,
     FileClock,
     Globe2,
-    FileSearch,
     Home,
     LayoutGrid,
     LogOut,
@@ -112,7 +111,10 @@ const PLATFORM_NAVIGATION_GROUPS: AdminNavGroup[] = [
         { navigationKey: "privileged-sessions", href: "/admin/security/privileged-sessions", label: "Acessos temporários", icon: ShieldCheck, permission: PLATFORM_PERMISSIONS.ACCESS },
         { navigationKey: "operators", href: "/admin/security/operators", label: "Administradores", icon: UsersRound, permission: PLATFORM_PERMISSIONS.SECURITY_OPERATORS_READ },
     ] },
-    { label: "Configuração", items: [{ navigationKey: "settings", href: "/admin/settings", label: "Configurações", icon: Settings2, permission: PLATFORM_PERMISSIONS.CONFIGURATION_READ, anyPermission: [PLATFORM_PERMISSIONS.BILLING_READ] }] },
+    { label: "Configuração", items: [
+        { navigationKey: "settings", href: "/admin/settings", label: "Configurações", icon: Settings2, permission: PLATFORM_PERMISSIONS.CONFIGURATION_READ, anyPermission: [PLATFORM_PERMISSIONS.BILLING_READ] },
+        { navigationKey: "internal-settings", href: "/admin/internal-settings", label: "Configurações internas", icon: Settings2, permission: PLATFORM_PERMISSIONS.CONFIGURATION_READ },
+    ] },
 ];
 
 const PRODUCT_NAV_ITEMS: Array<{
@@ -127,8 +129,7 @@ const PRODUCT_NAV_ITEMS: Array<{
     { href: "/dashboard", label: "Início", copyKey: "home", icon: Home },
     { href: "/dashboard/tables", label: "Tabelas", copyKey: "tables", icon: LayoutGrid, moduleKey: SAAS_MODULES.TABLES },
     { href: "/dashboard/ingredients", label: "Ingredientes", copyKey: "ingredients", icon: PackageSearch, moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
-    { href: "/dashboard/ingredients/technical-sheets", label: "Fichas técnicas", icon: FileSearch, moduleKey: SAAS_MODULES.TECHNICAL_SHEETS },
-    { href: "/dashboard/enterprise", label: "Enterprise", copyKey: "enterprise", icon: Globe2, moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
+    { href: "/dashboard/enterprise", label: "Internacional", copyKey: "enterprise", icon: Globe2, moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
     { href: "/dashboard/billing", label: "Faturamento", icon: CreditCard, billingOnly: true },
     { href: "/dashboard/settings", label: "Configurações", icon: Settings2, moduleKey: SAAS_MODULES.SETTINGS, settingsOnly: true },
 ];

@@ -1,6 +1,6 @@
 import { SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 
-export type DashboardNavigationKey = "home" | "tables" | "ingredients" | "technical-sheets" | "enterprise";
+export type DashboardNavigationKey = "home" | "tables" | "ingredients" | "enterprise";
 
 export type DashboardNavigationOverride = {
   key: DashboardNavigationKey;
@@ -16,7 +16,6 @@ export const DASHBOARD_NAVIGATION_CONTRACT: Record<DashboardNavigationKey, {
   home: { href: "/dashboard" },
   tables: { href: "/dashboard/tables", moduleKey: SAAS_MODULES.TABLES },
   ingredients: { href: "/dashboard/ingredients", moduleKey: SAAS_MODULES.CUSTOM_INGREDIENTS },
-  "technical-sheets": { href: "/dashboard/ingredients/technical-sheets", moduleKey: SAAS_MODULES.TECHNICAL_SHEETS },
   enterprise: { href: "/dashboard/enterprise", moduleKey: SAAS_MODULES.ENTERPRISE_LABELS },
 };
 

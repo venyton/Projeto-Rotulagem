@@ -14,6 +14,7 @@ import {
   ASAAS_CONFIGURATION_PREFIX,
 } from "@/features/billing/integrations/asaas/asaas-settings";
 import { ConfigurationRegistryManager } from "@/features/configuration/components/ConfigurationRegistryManager";
+import { INGREDIENT_QUANTITY_PRECISION_KEY } from "@/features/configuration/domain/ingredient-precision";
 import { getConfigurationDefinitionsForAdmin } from "@/features/configuration/services/configuration-service";
 import { PLATFORM_PERMISSIONS } from "@/features/platform-iam/domain/platform-authorization";
 import { authorizePlatformRequest, resolveCurrentPlatformAccess } from "@/features/platform-iam/services/platform-access";
@@ -51,7 +52,7 @@ export default async function AdminSettingsPage() {
   const asaasDefinitions = serializableDefinitions.filter((definition) =>
     isAsaasDefinition(definition.key) && !API_KEY_DEFINITION_KEYS.has(definition.key),
   );
-  const otherDefinitions = serializableDefinitions.filter((definition) => !isAsaasDefinition(definition.key));
+  const otherDefinitions = serializableDefinitions.filter((definition) => !isAsaasDefinition(definition.key) && definition.key !== INGREDIENT_QUANTITY_PRECISION_KEY);
 
   return (
     <div className="flex flex-col gap-6 lg:gap-8">

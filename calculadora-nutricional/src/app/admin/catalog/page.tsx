@@ -41,12 +41,12 @@ export default async function CatalogPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [access, catalog, feedback] = await Promise.all([
-    requirePlatformPagePermission({
-      permission: PLATFORM_PERMISSIONS.CATALOG_READ,
-      action: "platform.catalog.page.accessed",
-      targetId: "/admin/catalog",
-    }),
+  const access = await requirePlatformPagePermission({
+    permission: PLATFORM_PERMISSIONS.CATALOG_READ,
+    action: "platform.catalog.page.accessed",
+    targetId: "/admin/catalog",
+  });
+  const [catalog, feedback] = await Promise.all([
     listCommercialCatalog(),
     searchParams,
   ]);
