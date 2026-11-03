@@ -4,6 +4,7 @@ import { getResolvedConfigurations } from "@/features/configuration/services/con
 
 import {
   ROLLOUT_FLAGS,
+  resolveEnvironmentRolloutFlags,
   resolveRolloutFlags,
   type RolloutFlagName,
 } from "@/features/rollout/domain/feature-flags";
@@ -33,6 +34,10 @@ export async function getRolloutFlags() {
 }
 
 export async function isRolloutFeatureEnabled(flag: RolloutFlagName) {
+  if (
+    (flag === ROLLOUT_FLAGS.CONTROL_PLANE || flag === ROLLOUT_FLAGS.CUSTOMER_PLAN_UI)
+    && !resolveEnvironmentRolloutFlags(process.env)[flag]
+  ) return false;
   return (await getRolloutFlags())[flag];
 }
 

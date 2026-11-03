@@ -34,3 +34,12 @@ export function resolveRolloutFlags(source: Record<string, string | undefined>):
   }
   return state;
 }
+
+// As flags de cobrança são definidas no banco, nunca por variáveis legadas.
+export function resolveEnvironmentRolloutFlags(source: Record<string, string | undefined>): RolloutFlagState {
+  const environment = { ...source };
+  delete environment[ROLLOUT_FLAGS.BILLING_ASAAS];
+  delete environment[ROLLOUT_FLAGS.BILLING_CHECKOUT];
+  delete environment[ROLLOUT_FLAGS.BILLING_WEBHOOK_PROCESSING];
+  return resolveRolloutFlags(environment);
+}
