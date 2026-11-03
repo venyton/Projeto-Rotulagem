@@ -5,6 +5,8 @@ import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
   AnnexIvNutrientKey,
   calculateVD,
+  calculateVDFromDisplay,
+  formatOptionalNutrient,
   formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
@@ -162,16 +164,12 @@ function buildSelectedMicroRows(body: ExportBody, vdr: Record<string, number | n
     const rawPortion = pPortion[m.name] ?? 0;
     const ref = vdr[m.name];
 
-    const formatMicro = (val: number) => {
-      if (val === 0) return "0";
-      if (val < 1) return val.toFixed(1).replace(".", ",");
-      return Math.round(val).toString();
-    };
+
 
     return {
       name: `${m.label} (${m.unit})`,
-      portion: formatMicro(rawPortion),
-      vdPortion: body.showDailyValue === false ? "" : calculateVD(rawPortion, ref ?? null),
+      portion: formatOptionalNutrient(rawPortion, m.unit),
+      vdPortion: body.showDailyValue === false ? "" : calculateVDFromDisplay(formatOptionalNutrient(rawPortion, m.unit), ref ?? null),
     };
   });
 }

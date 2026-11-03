@@ -53,8 +53,20 @@ function readHeader(headers: HeaderBag, name: string) {
 }
 
 export function getClientAddress(request: Pick<NextRequest, "headers"> | { headers?: HeaderBag }) {
-  const forwarded = readHeader(request.headers, "x-forwarded-for").split(",", 1)[0]?.trim();
-  return forwarded || readHeader(request.headers, "x-real-ip").trim() || "unknown";
+  const headers = request.headers;
+  if (process.env.VERCEL) {
+    return readHeader(headers, "x-vercel-forwarded-for").split(",", 1)[0]?.trim() || "unknown";
+  }
+
+  const canTrustProxyHeaders = process.env.NODE_ENV !== "production"
+    || process.env.TRUST_PROXY_HEADERS === "true";
+  if (!canTrustProxyHeaders) return "unknown";
+
+  const forwarded = readHeader(headers, "x-forwarded-for")
+    .split(",")
+    .map((address) => address.trim())
+    .filter(Boolean);
+  return forwarded.at(-1) || readHeader(headers, "x-real-ip").trim() || "unknown";
 }
 
 export function consumeRequestRateLimit(

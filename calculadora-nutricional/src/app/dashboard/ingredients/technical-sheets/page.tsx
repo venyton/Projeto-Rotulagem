@@ -1,10 +1,8 @@
-import Link from "next/link";
-import { AlertTriangle, ArrowLeft, FileSearch } from "lucide-react";
+import { AlertTriangle, FileSearch } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import {
   getTechnicalSheetExtraction,
@@ -12,6 +10,7 @@ import {
 } from "@/features/technical-sheets/actions/technical-sheet-actions";
 import { TechnicalSheetExtractionList } from "@/features/technical-sheets/components/TechnicalSheetExtractionList";
 import { TechnicalSheetImportDialog } from "@/features/technical-sheets/components/TechnicalSheetImportDialog";
+import { IngredientsSectionTabs } from "@/features/ingredients/components/IngredientsSectionTabs";
 import { ModuleGateMessage } from "@/features/saas/components/ModuleGateMessage";
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, getCurrentSaaSContext } from "@/features/saas/services/entitlements";
@@ -52,19 +51,13 @@ export default async function TechnicalSheetsPage({ searchParams }: TechnicalShe
       <PageHeader
         title="Fichas técnicas importadas"
         description="Revise as extrações por IA antes de salvar os dados em seus ingredientes."
-        actions={
-          <>
-            {canUseCustomIngredients ? (
-              <Button asChild variant="outline">
-                <Link href="/dashboard/ingredients">
-                  <ArrowLeft data-icon="inline-start" />
-                  Ingredientes
-                </Link>
-              </Button>
-            ) : null}
-            {canUseAiImport ? <TechnicalSheetImportDialog /> : null}
-          </>
-        }
+        actions={canUseAiImport ? <TechnicalSheetImportDialog /> : undefined}
+      />
+
+      <IngredientsSectionTabs
+        activeTab="technical-sheets"
+        canUseIngredients={canUseCustomIngredients}
+        canUseTechnicalSheets
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">

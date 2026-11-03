@@ -15,7 +15,6 @@ export default async function IngredientsPage() {
       description="Gerencie seus ingredientes personalizados."
       showAddButton
       canUseTechnicalSheets={contextHasModuleAccess(context, SAAS_MODULES.TECHNICAL_SHEETS)}
-      canUseAiImport={contextHasModuleAccess(context, SAAS_MODULES.AI_IMPORT)}
       canExport={contextHasModuleAccess(context, SAAS_MODULES.EXPORTS)}
     />
   );

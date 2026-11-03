@@ -8,6 +8,7 @@ import {
 } from "./technical-sheet-schema";
 import type { TechnicalSheetDocumentType } from "./technical-sheet-schema";
 import { REQUIRED_NUTRIENT_KEYS } from "./technical-sheet-nutrients";
+import { MICRONUTRIENTS } from "../../tables/domain/micronutrients";
 
 export type NormalizedExtractedNutrient = {
   nutrientKey: string;
@@ -221,6 +222,13 @@ export function normalizeTechnicalSheetExtraction(
   };
 }
 
+function convertToDeclaredNutrientUnit(key: string, value: number, unit: string | null) {
+  const expected = MICRONUTRIENTS.find((nutrient) => nutrient.name === key)?.unit;
+  const massInMicrograms: Record<string, number> = { g: 1_000_000, mg: 1_000, "µg": 1 };
+  if (!expected || !unit || !massInMicrograms[expected] || !massInMicrograms[unit]) return { value, unit };
+  return { value: value * massInMicrograms[unit] / massInMicrograms[expected], unit: expected };
+}
+
 export function mapNutrientsToCustomIngredient(
   nutrients: Array<Pick<NormalizedExtractedNutrient, "nutrientKey" | "value" | "unit" | "sourceText">>
 ): CustomNutrientData {
@@ -243,14 +251,11 @@ export function mapNutrientsToCustomIngredient(
       value *= 1000;
     }
 
-    if (key === "omega3" && normalizeUnit(nutrient.unit) === "g") {
-      value *= 1000;
-    }
-
     if (key === "energy" && normalizeUnit(nutrient.unit) === "kj") {
       value = value / 4.184;
     }
 
+    value = convertToDeclaredNutrientUnit(key, value, normalizeUnit(nutrient.unit)).value;
     (mapped as Record<string, number | null>)[key] = roundNumber(value);
   }
 
@@ -365,8 +370,8 @@ export function normalizeUnit(unit: string | null | undefined) {
     mg: "mg",
     miligrama: "mg",
     miligramas: "mg",
-    µg: "µg",
     ug: "µg",
+    mcg: "µg",
     micrograma: "µg",
     microgramas: "µg",
     kcal: "kcal",
@@ -462,6 +467,12 @@ function normalizeAiNutrient(
   if (key === "energy" && value !== null && unit === "kj") {
     value = value / 4.184;
     unit = "kcal";
+  }
+
+  if (value !== null) {
+    const converted = convertToDeclaredNutrientUnit(key, value, unit);
+    value = converted.value;
+    unit = converted.unit;
   }
 
   const nutrientBaseQuantity = toFiniteNumber(nutrient.baseQuantity);

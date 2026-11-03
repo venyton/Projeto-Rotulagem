@@ -3,6 +3,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import { normalizeOpenFoodFactsProduct, type OpenFoodFactsProduct } from "@/features/open-food-facts/domain/open-food-facts";
+import { readBoundedJsonResponse } from "@/lib/security/request-body";
 
 const PRODUCT_FIELDS = [
   "code",
@@ -21,6 +22,7 @@ const PRODUCT_FIELDS = [
 const SEARCH_FIELDS = PRODUCT_FIELDS.split(",");
 const USER_AGENT = process.env.OPEN_FOOD_FACTS_USER_AGENT || "SoIZI/0.1.1 (contato@soizi.app)";
 const OPEN_FOOD_FACTS_TIMEOUT_MS = 10_000;
+const OPEN_FOOD_FACTS_RESPONSE_LIMIT_BYTES = 2 * 1024 * 1024;
 type RawProduct = Parameters<typeof normalizeOpenFoodFactsProduct>[0];
 
 export class OpenFoodFactsRateLimitError extends Error {
@@ -67,7 +69,9 @@ async function fetchOpenFoodFacts(url: string) {
     throw new Error(`Open Food Facts respondeu ${response.status}`);
   }
 
-  return response.json();
+  const parsed = await readBoundedJsonResponse(response, OPEN_FOOD_FACTS_RESPONSE_LIMIT_BYTES);
+  if (!parsed.ok) throw new Error("Open Food Facts retornou uma resposta inválida.");
+  return parsed.value;
 }
 
 async function searchOpenFoodFactsUncached(query: string): Promise<OpenFoodFactsProduct[]> {
@@ -94,8 +98,10 @@ async function searchOpenFoodFactsUncached(query: string): Promise<OpenFoodFacts
   }
 
   if (response.ok) {
-    const data = await response.json();
-    if (Array.isArray(data.hits)) {
+    const parsed = await readBoundedJsonResponse(response, OPEN_FOOD_FACTS_RESPONSE_LIMIT_BYTES);
+    if (!parsed.ok) throw new Error("Open Food Facts retornou uma resposta inválida.");
+    const data = parsed.value;
+    if (isRecord(data) && Array.isArray(data.hits)) {
       return normalizeProducts(data.hits);
     }
   }
@@ -112,13 +118,15 @@ async function searchOpenFoodFactsUncached(query: string): Promise<OpenFoodFacts
     `https://world.openfoodfacts.org/cgi/search.pl?${searchParams.toString()}`,
   );
 
+  if (!isRecord(fallbackData)) return [];
   return normalizeProducts(fallbackData.products);
 }
 
 async function fetchOpenFoodFactsProductUncached(code: string) {
   const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${PRODUCT_FIELDS}`;
   const data = await fetchOpenFoodFacts(url);
-  return normalizeOpenFoodFactsProduct(data.product || {});
+  if (!isRecord(data) || !isRecord(data.product)) return normalizeOpenFoodFactsProduct({});
+  return normalizeOpenFoodFactsProduct(data.product as RawProduct);
 }
 
 const cachedSearchOpenFoodFacts = unstable_cache(
@@ -145,4 +153,8 @@ export function searchOpenFoodFacts(query: string) {
 
 export function fetchOpenFoodFactsProduct(code: string) {
   return cachedFetchOpenFoodFactsProduct(code);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

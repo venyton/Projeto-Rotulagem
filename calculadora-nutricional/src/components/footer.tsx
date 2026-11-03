@@ -19,10 +19,10 @@ const FOOTER_LINKS = [
 export function Footer() {
   const pathname = usePathname();
 
-  if (pathname.startsWith("/dashboard")) return null;
+  if (pathname.startsWith("/dashboard") || pathname === "/admin" || pathname.startsWith("/admin/")) return null;
 
   return (
-    <footer className="site-footer border-t">
+    <footer className="site-footer">
       <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
           <div>

@@ -70,15 +70,15 @@ interface EnterpriseWorkspaceProps {
 }
 
 const STATUS_STYLES = {
-    ok: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-card dark:text-emerald-100",
-    warning: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-card dark:text-amber-100",
-    blocker: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/50 dark:bg-card dark:text-red-100",
+    ok: "border-success-border bg-success-subtle text-success",
+    warning: "border-warning-border bg-warning-subtle text-warning",
+    blocker: "border-destructive-border bg-destructive-subtle text-destructive",
 };
 
 const CLAIM_STYLES = {
-    eligible: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-card dark:text-emerald-100",
-    attention: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-card dark:text-amber-100",
-    "not-eligible": "border-slate-200 bg-slate-50 text-slate-700 dark:border-border dark:bg-card dark:text-muted-foreground",
+    eligible: "border-success-border bg-success-subtle text-success",
+    attention: "border-warning-border bg-warning-subtle text-warning",
+    "not-eligible": "border-border bg-secondary text-muted-foreground",
 };
 const SAFE_TEXT_CLASS = "min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere]";
 const ENTERPRISE_SELECT_TRIGGER_CLASS = "min-h-10 w-full min-w-0 *:data-[slot=select-value]:truncate";
@@ -105,7 +105,7 @@ type LegalFieldDefinition = {
 
 const ENTERPRISE_COPY = {
     "pt-BR": {
-        firstTableTitle: "Enterprise",
+        firstTableTitle: "Internacional",
         heading: "Adaptar rótulo por país",
         subheading: "Trabalhe em uma cópia local, confira o formato oficial e exporte sem tocar no rótulo brasileiro.",
         newProduct: "Novo produto",
@@ -162,7 +162,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versão persistida no banco.",
     },
     "en-US": {
-        firstTableTitle: "Enterprise",
+        firstTableTitle: "International",
         heading: "Adapt label by country",
         subheading: "Work on a local copy, check the official format, and export without changing the Brazilian label.",
         newProduct: "New product",
@@ -219,7 +219,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Version persisted in the database.",
     },
     "es-MX": {
-        firstTableTitle: "Empresarial",
+        firstTableTitle: "Internacional",
         heading: "Adaptar etiqueta por país",
         subheading: "Trabaje en una copia local, revise el formato oficial y exporte sin alterar la etiqueta brasileña.",
         newProduct: "Nuevo producto",
@@ -276,7 +276,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versión persistida en la base de datos.",
     },
     "es-CL": {
-        firstTableTitle: "Empresarial",
+        firstTableTitle: "Internacional",
         heading: "Adaptar etiqueta por país",
         subheading: "Trabaje en una copia local, revise el formato oficial y exporte sin alterar la etiqueta brasileña.",
         newProduct: "Nuevo producto",
@@ -333,7 +333,7 @@ const ENTERPRISE_COPY = {
         savedVersion: "Versión persistida en la base de datos.",
     },
     "fr-CA": {
-        firstTableTitle: "Entreprise",
+        firstTableTitle: "International",
         heading: "Adapter l’étiquette par pays",
         subheading: "Travaillez sur une copie locale, vérifiez le format officiel et exportez sans modifier l’étiquette brésilienne.",
         newProduct: "Nouveau produit",
@@ -583,7 +583,7 @@ export function EnterpriseWorkspace({
             });
 
             if (result.error || !result.project) {
-                toast.error(result.error || "Não foi possível salvar a versão Enterprise.");
+                toast.error(result.error || "Não foi possível salvar a versão internacional.");
                 return;
             }
 
@@ -678,7 +678,7 @@ export function EnterpriseWorkspace({
         return (
             <div className="mx-auto max-w-5xl px-4 py-10">
                 <section className="app-empty-state p-10">
-                    <h1 className="text-2xl font-semibold">{copy.firstTableTitle}</h1>
+                    <h1 className="type-heading-medium">{copy.firstTableTitle}</h1>
                     <p className="mt-2 text-sm text-muted-foreground">
                         {copy.subheading}
                     </p>
@@ -705,8 +705,8 @@ export function EnterpriseWorkspace({
                             {copy.firstTableTitle}
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{copy.heading}</h1>
-                            <p className="mt-2 max-w-2xl text-base text-muted-foreground">
+                            <h1 className="type-heading-medium">{copy.heading}</h1>
+                            <p className="type-body mt-2 max-w-2xl text-muted-foreground">
                                 {copy.subheading}
                             </p>
                         </div>
@@ -823,11 +823,11 @@ export function EnterpriseWorkspace({
                     <Panel>
                         <div className="app-panel-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <PanelTitle title={copy.countryLabel} detail={`${marketConfig.authority} · ${marketConfig.tableName}`} />
-                            <div className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1 text-xs font-semibold text-muted-foreground shadow-sm">
+                            <div className="inline-flex items-center rounded-full border border-border/50 bg-input-background px-3 py-1 text-xs font-semibold text-muted-foreground">
                                 {getMarketLabel(market, language)}
                             </div>
                         </div>
-                        <div className="overflow-x-auto bg-background p-8 shadow-inner">
+                        <div className="elevation-sunken overflow-x-auto p-8">
                             <div className="app-subpanel flex min-w-max justify-center p-4">
                                 <InternationalNutritionLabel
                                     id="international-label-preview"
@@ -853,7 +853,7 @@ export function EnterpriseWorkspace({
                                             className="h-auto min-h-20 flex-col gap-1 px-3 py-2"
                                         >
                                             <span className="text-xs font-semibold">{done ? <CheckCircle2 aria-hidden="true" /> : index + 1} {getApprovalLabel(step.status, language)}</span>
-                                            <span className="text-[10px] text-muted-foreground">{getApprovalOwner(step.status, language)}</span>
+                                            <span className="type-caption text-muted-foreground">{getApprovalOwner(step.status, language)}</span>
                                         </ToggleGroupItem>
                                     );
                                 })}
@@ -1045,9 +1045,9 @@ export function EnterpriseWorkspace({
                             <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <PanelTitle title={copy.pending} />
                                 <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                    {totals.blocker > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100/80 px-2.5 py-1 text-red-700 ring-1 ring-red-600/20 dark:bg-red-950/50 dark:text-red-300"><AlertCircle className="h-3.5 w-3.5"/>{totals.blocker} {copy.blockers}</span>}
-                                    {totals.warning > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2.5 py-1 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-300"><AlertCircle className="h-3.5 w-3.5"/>{totals.warning} {copy.alerts}</span>}
-                                    {totals.blocker === 0 && totals.warning === 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/80 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/50 dark:text-emerald-300"><CheckCircle className="h-3.5 w-3.5"/>0 pendências</span>}
+                                    {totals.blocker > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-destructive-border bg-destructive-subtle px-2.5 py-1 text-destructive"><AlertCircle className="h-3.5 w-3.5"/>{totals.blocker} {copy.blockers}</span>}
+                                    {totals.warning > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-warning-border bg-warning-subtle px-2.5 py-1 text-warning"><AlertCircle className="h-3.5 w-3.5"/>{totals.warning} {copy.alerts}</span>}
+                                    {totals.blocker === 0 && totals.warning === 0 && <span className="inline-flex items-center gap-1 rounded-full border border-success-border bg-success-subtle px-2.5 py-1 text-success"><CheckCircle className="h-3.5 w-3.5"/>0 pendências</span>}
                                 </div>
                             </div>
                             <StackList>
@@ -1065,7 +1065,7 @@ export function EnterpriseWorkspace({
                         <Panel>
                             <div className="flex flex-col border-b border-border/60 bg-muted/10 p-5 sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <PanelTitle title={copy.front} />
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${activeFrontWarnings.length > 0 ? "bg-amber-100/80 text-amber-700 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-300" : "bg-emerald-100/80 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-950/50 dark:text-emerald-300"}`}>
+                                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${activeFrontWarnings.length > 0 ? "border-warning-border bg-warning-subtle text-warning" : "border-success-border bg-success-subtle text-success"}`}>
                                     {activeFrontWarnings.length > 0 ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle className="h-3.5 w-3.5" />}
                                     {activeFrontWarnings.length > 0 ? `${activeFrontWarnings.length} ${copy.activeSymbols}` : copy.noSymbol}
                                 </span>
@@ -1111,8 +1111,8 @@ export function EnterpriseWorkspace({
                         <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 p-5">
                             <PanelTitle title={copy.technicalTable} detail={marketConfig.servingBasis} />
                         </div>
-                        <div className="overflow-x-auto p-5">
-                            <div className="overflow-hidden rounded-lg border border-border shadow-sm">
+                            <div className="overflow-x-auto p-5">
+                            <div className="elevation-bordered overflow-hidden rounded-lg">
                                 <Table className="min-w-[34rem]">
                                     <TableHeader>
                                         <TableRow>
@@ -1173,7 +1173,7 @@ export function EnterpriseWorkspace({
                                 </Button>
                             ) : null}
                             <div className="mt-2 md:col-span-3">
-                                <div className="break-all rounded-lg border border-border/50 bg-background p-4 font-mono text-xs text-foreground shadow-inner">
+                                <div className="elevation-sunken break-all rounded-lg p-4 font-mono text-xs text-foreground">
                                     {analysis.gs1Link}
                                 </div>
                             </div>
@@ -1186,12 +1186,12 @@ export function EnterpriseWorkspace({
 }
 
 function Panel({ children }: { children: React.ReactNode }) {
-    return <section className={`min-w-0 rounded-xl border border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md ${SAFE_TEXT_CLASS}`}>{children}</section>;
+    return <section className={`elevation-bordered min-w-0 rounded-lg bg-card ${SAFE_TEXT_CLASS}`}>{children}</section>;
 }
 
 function PanelHeader({ title, detail }: { title: string; detail?: string }) {
     return (
-        <div className="border-b border-border/60 bg-muted/10 p-5">
+        <div className="bg-muted/10 p-5">
             <PanelTitle title={title} detail={detail} />
         </div>
     );
@@ -1250,7 +1250,7 @@ function StatusRow({
     const isBlocker = tone.includes("red");
     
     return (
-        <div className={`group flex items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm transition-all hover:shadow-md ${SAFE_TEXT_CLASS} ${tone} ${muted ? "opacity-75" : ""}`}>
+        <div className={`elevation-default group flex items-start gap-3 rounded-lg px-4 py-3 text-sm transition-colors ${SAFE_TEXT_CLASS} ${tone} ${muted ? "opacity-75" : ""}`}>
             <div className="mt-0.5 shrink-0">
                 {isOk && <CheckCircle className="h-4 w-4 opacity-80" />}
                 {isWarning && <AlertCircle className="h-4 w-4 opacity-80" />}

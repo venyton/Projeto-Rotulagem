@@ -28,6 +28,8 @@ import { SAAS_MODULES } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { isDatabaseId } from "@/lib/validation/identifiers";
+import { USAGE_METRICS } from "@/features/saas/domain/usage-metering";
+import { recordServerUsage } from "@/features/saas/services/usage-metering";
 
 export type SaveEnterpriseLabelProjectInput = {
     baseTableId: string;
@@ -329,7 +331,7 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
         },
     });
 
-    if (!project) return { error: "Projeto Enterprise não encontrado." };
+    if (!project) return { error: "Projeto internacional não encontrado." };
     if (project.currentVersionId !== input.versionId) {
         return { error: "Salve a versão atual antes de registrar a exportação." };
     }
@@ -345,9 +347,9 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
             approvalStatus: true,
         },
     });
-    if (!version) return { error: "Versão Enterprise inválida." };
+    if (!version) return { error: "Versão internacional inválida." };
 
-    await prisma.enterpriseExport.create({
+    const createdExport = await prisma.enterpriseExport.create({
         data: {
             projectId: project.id,
             versionId: version.id,
@@ -366,6 +368,14 @@ export async function recordEnterpriseLabelExport(input: RecordEnterpriseExportI
                 approvalStatus: version.approvalStatus,
             }),
         },
+    });
+
+    await recordServerUsage({
+        organizationId: context.organization.id,
+        userId: user.id,
+        metricKey: USAGE_METRICS.EXPORTS,
+        idempotencyKey: `enterprise-export:${createdExport.id}`,
+        source: "enterprise.export",
     });
 
     revalidatePath("/dashboard/enterprise");

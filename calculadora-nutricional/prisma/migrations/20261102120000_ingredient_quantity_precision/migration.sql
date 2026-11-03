@@ -1,0 +1,3 @@
+INSERT INTO "ConfigurationDefinition" ("id", "key", "category", "label", "description", "valueType", "defaultValue", "validation", "editable", "sensitive", "active", "updatedAt")
+VALUES ('config_ingredient_quantity_precision', 'business.ingredients.quantity_decimal_places', 'PRECISÃO', 'Casas decimais para quantidade de ingrediente', 'Limite de casas decimais da quantidade em gramas na receita e no preparo. Alterações são aplicadas quando uma tabela é salva; regras de declaração nutricional permanecem independentes.', 'INTEGER', '15', '{"min":0,"max":15}', true, false, true, CURRENT_TIMESTAMP)
+ON CONFLICT ("key") DO NOTHING;

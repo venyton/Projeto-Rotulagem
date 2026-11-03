@@ -49,10 +49,10 @@ const workspaceGuide = [
         moduleKey: SAAS_MODULES.TECHNICAL_SHEETS,
     },
     {
-        title: "Enterprise",
+        title: "Internacional",
         description: "Mercados internacionais, versões, aprovações e entregáveis.",
         href: "/dashboard/enterprise",
-        action: "Abrir Enterprise",
+        action: "Abrir Internacional",
         icon: Globe2,
         moduleKey: SAAS_MODULES.ENTERPRISE_LABELS,
     },
@@ -97,7 +97,7 @@ export default async function DashboardHomePage() {
         <div className="app-page app-page-loose flex flex-col gap-12">
             <section className="app-enter grid gap-8 border-b pb-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:items-end">
                 <div className="max-w-3xl">
-                    <h1 className="text-balance text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">
+                    <h1 className="type-heading-xxlarge text-balance">
                         Olá, {firstName}. O que vamos rotular hoje?
                     </h1>
                     {hasTables ? (
@@ -132,12 +132,12 @@ export default async function DashboardHomePage() {
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Ferramentas</p>
-                        <h2 id="workspace-title" className="mt-2 text-2xl font-semibold tracking-tight">Áreas de trabalho</h2>
+                        <h2 id="workspace-title" className="type-heading-medium mt-2">Áreas de trabalho</h2>
                     </div>
                     <p className="text-sm text-muted-foreground">Escolha uma área para continuar.</p>
                 </div>
 
-                <div className="grid overflow-hidden rounded-xl border bg-card shadow-sm sm:grid-cols-2">
+                <div className="elevation-bordered grid overflow-hidden rounded-lg bg-card sm:grid-cols-2">
                     {visibleWorkspaceGuide.map((item, index) => {
                         const Icon = item.icon;
                         return (
@@ -171,7 +171,7 @@ export default async function DashboardHomePage() {
                 <div className="grid gap-7 lg:grid-cols-[18rem_1fr]">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Fluxo recomendado</p>
-                        <h2 id="workflow-title" className="mt-2 text-2xl font-semibold tracking-tight">Da ficha ao rótulo</h2>
+                        <h2 id="workflow-title" className="type-heading-medium mt-2">Da ficha ao rótulo</h2>
                     </div>
                     <ol className="grid gap-6 sm:grid-cols-3">
                         {workflow.map((item) => (

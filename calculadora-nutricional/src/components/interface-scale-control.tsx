@@ -9,10 +9,10 @@ type InterfaceScaleValue = "compact" | "standard" | "comfortable" | "large";
 const STORAGE_KEY = "soizi-interface-scale";
 const DEFAULT_SCALE: InterfaceScaleValue = "standard";
 const SCALE_OPTIONS: Array<{ value: InterfaceScaleValue; label: string; fontSize: string }> = [
-    { value: "compact", label: "Compacto", fontSize: "12px" },
-    { value: "standard", label: "Padrão", fontSize: "13px" },
-    { value: "comfortable", label: "Amplo", fontSize: "14px" },
-    { value: "large", label: "Grande", fontSize: "15px" },
+    { value: "compact", label: "Compacto", fontSize: "15px" },
+    { value: "standard", label: "Padrão", fontSize: "16px" },
+    { value: "comfortable", label: "Amplo", fontSize: "17px" },
+    { value: "large", label: "Grande", fontSize: "18px" },
 ];
 
 function normalizeScale(value: string | null): InterfaceScaleValue {

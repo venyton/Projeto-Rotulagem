@@ -5,6 +5,7 @@ import { OrganizationRole, Prisma, SaaSModuleKey as PrismaSaaSModuleKey } from "
 import { prisma } from "@/lib/prisma";
 import { ALL_SAAS_MODULES, SAAS_MODULES, type SaaSModuleKey } from "@/features/saas/domain/modules";
 import { contextHasModuleAccess, type SaaSContext } from "@/features/saas/services/entitlements";
+import { resolveOrganizationModuleEntitlements } from "@/features/saas/services/feature-entitlements";
 import { PROFILE_PERMISSION_MODULES } from "@/features/settings/domain/profile-permissions";
 import { isInternalMasterEmail } from "@/features/master/domain/master-identity";
 
@@ -12,21 +13,21 @@ const DEFAULT_PROFILES = [
     {
         systemKey: "OWNER",
         role: OrganizationRole.OWNER,
-        name: "Proprietário",
-        description: "Acesso completo ao workspace.",
+        name: "Administrador do cliente (proprietário)",
+        description: "Administra a organização e os módulos incluídos no pacote.",
         modules: PROFILE_PERMISSION_MODULES,
     },
     {
         systemKey: "ADMIN",
         role: OrganizationRole.ADMIN,
-        name: "Administrador",
-        description: "Gerencia usuários, perfis e funcionalidades.",
+        name: "client_admin",
+        description: "Administra usuários e perfis da organização dentro dos limites do pacote.",
         modules: PROFILE_PERMISSION_MODULES,
     },
     {
         systemKey: "MEMBER",
         role: OrganizationRole.MEMBER,
-        name: "Colaborador",
+        name: "client",
         description: "Acesso operacional padrão.",
         modules: [
             SAAS_MODULES.TABLES,
@@ -43,7 +44,8 @@ const DEFAULT_PROFILES = [
 const DEFAULT_PROFILE_KEYS = DEFAULT_PROFILES.map((profile) => profile.systemKey);
 
 export function canManageOrganizationSettings(context: NonNullable<SaaSContext>) {
-    return contextHasModuleAccess(context, SAAS_MODULES.SETTINGS);
+    return (context.member.role === OrganizationRole.OWNER || context.member.role === OrganizationRole.ADMIN)
+        && contextHasModuleAccess(context, SAAS_MODULES.SETTINGS);
 }
 
 export function canManageAllOrganizationUsers(context: NonNullable<SaaSContext>) {
@@ -100,7 +102,7 @@ export async function ensureOrganizationProfiles(organizationId: string) {
 
     if (!defaultsReady) {
       await prisma.$transaction(async (tx) => {
-        let adminProfileId: string | null = null;
+        const profileIds = new Map<OrganizationRole, string>();
 
         for (const profileDefinition of DEFAULT_PROFILES) {
             const profile = await tx.organizationProfile.upsert({
@@ -122,9 +124,7 @@ export async function ensureOrganizationProfiles(organizationId: string) {
                 select: { id: true },
             });
 
-            if (profileDefinition.role === OrganizationRole.ADMIN) {
-                adminProfileId = profile.id;
-            }
+            profileIds.set(profileDefinition.role, profile.id);
 
             await tx.organizationProfilePermission.createMany({
                 data: PROFILE_PERMISSION_MODULES.map((moduleKey) => ({
@@ -148,13 +148,21 @@ export async function ensureOrganizationProfiles(organizationId: string) {
             }
         }
 
-        if (adminProfileId) {
+        for (const [role, profileId] of profileIds) {
             await tx.organizationMember.updateMany({
                 where: {
                     organizationId,
                     profileId: null,
+                    role,
                 },
-                data: { profileId: adminProfileId },
+                data: { profileId },
+            });
+        }
+        const memberProfileId = profileIds.get(OrganizationRole.MEMBER);
+        if (memberProfileId) {
+            await tx.organizationMember.updateMany({
+                where: { organizationId, profileId: null, role: OrganizationRole.BILLING },
+                data: { profileId: memberProfileId },
             });
         }
       }, { timeout: 20_000 });
@@ -303,7 +311,11 @@ export async function getOrganizationSettingsData(organizationId: string) {
 
     if (!organization) return null;
 
-    return organization;
+    const entitlements = await resolveOrganizationModuleEntitlements(organizationId);
+    return { ...organization, entitlements: entitlements.map((entitlement) => ({
+        ...entitlement,
+        enabled: entitlement.enabled && (!entitlement.expiresAt || entitlement.expiresAt > new Date()),
+    })) };
 }
 
 export async function listActiveOrganizationsForSettings(search?: string) {

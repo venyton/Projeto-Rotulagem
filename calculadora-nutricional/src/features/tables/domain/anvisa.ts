@@ -1,6 +1,7 @@
 /**
  * Rules from IN 75/2020 ANVISA
  */
+import BigNumber from "bignumber.js";
 
 export type FOPFoodType = "solid" | "liquid";
 export type AnnexIvNutrientKey =
@@ -38,10 +39,7 @@ function toSafeNumber(value: number) {
 }
 
 export function roundEnergy(val: number): string {
-    const safeValue = toSafeNumber(val);
-    if (safeValue === 0) return "0";
-    if (safeValue <= 50) return Math.max(5, Math.round(safeValue / 5) * 5).toString();
-    return (Math.round(safeValue / 10) * 10).toString();
+    return Math.round(toSafeNumber(val)).toString();
 }
 
 export function roundMacro(val: number): string {
@@ -58,18 +56,26 @@ export function roundSugars(val: number): string {
 
 export function roundSodium(val: number): string {
     const safeValue = toSafeNumber(val);
-    if (safeValue === 0) return "0";
-    if (safeValue <= 140) return Math.max(5, Math.round(safeValue / 5) * 5).toString();
-    return (Math.round(safeValue / 10) * 10).toString();
+    if (safeValue >= 10) return Math.round(safeValue).toString();
+    const places = safeValue < 1 ? 2 : 1;
+    return new BigNumber(safeValue).decimalPlaces(places, BigNumber.ROUND_HALF_UP).toString().replace('.', ',');
 }
 
 export function calculateVD(val: number, vdr: number | null): string {
     if (vdr === null || vdr === 0) return "-";
-    const pct = (val / vdr) * 100;
-    // Rule: "Arredondar para inteiro mais próximo"
-    // Usually < 1% is "0"? Or just round? 
-    // Standard practice: < 1 -> 0? Or just round. Math.round(0.4) = 0.
+    const pct = (val * 100) / vdr;
     return Math.round(pct).toString();
+}
+
+// O percentual usa a quantidade efetivamente declarada na tabela.
+export function calculateVDFromDisplay(display: string, vdr: number | null): string {
+    return calculateVD(Number(display.replace(",", ".")), vdr);
+}
+
+export function formatOptionalNutrient(val: number, unit = "g"): string {
+    const safeValue = toSafeNumber(val);
+    const places = safeValue >= 10 ? 0 : safeValue < 1 && unit !== "g" ? 2 : 1;
+    return new BigNumber(safeValue).decimalPlaces(places, BigNumber.ROUND_HALF_UP).toString().replace(".", ",");
 }
 
 function roundGram(val: number): string {
@@ -77,7 +83,7 @@ function roundGram(val: number): string {
     if (safeValue === 0) return "0";
     if (safeValue >= 10) return Math.round(safeValue).toString();
 
-    const rounded = safeValue.toFixed(1).replace(".", ",");
+    const rounded = new BigNumber(safeValue).decimalPlaces(1, BigNumber.ROUND_HALF_UP).toFixed(1).replace(".", ",");
     return rounded.endsWith(",0") ? rounded.slice(0, -2) : rounded;
 }
 
@@ -137,11 +143,13 @@ export function formatAnnexIvNutrientPair(
     const per100Value = zeroMap[key] ? 0 : values.per100g[key];
     const portionValue = zeroMap[key] ? 0 : values.perPortion[key];
 
+    const per100 = formatNutrientValue(key, per100Value);
+    const portion = formatNutrientValue(key, portionValue);
     return {
-        per100: formatNutrientValue(key, per100Value),
-        portion: formatNutrientValue(key, portionValue),
-        per100Value,
-        portionValue,
+        per100,
+        portion,
+        per100Value: Number(per100.replace(",", ".")),
+        portionValue: Number(portion.replace(",", ".")),
         isNonSignificant: zeroMap[key],
     };
 }

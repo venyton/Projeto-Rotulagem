@@ -87,10 +87,12 @@ const userErrorMessages: Record<string, string> = {
     not_found: "Não existe um usuário cadastrado com este email.",
     organization: "Selecione uma organização válida.",
     rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+    seat_limit: "O limite de usuários ativos do plano foi atingido. Aumente o plano ou solicite um grant antes de adicionar outro usuário.",
 };
 
 const settingsErrorMessages: Record<string, string> = {
     rate_limit: "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente.",
+    seat_limit: "O limite de usuários ativos do plano foi atingido. Nenhum usuário foi ativado.",
     invalid: "Verifique os dados informados.",
     cnpj: "Informe um CNPJ válido.",
     cnpj_exists: "Este CNPJ já está vinculado a outra organização.",
@@ -180,7 +182,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
     const profileData = profileSettingsData ?? data;
 
-    const enabledOrganizationModules = new Set(
+    const enabledOrganizationModules = new Set<string>(
         profileData.entitlements.filter((entitlement) => entitlement.enabled).map((entitlement) => entitlement.moduleKey),
     );
     const selectedProfile =
@@ -192,12 +194,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         : [];
     const isAdministratorProfile = selectedProfile?.systemKey === "ADMIN";
     const actorProfilePermissions = PROFILE_PERMISSION_MODULES.filter((moduleKey) => contextHasModuleAccess(context, moduleKey));
-    const assignableProfiles = data.profiles.filter((profile) => canGrantManagedProfilePermissions({
+    const assignableProfiles = data.profiles.filter((profile) => profile.systemKey !== "OWNER" && canGrantManagedProfilePermissions({
         hasGlobalAuthority: canManageAllUsers,
         actorRole: context.member.role,
         actorPermissions: actorProfilePermissions,
         requestedPermissions: profile.permissions
-            .filter((permission) => permission.enabled)
+            .filter((permission) => permission.enabled && enabledOrganizationModules.has(permission.moduleKey))
             .map((permission) => permission.moduleKey),
     }));
     const defaultNewUserProfile = assignableProfiles.find((profile) => profile.systemKey === "MEMBER") ?? assignableProfiles[0] ?? selectedProfile;
@@ -206,7 +208,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             hasGlobalAuthority: canManageAllUsers,
             actorRole: context.member.role,
             actorPermissions: actorProfilePermissions,
-            requestedPermissions: selectedProfilePermissions,
+            requestedPermissions: selectedProfilePermissions.filter((moduleKey) => enabledOrganizationModules.has(moduleKey)),
         }) && !(
             context.member.role === "MEMBER" &&
             (selectedProfile.systemKey === "OWNER" || selectedProfile.systemKey === "ADMIN")
@@ -261,7 +263,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             <CardDescription>Busque pelo nome, razão social, nome fantasia ou pelos quatro últimos dígitos do CPF/CNPJ.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4">
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Cadastrar organização</summary>
                                 <form action={createManagedOrganization} className="mt-4">
                                     <FieldGroup className="grid gap-3 lg:grid-cols-4">
@@ -358,7 +360,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             </div>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4">
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Editar dados da organização</summary>
                                 <form action={updateOrganizationIdentity} className="mt-4">
                                     <input type="hidden" name="organizationId" value={selectedOrganizationData.id} />
@@ -379,7 +381,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                 </form>
                             </details>
 
-                            <details className="rounded-lg border bg-muted/20 p-4">
+                            <details className="elevation-sunken rounded-lg bg-muted/20 p-4">
                                 <summary className="cursor-pointer font-medium">Adicionar usuário à organização</summary>
                                 <form action={createOrganizationUser} className="mt-4">
                                     <input type="hidden" name="organizationId" value={selectedOrganizationData.id} />
@@ -392,7 +394,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                         <Field>
                                             <FieldLabel htmlFor="selected-user-profile">Perfil</FieldLabel>
                                             <NativeSelect id="selected-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>
-                                                {selectedOrganizationData.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}
+                                                {selectedOrganizationData.profiles.filter((profile) => profile.systemKey !== "OWNER").map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}
                                             </NativeSelect>
                                         </Field>
                                         <Button type="submit"><Plus data-icon="inline-start" />Criar usuário</Button>
@@ -403,7 +405,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                     <input type="hidden" name="managementTab" value="organizations" />
                                     <FieldGroup className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem_auto] lg:items-end">
                                         <Field><FieldLabel htmlFor="selected-existing-user-email">Vincular usuário existente</FieldLabel><Input id="selected-existing-user-email" name="email" type="email" required placeholder="colaborador@empresa.com" /></Field>
-                                        <Field><FieldLabel htmlFor="selected-existing-user-profile">Perfil</FieldLabel><NativeSelect id="selected-existing-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>{selectedOrganizationData.profiles.map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field>
+                                        <Field><FieldLabel htmlFor="selected-existing-user-profile">Perfil</FieldLabel><NativeSelect id="selected-existing-user-profile" name="profileId" required defaultValue={selectedOrganizationData.profiles.find((profile) => profile.systemKey === "MEMBER")?.id || ""}>{selectedOrganizationData.profiles.filter((profile) => profile.systemKey !== "OWNER").map((profile) => <NativeSelectOption key={profile.id} value={profile.id}>{profile.name}</NativeSelectOption>)}</NativeSelect></Field>
                                         <Button type="submit" variant="outline"><Link2 data-icon="inline-start" />Vincular</Button>
                                     </FieldGroup>
                                 </form>
@@ -566,7 +568,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                         </CardHeader>
                         <CardContent className="min-w-0">
                             <form action={createOrganizationUser}>
-                              <FieldGroup className="grid gap-3 lg:grid-cols-2">
+                              <FieldGroup className="grid gap-3 lg:grid-cols-2 lg:items-end">
                                 <Field>
                                     <FieldLabel htmlFor="new-user-name">Nome</FieldLabel>
                                     <Input id="new-user-name"
@@ -713,7 +715,29 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                             <TableCell>
                                                 {canManageMember ? <div className="flex min-w-[11rem] flex-col gap-2">
                                                     <form action={setOrganizationMemberActive}><input type="hidden" name="memberId" value={member.id} /><input type="hidden" name="active" value={member.active ? "false" : "true"} /><Button type="submit" variant="outline" size="sm"><Power data-icon="inline-start" />{member.active ? "Inativar" : "Ativar"}</Button></form>
-                                                    <details><summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary><div className="mt-2 flex flex-col gap-2">{canResetManagedMemberPassword({ hasGlobalAuthority: canManageAllUsers, sameOrganization: true, isSelf: member.user.id === context.user.id, actorRole: context.member.role, targetRole: member.role }) ? <form action={resetManagedUserPassword} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="password" type="password" minLength={10} required placeholder="Nova senha temporária" /><Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button></form> : null}<form action={removeOrganizationMember} className="flex flex-col gap-2"><input type="hidden" name="memberId" value={member.id} /><Input name="confirmation" required placeholder="Digite REMOVER" /><Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button></form></div></details>
+                                                    <details>
+                                                        <summary className="cursor-pointer text-sm text-muted-foreground">Senha ou remoção</summary>
+                                                        <div className="mt-2 flex flex-col gap-3">
+                                                            {canResetManagedMemberPassword({ hasGlobalAuthority: canManageAllUsers, sameOrganization: true, isSelf: member.user.id === context.user.id, actorRole: context.member.role, targetRole: member.role }) ? (
+                                                                <form action={resetManagedUserPassword} className="flex flex-col gap-2">
+                                                                    <input type="hidden" name="memberId" value={member.id} />
+                                                                    <Field className="gap-1.5">
+                                                                        <FieldLabel htmlFor={`member-password-${member.id}`}>Nova senha temporária</FieldLabel>
+                                                                        <Input id={`member-password-${member.id}`} name="password" type="password" minLength={10} required />
+                                                                    </Field>
+                                                                    <Button type="submit" variant="outline" size="sm"><KeyRound data-icon="inline-start" />Redefinir senha</Button>
+                                                                </form>
+                                                            ) : null}
+                                                            <form action={removeOrganizationMember} className="flex flex-col gap-2">
+                                                                <input type="hidden" name="memberId" value={member.id} />
+                                                                <Field className="gap-1.5">
+                                                                    <FieldLabel htmlFor={`member-removal-${member.id}`}>Digite REMOVER para confirmar</FieldLabel>
+                                                                    <Input id={`member-removal-${member.id}`} name="confirmation" required />
+                                                                </Field>
+                                                                <Button type="submit" variant="destructive" size="sm"><Trash2 data-icon="inline-start" />Remover acesso</Button>
+                                                            </form>
+                                                        </div>
+                                                    </details>
                                                 </div> : <span className="text-sm text-muted-foreground">Sem ações disponíveis</span>}
                                             </TableCell>
                                         </TableRow>
@@ -753,7 +777,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                                         required
                                         minLength={2}
                                         maxLength={60}
-                                        placeholder="Nome do perfil"
+                                        placeholder="Nome do perfil *"
                                       />
                                     </Field>
                                     <Field>

@@ -82,7 +82,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: IngredientDto
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="h-12 w-full justify-between gap-2 rounded-xl border-border/70 bg-background/95 px-3 text-sm shadow-sm hover:bg-accent/40"
+                    className="h-12 w-full justify-between gap-2 rounded-lg border-border/70 bg-input-background px-3 text-sm hover:bg-accent/40"
                 >
                     <span className="truncate text-left">
                         Buscar ingrediente...
@@ -91,7 +91,7 @@ export function IngredientSelector({ onSelect }: { onSelect: (ing: IngredientDto
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className="w-[min(95vw,32rem)] rounded-xl border-border/70 bg-popover p-0 shadow-xl"
+                className="elevation-floating w-[min(95vw,32rem)] rounded-xl bg-popover p-0"
                 align="start"
             >
                 <Command shouldFilter={false} className="bg-transparent">

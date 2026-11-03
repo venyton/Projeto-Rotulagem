@@ -9,6 +9,7 @@ import {
 import { getClientAddress, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { sendPasswordResetEmail } from "@/lib/security/password-reset-email";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { readBoundedJsonRequest } from "@/lib/security/request-body";
 import { emailSchema } from "@/lib/validation/contacts";
 
 const requestSchema = z.object({
@@ -24,10 +25,10 @@ export async function POST(request: NextRequest) {
   const originError = rejectCrossOriginRequest(request);
   if (originError) return originError;
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (!Number.isFinite(contentLength) || contentLength > 4096) return successResponse();
+  const body = await readBoundedJsonRequest(request, 4096);
+  if (!body.ok) return successResponse();
 
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = requestSchema.safeParse(body.value);
   if (!parsed.success) return successResponse();
 
   const { email } = parsed.data;

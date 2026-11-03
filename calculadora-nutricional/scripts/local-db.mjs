@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,8 @@ const localEnvPath = resolve(projectRoot, ".env.local");
 const composeFile = "docker-compose.local.yml";
 const localDatabaseUrl = "postgresql://calculadora_local:calculadora_local@127.0.0.1:54329/calculadora_nutricional?schema=public";
 const databaseKeys = ["POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING", "DATABASE_URL"];
+const baselineMigration = "0_baseline_pre_prisma_migrate";
+const baselineTables = ["User", "Ingredient", "CustomIngredient", "GeneratedTable", "TableItem"];
 
 function parseEnv(contents) {
   return Object.fromEntries(
@@ -82,40 +84,34 @@ function localPsql(query) {
   ]);
 }
 
-function migrationNames() {
-  return readdirSync(resolve(projectRoot, "prisma/migrations"), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-}
-
-function bootstrapEmptyLocalDatabase() {
+function prepareLocalMigrationHistory(env) {
   const migrationTableExists = localPsql("SELECT to_regclass('public._prisma_migrations') IS NOT NULL;") === "t";
   const domainTableCount = Number(localPsql("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations';"));
   const hasFailedMigration = migrationTableExists && localPsql("SELECT EXISTS (SELECT 1 FROM \"_prisma_migrations\" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL);") === "t";
 
-  if (migrationTableExists && domainTableCount > 0) return false;
-  if (migrationTableExists && !hasFailedMigration) {
-    throw new Error("O banco local possui histórico de migrations, mas nenhuma tabela de domínio. Execução interrompida.");
+  if (!migrationTableExists && domainTableCount === 0) return;
+  if (!migrationTableExists) {
+    throw new Error("O banco local não está vazio e não possui _prisma_migrations. Faça baseline explícito ou recrie somente esse banco local.");
+  }
+  if (domainTableCount === 0 || hasFailedMigration) {
+    throw new Error("O banco local possui histórico incompleto ou inconsistente. Execução interrompida sem reset automático.");
   }
 
-  if (migrationTableExists) {
-    run("docker", ["compose", "-f", composeFile, "exec", "-T", "postgres", "psql", "-U", "calculadora_local", "-d", "calculadora_nutricional", "-v", "ON_ERROR_STOP=1", "-c", "DROP TABLE \"_prisma_migrations\";"]);
+  const baselineApplied = localPsql(`SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE migration_name = '${baselineMigration}' AND finished_at IS NOT NULL);`) === "t";
+  if (baselineApplied) return;
+
+  const existingBaselineTables = Number(localPsql(`SELECT count(*) FROM unnest(ARRAY[${baselineTables.map((table) => `'${table}'`).join(", ")}]) AS expected(name) WHERE to_regclass('public."' || expected.name || '"') IS NOT NULL;`));
+  if (existingBaselineTables !== baselineTables.length) {
+    throw new Error("O banco local não contém todas as tabelas do baseline histórico. Execução interrompida sem marcar migration como aplicada.");
   }
 
-  const env = localEnv();
-  run("npx", ["prisma", "db", "push", "--skip-generate", "--schema=./prisma/schema.prisma"], env);
-  for (const name of migrationNames()) {
-    run("npx", ["prisma", "migrate", "resolve", "--applied", name, "--schema=./prisma/schema.prisma"], env);
-  }
-  return true;
+  run("npx", ["prisma", "migrate", "resolve", "--applied", baselineMigration, "--schema=./prisma/schema.prisma"], env);
 }
 
 function migrateLocalDatabase() {
   const env = localEnv();
-  if (!bootstrapEmptyLocalDatabase()) {
-    run("npx", ["prisma", "migrate", "deploy", "--schema=./prisma/schema.prisma"], env);
-  }
+  prepareLocalMigrationHistory(env);
+  run("npx", ["prisma", "migrate", "deploy", "--schema=./prisma/schema.prisma"], env);
   run("npx", ["prisma", "migrate", "status", "--schema=./prisma/schema.prisma"], env);
 }
 
@@ -127,6 +123,10 @@ try {
     run("docker", ["compose", "-f", composeFile, "up", "-d", "--wait"]);
   } else if (action === "migrate") {
     migrateLocalDatabase();
+  } else if (action === "push") {
+    const env = localEnv();
+    console.warn("db push está restrito ao PostgreSQL local e não substitui uma migration versionada.");
+    run("npx", ["prisma", "db", "push", "--schema=./prisma/schema.prisma"], env);
   } else if (action === "down") {
     run("docker", ["compose", "-f", composeFile, "down"]);
   } else if (action === "prepare") {
@@ -134,7 +134,7 @@ try {
     run("docker", ["compose", "-f", composeFile, "up", "-d", "--wait"]);
     migrateLocalDatabase();
   } else {
-    throw new Error("Use: node scripts/local-db.mjs <prepare|up|migrate|down>");
+    throw new Error("Use: node scripts/local-db.mjs <prepare|up|migrate|push|down>");
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);

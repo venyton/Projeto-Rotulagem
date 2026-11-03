@@ -1,955 +1,1066 @@
-# Documentacao completa do sistema
+# Arquitetura e funcionamento completo do SoIZI
 
-Atualizado em: 30/07/2026.
+Atualizado em: 25/08/2026.
 
-## 1. Visao geral
+Status: documento canônico da arquitetura implementada no checkout
+`Projeto-Rotulagem-security-regras-negocio/calculadora-nutricional`, branch
+`security/regras-negocio-backend`.
 
-O sistema e uma aplicacao web para criacao, calculo, revisao, pre-visualizacao, salvamento e exportacao de tabelas nutricionais para rotulagem de alimentos.
+## 1. Objetivo e contrato deste documento
 
-Ele foi construido para apoiar o fluxo operacional de rotulagem nutricional com base em receitas, ingredientes, grupos de alimentos, porcoes, medidas caseiras e regras regulatórias da Anvisa. O foco do produto e permitir que o usuario monte uma receita, calcule seus nutrientes, escolha o modelo oficial de tabela, valide regras importantes e gere arquivos para uso em rotulo, planilha ou revisao tecnica.
+Este documento descreve o sistema como ele funciona hoje no código: produto,
+arquitetura, stack, árvore do repositório, responsabilidades, fluxos, banco de
+dados, segurança, integrações, testes, deploy, decisões e limitações conhecidas.
 
-A base atual tambem inclui importacao de fichas tecnicas por IA, revisao humana antes de transformar dados extraidos em ingrediente, organizacao de SQL para execucao manual e um workspace enterprise para versoes, aprovacao e mercados internacionais.
+Quatro classificações evitam confundir intenção com realidade:
 
-O projeto fica em:
+| Classificação | Significado |
+| --- | --- |
+| **Implementado** | Existe no runtime atual e há código que executa o comportamento. |
+| **Preparado** | Há modelo, configuração ou estrutura, mas o fluxo não está completo ou exposto. |
+| **Histórico** | Aparece em migrations ou documentos antigos, mas não integra o runtime atual. |
+| **Recomendação** | Melhoria arquitetural proposta; não deve ser tratada como entregue. |
 
-```text
-/home/paz/Projeto-Rotulagem/calculadora-nutricional
+O código e o `prisma/schema.prisma` são a fonte de verdade do comportamento da
+aplicação. A pasta `prisma/migrations` é a fonte de verdade da evolução histórica
+do banco. Quando ambos divergem, a divergência é documentada, não ocultada.
+
+## 2. Resumo executivo
+
+O SoIZI é uma aplicação web multiusuário e multi-organização para construir,
+calcular, revisar, versionar e exportar informações de rotulagem nutricional.
+Seus núcleos são:
+
+- receitas, ingredientes e tabelas nutricionais;
+- cálculo nutricional e declaração de porção;
+- rotulagem nutricional frontal, chamada de lupa/FOP;
+- exportações técnicas em imagem, planilha e documentos;
+- importação assistida de fichas técnicas com Gemini e revisão humana;
+- projetos Enterprise com versões, aprovações, mercados e exportações;
+- controle de acesso por organização, função, perfil, módulo e token de API;
+- integrações com Open Food Facts, provedores OAuth, Resend e Gemini.
+
+A arquitetura segue uma aplicação monolítica modular em Next.js. Interface,
+Server Actions, Route Handlers, domínios puros, serviços de infraestrutura e
+persistência vivem no mesmo deploy, mas obedecem fronteiras de importação e de
+autoridade. Não há microsserviços, fila, worker separado ou RLS no PostgreSQL.
+
+A decisão de segurança mais importante é esta: o navegador pode produzir uma
+prévia, mas não é autoridade para persistência, documentos oficiais ou cálculos
+sensíveis. Nessas fronteiras o servidor revalida identidade, organização,
+módulo, entrada e regras de negócio, e recalcula os dados necessários.
+
+## 3. Contexto do produto
+
+### 3.1 Usuários e casos de uso
+
+O produto atende profissionais e equipes que precisam:
+
+- cadastrar ou reaproveitar ingredientes;
+- descrever uma receita e seu rendimento;
+- montar uma tabela nutricional;
+- revisar porções, medidas caseiras, arredondamentos e nutrientes;
+- calcular a incidência e as dimensões da lupa frontal;
+- salvar e editar o trabalho sem perder o estado da interface;
+- exportar materiais técnicos;
+- transformar ficha técnica em ingrediente após revisão humana;
+- trabalhar com versões e aprovações em um contexto Enterprise;
+- consultar dados autorizados por uma API externa versionada.
+
+O sistema auxilia o trabalho técnico, mas não substitui a responsabilidade do
+profissional que conhece o produto, sua formulação e seu enquadramento legal.
+
+### 3.2 Capacidades ativas
+
+| Área | Situação atual |
+| --- | --- |
+| Autenticação por credencial e OAuth | Implementado |
+| Recuperação de senha e 2FA TOTP | Implementado |
+| Organizações, membros, perfis e módulos | Implementado |
+| Ingredientes próprios e base de alimentos | Implementado |
+| Open Food Facts | Implementado |
+| Tabelas nutricionais e lupa frontal | Implementado |
+| Excel, memorial e imagens editáveis | Implementado |
+| Importação de ficha técnica por IA | Implementado, com revisão humana |
+| Projetos, versões e aprovações Enterprise | Implementado |
+| Tokens e API externa `/api/v1` | Implementado |
+| Convites de organização | Preparado no modelo; sem fluxo completo atual |
+| Billing/Stripe | Histórico/configuração reservada; não implementado no runtime atual |
+| Marketing analytics | Histórico/configuração reservada; não implementado no runtime atual |
+
+## 4. Visão arquitetural
+
+### 4.1 Estilo
+
+O sistema é um **monólito modular full-stack**. Essa escolha permite compartilhar
+tipos e regras puras, realizar renderização no servidor e manter as mutações
+próximas do domínio, sem pagar a complexidade operacional de serviços separados.
+As fronteiras são lógicas e verificadas por scripts de arquitetura.
+
+```mermaid
+flowchart LR
+    U[Usuário ou cliente API] --> P[Next.js Proxy e CSP]
+    P --> UI[App Router e componentes]
+    UI --> SA[Server Actions]
+    U --> RH[Route Handlers /api]
+    SA --> DM[Domínios e casos de uso]
+    RH --> DM
+    DM --> SV[Serviços server-only]
+    SV --> PR[Prisma]
+    PR --> DB[(PostgreSQL)]
+    SV --> EX[Gemini, Open Food Facts, Resend e OAuth]
 ```
 
-Stack principal:
+### 4.2 Camadas e responsabilidades
+
+| Camada | Local principal | Responsabilidade |
+| --- | --- | --- |
+| Apresentação | `src/app`, `src/components` | Rotas, layouts, formulários, feedback e composição visual. |
+| Feature | `src/features/*` | Agrupar ações, componentes, domínio, páginas internas e serviços por capacidade. |
+| Domínio | `src/features/*/domain` | Regras determinísticas e tipos sem acesso ao banco. |
+| Casos de uso HTTP | Server Actions e `src/app/api` | Autenticar, autorizar, validar DTOs, executar a operação e devolver resposta segura. |
+| Infraestrutura | `src/lib`, `src/features/*/services` | Prisma, criptografia, e-mail, APIs externas, rate limit e telemetria. |
+| Persistência | `prisma` | Modelo relacional, constraints, índices, migrations e seed. |
+| Guardrails | `scripts`, CI | Verificar fronteiras, validações, segurança, tipos, testes e build. |
+
+### 4.3 Fronteiras de confiança
+
+1. **Internet → aplicação:** cookies, headers, corpo, arquivos e bearer tokens são
+   não confiáveis.
+2. **Navegador → servidor:** IDs, nutrientes calculados, `organizationId`, função
+   e permissões enviados pelo cliente nunca concedem autoridade.
+3. **Aplicação → banco:** o Prisma restringe a forma usual de acesso, mas o
+   isolamento de tenant depende dos filtros da aplicação; não existe RLS.
+4. **Aplicação → provedores:** respostas de Gemini e Open Food Facts são dados
+   externos e passam por normalização/validação.
+5. **Prévia → artefato oficial:** a prévia do navegador é conveniência; o servidor
+   recompõe o estado autoritativo para persistência e exportações oficiais.
+
+## 5. Stack e versões observadas
+
+As versões abaixo vêm do `package.json`, `package-lock.json` e ambiente local
+observado em 25/08/2026. Onde a declaração usa `^`, a versão instalada é a que
+representa este checkout.
+
+| Tecnologia | Versão observada | Uso |
+| --- | --- | --- |
+| Node.js | 24.18.0 no ambiente local | Runtime local/CI. O projeto ainda não declara `engines`. |
+| npm | 11.16.0 no ambiente local | Instalação e scripts. |
+| Next.js | 16.2.12 | App Router, Server Components, Server Actions, Route Handlers e build. |
+| React / React DOM | 19.2.3 | Interface declarativa e componentes cliente/servidor. |
+| TypeScript | 5.9.3 instalado | Tipagem estrita e contratos internos. |
+| Prisma / Prisma Client | 5.22.0 | ORM, schema e migrations PostgreSQL. |
+| PostgreSQL | 16 no Compose local | Persistência relacional e rate limit atômico. |
+| NextAuth | 4.24.15 | Credentials, OAuth, JWT e callbacks de sessão. |
+| Tailwind CSS | 4.1.18 | Tokens, utilitários e estilos. |
+| Radix UI / shadcn | Radix 1.6.2 e primitives | Componentes acessíveis e design system local. |
+| Zod | 4.4.3 | Validação de payloads e respostas externas. |
+| bcryptjs | 3.0.3 | Hash de senha. |
+| Google GenAI | 2.2.0 | Extração estruturada de fichas técnicas. |
+| ExcelJS | 4.4.0 | Geração e leitura de planilhas usadas pelo produto. |
+| html-to-image | 1.11.13 | Exportações visuais no navegador. |
+| lucide-react | 0.562.0 | Ícones. |
+| sonner | 2.0.7 | Toasts e feedback. |
+| input-otp | 1.4.2 | Entrada acessível de códigos 2FA. |
+| qrcode | 1.5.4 | QR Code de provisionamento TOTP. |
+
+Observações:
+
+- o lockfile usa `lockfileVersion: 3`;
+- `xlsx` não é dependência direta do runtime atual; menções em documentos antigos
+  devem ser entendidas como históricas;
+- `jszip` aparece de forma transitiva, não como contrato direto da aplicação;
+- `next-themes` está instalado, mas o tema efetivo é controlado pelo provider
+  próprio e pelas variáveis CSS do projeto;
+- o CI usa Node 24; declarar `engines` é uma recomendação de alinhamento.
+
+## 6. Modelo de execução do Next.js
+
+### 6.1 Server Components e Client Components
+
+Páginas e layouts são Server Components por padrão. Componentes recebem
+`"use client"` apenas quando precisam de estado local, eventos, APIs do browser,
+contextos de interface ou efeitos. Isso reduz JavaScript no cliente e mantém
+leitura de sessão e dados sensíveis no servidor.
+
+### 6.2 Server Actions
+
+Mutações iniciadas pela interface são, em geral, Server Actions em
+`src/features/<feature>/actions`. Elas devem:
+
+1. declarar `"use server"`;
+2. obter a sessão/contexto no servidor;
+3. validar a organização e o módulo necessários;
+4. converter `FormData` em um DTO explícito;
+5. validar o DTO;
+6. consultar ou gravar sempre no escopo da organização;
+7. registrar evento/auditoria quando aplicável;
+8. revalidar a rota ou devolver resultado serializável.
+
+### 6.3 Route Handlers
+
+Integrações HTTP, arquivos, auth e API externa usam Route Handlers. Operações
+mutáveis rejeitam requisições cross-origin e aplicam limites antes de executar
+trabalho custoso. Respostas não expõem erros internos, hashes ou stack traces.
+
+### 6.4 Serviços `server-only`
+
+Código que acessa Prisma, chaves, tokens ou integrações usa `import "server-only"`.
+O verificador arquitetural impede que componentes cliente importem Prisma ou
+serviços de infraestrutura e impede que o domínio puro conheça o ORM.
+
+## 7. Árvore comentada do repositório
 
 ```text
-Next.js 16
-React 19
-TypeScript
-Prisma
-PostgreSQL
-NextAuth
-Tailwind CSS
-ExcelJS
-html-to-image
-XLSX
-Gemini API
-Open Food Facts
+Projeto-Rotulagem-security-regras-negocio/       # raiz Git deste checkout
+├── .github/
+│   ├── dependabot.yml                          # atualização de dependências
+│   └── workflows/security.yml                  # pipeline de qualidade/segurança
+└── calculadora-nutricional/                    # aplicação e documentação
+    ├── Dataset/                                # fontes e referências alimentares
+    ├── docs/
+    │   ├── architecture/                       # decisões e organização temática
+    │   ├── database/sql/                       # SQL legado/manual documentado
+    │   ├── operations/                         # deploy, banco, exportações e rollout
+    │   ├── references/                         # materiais técnicos de referência
+    │   ├── reports/                            # relatórios locais, não canônicos
+    │   └── system/                             # esta visão integral
+    ├── prisma/
+    │   ├── migrations/                         # 20 diretórios de evolução
+    │   ├── schema.prisma                       # 26 modelos e 11 enums atuais
+    │   └── seed.ts                             # carga inicial
+    ├── public/                                 # logos, bandeiras e imagens FOP
+    ├── scripts/                                # checks, banco e utilitários
+    ├── src/
+    │   ├── app/                                # App Router e Route Handlers
+    │   ├── components/                         # componentes compartilhados/UI
+    │   ├── features/                           # módulos funcionais coesos
+    │   ├── hooks/                              # hooks compartilhados do cliente
+    │   ├── lib/                                # auth, Prisma, segurança e validação
+    │   └── proxy.ts                            # dashboard e CSP por requisição
+    ├── .env.example                            # contrato de configuração
+    ├── components.json                         # shadcn, aliases e ícones
+    ├── docker-compose.local.yml                 # PostgreSQL 16 local
+    ├── next.config.ts                          # headers, imagens e limites
+    ├── package.json / package-lock.json         # dependências, versões e scripts
+    ├── tsconfig.json                           # strict e resolução bundler
+    └── vercel.json                             # install e build no deploy
 ```
 
-## 2. Publico e finalidade
-
-O sistema atende principalmente:
-
-- profissionais que montam tabelas nutricionais;
-- usuarios que precisam cadastrar receitas e gerar rotulos;
-- equipes que precisam exportar tabelas em imagem e Excel;
-- operacao interna que precisa salvar, editar e reaproveitar tabelas;
-- analistas que precisam lidar com alimentos gerais, suplementos e categorias especiais.
-
-Ele nao substitui uma auditoria regulatoria final feita por responsavel tecnico. O sistema automatiza calculo, formato e varias regras, mas a decisao final sobre enquadramento regulatorio, alegacoes, limites e uso do rotulo ainda depende do produto real e da revisao tecnica.
-
-## 3. Principais capacidades
-
-### 3.1 Cadastro e autenticacao de usuarios
-
-O sistema permite:
-
-- cadastrar usuario com nome, email e senha;
-- autenticar por email e senha via NextAuth Credentials;
-- proteger as paginas do painel;
-- manter sessao por JWT;
-- editar dados de perfil;
-- alterar senha com validacao da senha atual;
-- exigir novo login quando o email do perfil e alterado.
-
-Arquivos principais:
+### 7.1 Módulos em `src/features`
 
 ```text
-src/lib/auth.ts
-src/features/auth/actions/register-user.ts
-src/features/profile/actions/profile-actions.ts
-src/app/login/page.tsx
-src/app/register/page.tsx
-src/app/dashboard/profile/page.tsx
+features/
+├── api-access/          # criação, listagem e revogação de tokens
+├── auth/                # cadastro e componentes de autenticação
+├── enterprise/          # projetos, versões, aprovações e exportações
+├── i18n/                # catálogo e troca de idioma da interface
+├── ingredients/         # ingredientes, cadastro, consultas e formulários
+├── master/              # autoridade interna global
+├── open-food-facts/     # busca, normalização, importação e cache
+├── organizations/       # tipos e regras de organização
+├── profile/             # perfil do usuário
+├── saas/                # contexto, módulos e autorização multi-tenant
+├── settings/            # identidade, 2FA, membros, perfis e módulos
+├── tables/              # cálculo, persistência, FOP e exportação
+└── technical-sheets/    # upload, IA, revisão e criação de ingrediente
 ```
 
-### 3.2 Painel de tabelas salvas
+Cada feature pode conter `actions`, `components`, `domain`, `pages` e `services`.
+A existência de uma pasta não autoriza dependências arbitrárias: domínio continua
+puro, infraestrutura continua server-only e a interface não fala diretamente com
+o banco.
 
-No painel, o usuario consegue:
+## 8. Mapa de páginas
 
-- ver suas tabelas salvas;
-- criar nova tabela;
-- abrir uma tabela existente para edicao;
-- visualizar dados basicos como titulo, porcao, grupo populacional e data de criacao.
+### 8.1 Páginas públicas
 
-Cada tabela salva pertence ao usuario logado.
+| Rota | Função |
+| --- | --- |
+| `/` | Página pública inicial. |
+| `/login` | Login por credencial, OAuth e etapa de 2FA. |
+| `/register` | Cadastro com aceite legal versionado. |
+| `/forgot-password` | Solicitação de recuperação sem revelar existência da conta. |
+| `/reset-password` | Definição de nova senha por token. |
+| `/termos-de-uso` | Termos e versão legal vigente. |
+| `/politica-de-privacidade` | Política de privacidade. |
 
-Arquivos principais:
+### 8.2 Dashboard
 
-```text
-src/app/dashboard/page.tsx
-src/app/dashboard/new/page.tsx
-src/app/dashboard/edit/[id]/page.tsx
-src/features/tables/actions/table-actions.ts
+| Rota | Função principal |
+| --- | --- |
+| `/dashboard` | Visão inicial do workspace. |
+| `/dashboard/tables` | Listagem de tabelas salvas. |
+| `/dashboard/new` | Construção de uma tabela. |
+| `/dashboard/edit/[id]` | Edição de tabela existente e tenant-scoped. |
+| `/dashboard/edit/[id]/lupa` | Configuração e prévia da rotulagem frontal. |
+| `/dashboard/ingredients` | Entrada da área de ingredientes. |
+| `/dashboard/ingredients/my-ingredients` | Ingredientes próprios da organização. |
+| `/dashboard/ingredients/technical-sheets` | Importação e revisão de fichas por IA. |
+| `/dashboard/enterprise` | Projetos e workflow Enterprise. |
+| `/dashboard/api-access` | Administração de tokens da API. |
+| `/dashboard/profile` | Dados pessoais e senha. |
+| `/dashboard/settings` | Organização, segurança, membros, perfis e módulos. |
+
+As rotas antigas `/dashboard/master/modules`, `/dashboard/master/plans` e
+`/dashboard/modules` são compatibilidades que redirecionam para `/dashboard`.
+Elas não significam que há telas atuais de planos ou billing.
+
+## 9. Mapa das APIs
+
+| Método e rota | Responsabilidade | Controle principal |
+| --- | --- | --- |
+| `GET/POST /api/auth/[...nextauth]` | NextAuth, providers e callbacks | Configuração NextAuth |
+| `POST /api/auth/forgot-password` | Criar token e enviar e-mail | Same-origin, rate limit, resposta genérica |
+| `POST /api/auth/reset-password` | Validar token e trocar senha | Hash, expiração, uso único e rate limit |
+| `GET /api/health` | Liveness da aplicação | Não consulta dependências críticas |
+| `GET /api/ready` | Readiness com banco | Consulta controlada ao PostgreSQL |
+| `GET /api/open-food-facts` | Buscar produto/alimento externo | Validação e limite de requisição |
+| `POST /api/open-food-facts` | Importar/cachear alimento | Sessão, módulo, same-origin e tenant |
+| `POST /api/export/complete` | Gerar exportação oficial completa | Sessão, módulo, DTO e recálculo servidor |
+| `POST /api/export/excel` | Gerar planilha | Sessão, módulo e estado autoritativo |
+| `GET /api/export/memorial` | Gerar memorial | Sessão, módulo e tabela tenant-scoped |
+| `GET/POST /api/participant-modules` | Ler/alterar grants de membro | Administração e organização |
+| `POST /api/workspace/select` | Selecionar organização ativa | Membership, rate limit e cookie seguro |
+| `DELETE /api/tables/[id]` | Excluir tabela da organização | Sessão, módulo, same-origin e tenant |
+| `GET /api/v1/tables` | Consultar tabelas via integração | Bearer token, organização e módulo |
+
+`/api/v1` é o início do contrato externo versionado. As demais rotas são
+contratos internos do frontend e podem evoluir junto com o aplicativo.
+
+## 10. Fluxos de ponta a ponta
+
+### 10.1 Cadastro e criação do workspace
+
+1. O usuário envia nome, e-mail, senha e aceite legal.
+2. O servidor normaliza e valida os campos.
+3. A senha passa pela política de força e é gravada com bcrypt, custo 12.
+4. Usuário, organização inicial, membership de proprietário e módulos padrão são
+   provisionados de forma coerente.
+5. A versão dos termos/política aceita fica registrada.
+6. O usuário passa a autenticar pelo NextAuth.
+
+No primeiro login OAuth, callbacks equivalentes provisionam usuário e workspace
+quando necessário. Providers só são habilitados quando suas variáveis existem.
+
+### 10.2 Login e 2FA
+
+1. O login por credencial aplica uma camada rápida de limite em memória e um
+   limite persistente no PostgreSQL.
+2. E-mail e senha são validados; falhas devolvem erro genérico.
+3. Se 2FA estiver habilitado, um código TOTP de seis dígitos e janela de 30
+   segundos é exigido.
+4. O secret TOTP permanece cifrado com AES-256-GCM.
+5. O NextAuth emite sessão JWT; o proxy valida a sessão para o dashboard.
+
+### 10.3 Seleção de organização e autorização
+
+1. O servidor lê a sessão e o cookie HttpOnly `soizi-active-organization`.
+2. Confirma que a membership e a organização estão ativas.
+3. Se a seleção estiver obsoleta, escolhe um workspace válido sem produzir
+   efeitos colaterais durante a leitura.
+4. A troca valida a membership antes de atualizar o cookie `SameSite=Lax`,
+   `Secure` em produção.
+5. A operação seguinte verifica entitlement, perfil/função e grant aplicáveis.
+
+A precedência de módulos é:
+
+1. o módulo precisa estar habilitado para a organização;
+2. uma permissão explícita do perfil prevalece nos módulos controlados por perfil;
+3. se um módulo controlado não tiver permissão no perfil, o acesso é negado;
+4. proprietário e administrador acessam módulos não restringidos pelo perfil;
+5. membro comum depende do grant explícito quando aplicável.
+
+A autoridade interna global é derivada exclusivamente da allowlist server-side
+`INTERNAL_MASTER_EMAILS`. Ela não é concedida por parâmetro, perfil ou módulo.
+
+### 10.4 Criação e salvamento de tabela
+
+1. A interface seleciona ingredientes, quantidades, rendimento e configurações.
+2. Funções puras calculam uma prévia imediata no navegador.
+3. Ao salvar, a Server Action valida usuário, organização, módulo, IDs e DTO.
+4. Ingredientes são lidos no escopo permitido e os valores são recalculados.
+5. A tabela e seus itens são gravados com `organizationId` e autoria.
+6. Valores por 100 g relevantes são copiados para `TableItem`, formando snapshot
+   e evitando alteração retroativa quando o ingrediente de origem mudar.
+7. O estado evolutivo da tela é persistido em `GeneratedTable.uiState` JSON.
+
+### 10.5 Lupa frontal e exportações
+
+1. A tela calcula uma prévia com as mesmas regras puras compartilhadas.
+2. O servidor carrega a tabela pelo par `id + organizationId`.
+3. Referências de preparação são resolvidas apenas entre IDs/snapshots permitidos.
+4. Receita, nutrientes, overrides, declaração e lupa são recompostos.
+5. O payload final é validado antes de gerar Excel ou memorial.
+6. Alterações sensíveis de lupa podem gerar registro de auditoria.
+
+PNG/SVG gerados no browser são úteis para edição e composição visual, mas não
+possuem assinatura de autenticidade. Documentos oficiais server-side são a
+fronteira autoritativa do sistema.
+
+### 10.6 Importação de ficha técnica por IA
+
+```mermaid
+sequenceDiagram
+    participant U as Usuário
+    participant A as Server Action
+    participant G as Gemini
+    participant D as PostgreSQL
+    U->>A: arquivo PDF/PNG/JPEG/WEBP
+    A->>A: sessão, módulo, tamanho e magic bytes
+    A->>G: arquivo + schema de resposta
+    G-->>A: JSON estruturado
+    A->>A: Zod, normalização e confiança
+    A->>D: documento, extração, nutrientes e campos
+    A-->>U: tela de revisão
+    U->>A: correções e aprovação
+    A->>D: CustomIngredient autorizado
 ```
 
-### 3.3 Cadastro de ingredientes
+O modelo padrão é `gemini-2.5-flash`, configurável por ambiente. A temperatura é
+baixa, a resposta usa schema estruturado e o retorno ainda é validado por Zod.
+Erros transitórios têm tentativas limitadas com backoff. Arquivos pequenos podem
+usar fallback inline; lotes são processados sequencialmente, sem fila externa.
 
-O sistema trabalha com dois tipos de ingredientes:
+Confiança abaixo de 0,6 é sinalizada para revisão; uma extração sem nutrientes
+úteis ou com confiança crítica não vira ingrediente automaticamente. A IA sugere;
+a aprovação humana cria o ingrediente.
 
-- base oficial/importada no banco, em `Ingredient`;
-- ingredientes personalizados do usuario, em `CustomIngredient`.
+### 10.7 Enterprise
 
-O usuario consegue:
+O fluxo Enterprise organiza um projeto de rótulo em estados intermediários,
+versões imutáveis por snapshot, aprovações e exportações. Mercados previstos pelo
+domínio incluem Brasil, Estados Unidos, União Europeia, Canadá, México e Chile.
 
-- cadastrar ingrediente manualmente;
-- editar ingrediente proprio;
-- excluir ingrediente proprio;
-- inspecionar valores nutricionais;
-- importar ingredientes por Excel;
-- exportar seus ingredientes para Excel;
-- pesquisar ingredientes oficiais e proprios no gerador de tabela.
+Estados colaborativos podem ser atualizados por usuários habilitados. A aprovação
+final exige a permissão de `SETTINGS`. O modelo atual não implementa segregação
+formal de função por departamento nem a regra de “quatro olhos”.
 
-O cadastro aceita macronutrientes, gorduras, acucares, sodio, fibras e uma lista ampla de micronutrientes.
+### 10.8 API externa
 
-Campos principais:
+1. Um administrador cria um token com prefixo `soizi_`.
+2. O segredo completo aparece uma única vez.
+3. O banco guarda apenas SHA-256, prefixo, últimos quatro caracteres, expiração e
+   metadados.
+4. O cliente envia `Authorization: Bearer <token>` para `/api/v1/tables`.
+5. O servidor valida token ativo, organização, membership e módulo.
+6. `lastUsedAt` é atualizado no máximo aproximadamente uma vez por minuto,
+   evitando escrita em toda leitura.
 
-```text
-Valor energetico
-Carboidratos
-Acucares totais
-Acucares adicionados
-Proteinas
-Fibras alimentares
-Sodio
-Gorduras totais
-Gorduras saturadas
-Gorduras trans
-Gorduras monoinsaturadas
-Gorduras poli-insaturadas
-Omega 6
-Omega 3
-Colesterol
-Vitaminas
-Minerais
-Colina
+## 11. Domínio de cálculo nutricional
+
+### 11.1 Regras puras
+
+`src/features/tables/domain/nutrients.ts` concentra operações como:
+
+- escala de nutrientes por 100 g conforme quantidade utilizada;
+- soma da receita;
+- transformação do produto preparado;
+- fatores energéticos;
+- micronutrientes manuais;
+- identificação de açúcares adicionados conforme o modelo da entrada.
+
+`portion-declarations.ts` e arquivos regulatórios relacionados concentram porção,
+medida caseira, fração, rendimento, categoria e forma de declaração. A lupa tem
+domínio próprio em `fop-lupa.ts`, inclusive dimensionamento tipográfico.
+
+### 11.2 Por que as funções são compartilhadas
+
+As funções determinísticas podem ser executadas na interface para resposta rápida
+e no servidor para autoridade. Compartilhar regra reduz divergência; executar de
+novo no servidor impede que payload manipulado substitua a regra.
+
+### 11.3 Estado relacional e estado evolutivo
+
+- identidade, ownership, ingredientes e itens essenciais são relacionais;
+- nutrientes dos itens formam snapshots históricos;
+- `uiState` JSON preserva opções de interface que evoluem mais rápido que o
+  schema relacional;
+- snapshots Enterprise preservam versões completas sem depender do estado atual.
+
+Essa combinação favorece consistência no núcleo e compatibilidade na periferia.
+O trade-off é exigir validação/migração do JSON quando seu contrato evoluir.
+
+## 12. Arquitetura de dados
+
+### 12.1 Conexão
+
+O Prisma usa:
+
+- `POSTGRES_PRISMA_URL` para a conexão normal, compatível com pool;
+- `POSTGRES_URL_NON_POOLING` como `directUrl` para migrations/operações diretas.
+
+`src/lib/prisma.ts` mantém uma instância singleton em desenvolvimento para evitar
+clientes duplicados durante hot reload.
+
+### 12.2 Catálogo dos 26 modelos atuais
+
+#### Identidade, tenant e segurança
+
+| Modelo | Papel |
+| --- | --- |
+| `User` | Identidade, credencial, aceite legal, 2FA e autoria. |
+| `Organization` | Tenant e identidade organizacional. |
+| `OrganizationMember` | Relação usuário-organização, função, status e perfil. |
+| `OrganizationInvitation` | Convite persistível; fluxo ainda preparado. |
+| `OrganizationProfile` | Perfil de acesso específico de uma organização. |
+| `GlobalOrganizationProfile` | Template global de perfil. |
+| `GlobalOrganizationProfilePermission` | Permissões do template global. |
+| `OrganizationProfilePermission` | Permissões do perfil local. |
+| `OrganizationEntitlement` | Módulos habilitados para a organização. |
+| `ParticipantModuleGrant` | Concessão explícita de módulo a participante. |
+| `ApiAccessToken` | Hash e metadados de tokens externos. |
+| `SecurityAuditLog` | Eventos de segurança e administração. |
+| `RateLimitBucket` | Contadores persistentes de limite por janela. |
+
+#### Nutrição
+
+| Modelo | Papel |
+| --- | --- |
+| `Ingredient` | Base/importação compartilhada de ingrediente. |
+| `CustomIngredient` | Ingrediente criado e controlado pelo tenant. |
+| `GeneratedTable` | Tabela nutricional, estado e metadados. |
+| `TableItem` | Ingrediente da receita e snapshot nutricional. |
+
+#### Fichas técnicas e IA
+
+| Modelo | Papel |
+| --- | --- |
+| `TechnicalDocument` | Arquivo e metadados do documento submetido. |
+| `TechnicalSheetExtraction` | Execução, status, conteúdo estruturado e confiança. |
+| `ExtractedNutrient` | Nutriente extraído. |
+| `ExtractedAllergen` | Alérgeno extraído. |
+| `ExtractedTechnicalField` | Campo técnico extraído por categoria. |
+
+#### Enterprise
+
+| Modelo | Papel |
+| --- | --- |
+| `EnterpriseLabelProject` | Projeto e estado colaborativo. |
+| `EnterpriseLabelVersion` | Snapshot versionado do rótulo. |
+| `EnterpriseApproval` | Decisão e autoria de aprovação. |
+| `EnterpriseExport` | Registro do artefato exportado. |
+
+### 12.3 Enums
+
+Os 11 enums atuais são `DocumentType`, `ExtractionStatus`, `ReviewStatus`,
+`TechnicalFieldCategory`, `EnterpriseApprovalStatus`, `EnterpriseExportType`,
+`OrganizationStatus`, `OrganizationRole`, `OrganizationKind`,
+`OrganizationInvitationStatus` e `SaaSModuleKey`.
+
+### 12.4 Relações de alto nível
+
+```mermaid
+erDiagram
+    User ||--o{ OrganizationMember : participa
+    Organization ||--o{ OrganizationMember : possui
+    Organization ||--o{ OrganizationEntitlement : habilita
+    Organization ||--o{ GeneratedTable : isola
+    Organization ||--o{ CustomIngredient : isola
+    Organization ||--o{ ApiAccessToken : emite
+    GeneratedTable ||--o{ TableItem : contem
+    TechnicalDocument ||--o| TechnicalSheetExtraction : produz
+    TechnicalSheetExtraction ||--o{ ExtractedNutrient : contem
+    EnterpriseLabelProject ||--o{ EnterpriseLabelVersion : versiona
+    EnterpriseLabelProject ||--o{ EnterpriseApproval : recebe
 ```
 
-Arquivos principais:
-
-```text
-src/features/ingredients/actions/custom-ingredient-actions.ts
-src/features/ingredients/actions/import-ingredient-actions.ts
-src/features/ingredients/components/AddIngredientForm.tsx
-src/features/ingredients/components/IngredientSelector.tsx
-src/features/ingredients/components/IngredientsTable.tsx
-src/features/ingredients/components/ImportIngredientsDialog.tsx
-src/features/ingredients/components/InspectIngredientDialog.tsx
-```
-
-### 3.4 Busca de ingredientes
-
-A busca de ingredientes:
-
-- pesquisa base oficial e ingredientes do usuario;
-- aceita busca com ou sem acento;
-- busca por termo direto e por nome normalizado;
-- separa visualmente "Meus ingredientes" e "Base oficial";
-- remove duplicados por nome normalizado dentro da mesma origem;
-- prioriza ingredientes proprios quando aplicavel.
-
-Exemplo: buscar `acuca` encontra `Acucar`, `Acucar cristal`, `Acucar mascavo`, etc., sem duplicar itens iguais da base oficial.
-
-### 3.5 Importacao e exportacao de ingredientes
-
-O usuario pode importar um arquivo `.xlsx` ou `.xls` com colunas de nutrientes.
-
-Colunas aceitas incluem:
-
-```text
-Nome
-Energia
-Proteina
-Carboidratos
-Gorduras Totais
-Gorduras Saturadas
-Gorduras Trans
-Fibra
-Sodio
-Acucares Totais
-Acucares Adicionados
-Vitaminas
-Minerais
-Gorduras monoinsaturadas
-Gorduras poli-insaturadas
-Omega 6
-Omega 3
-Colesterol
-```
-
-Tambem e possivel exportar os ingredientes proprios para `meus-ingredientes.xlsx`.
-
-### 3.6 Criacao de tabela nutricional por receita
-
-O gerador de tabela permite:
-
-- escolher grupo de alimentos;
-- escolher produto sugerido dentro do grupo;
-- preencher automaticamente nome, porcao e medida caseira quando ha produto sugerido;
-- editar manualmente o nome do produto;
-- definir porcao em gramas;
-- definir medida caseira;
-- definir conteudo da embalagem;
-- calcular porcoes por embalagem automaticamente;
-- declarar porcoes por embalagem manualmente;
-- selecionar ingredientes;
-- informar quantidade de cada ingrediente;
-- marcar se um ingrediente conta como acucar adicionado;
-- limpar ingredientes selecionados;
-- calcular peso total dos ingredientes;
-- selecionar micronutrientes opcionais para aparecerem na tabela.
-
-Arquivos principais:
-
-```text
-src/features/tables/components/TableGenerator.tsx
-src/features/tables/domain/food-groups.ts
-src/features/tables/domain/household-measures.ts
-```
-
-### 3.7 Calculo nutricional
-
-O calculo central fica em:
-
-```text
-src/features/tables/domain/nutrients.ts
-```
-
-O sistema calcula:
-
-- totais da receita;
-- valores por 100 g;
-- valores por porcao;
-- energia;
-- carboidratos;
-- acucares totais;
-- acucares adicionados;
-- proteinas;
-- gorduras totais;
-- gorduras saturadas;
-- gorduras trans;
-- fibras;
-- sodio;
-- micronutrientes selecionaveis.
-
-O calculo usa a quantidade de cada ingrediente em gramas e escala os nutrientes informados por 100 g.
-
-### 3.8 Separacao entre acucares totais e adicionados
-
-O sistema separa acucares totais e acucares adicionados.
-
-Regra aplicada:
-
-- acucares totais sempre entram em `sugarTotal`;
-- acucares adicionados entram em `sugarAdded` quando:
-  - o ingrediente tem `sugarAdded` declarado;
-  - ou o usuario marca o ingrediente como acucar adicionado;
-  - ou o sistema identifica pelo nome que o ingrediente provavelmente e acucar adicionado.
-
-O sistema sugere automaticamente acucar adicionado quando o nome do ingrediente contem termos como:
-
-```text
-acucar
-sacarose
-glicose
-frutose
-lactose
-dextrose
-acucar invertido
-mel
-melaco
-melado
-rapadura
-caldo de cana
-extrato de malte
-xarope
-maltodextrina
-carboidrato hidrolisado
-```
-
-O usuario ainda pode alterar manualmente a marcacao.
-
-### 3.9 Regras de arredondamento e FOP
-
-As regras de arredondamento e lupa frontal ficam em:
-
-```text
-src/features/tables/domain/anvisa.ts
-```
-
-O sistema aplica arredondamento para:
-
-- valor energetico;
-- carboidratos;
-- proteinas;
-- gorduras totais;
-- fibras;
-- acucares;
-- gorduras saturadas;
-- gorduras trans;
-- sodio;
-- percentual de valores diarios.
-
-Tambem calcula a lupa frontal para:
-
-- alto em acucar adicionado;
-- alto em gordura saturada;
-- alto em sodio.
-
-Limites usados:
-
-```text
-Solidos e semissolidos, por 100 g:
-- acucares adicionados: 15 g
-- gordura saturada: 6 g
-- sodio: 600 mg
-
-Liquidos, por 100 ml:
-- acucares adicionados: 7,5 g
-- gordura saturada: 3 g
-- sodio: 300 mg
-```
-
-O usuario pode informar se a base da lupa e:
-
-- solido/semissolido;
-- liquido;
-- como exposto a venda;
-- pronto para consumo.
-
-### 3.10 Base regulatoria e VDR
-
-O sistema permite escolher dois cenarios:
-
-```text
-Populacao geral - alimentos em geral
-Grupo populacional especifico / suplementos
-```
-
-Para alimentos em geral, usa a referencia de populacao geral.
-
-Para produtos destinados a grupo especifico, usa um dos grupos:
-
-```text
-0-6 meses
-7-11 meses
-1-3 anos
-4-8 anos
-9-18 anos
->=19 anos
-Gestantes
-Lactantes
-```
-
-Suplemento alimentar força o uso de grupo populacional especifico.
-
-Os VDR ficam em:
-
-```text
-src/features/tables/domain/constants.ts
-```
-
-### 3.11 Categorias regulatorias especiais
-
-O sistema tem seletor de categoria regulatoria:
-
-```text
-Alimento em geral
-Suplemento alimentar
-Alimento para fins especiais
-Formula infantil
-Formula para nutricao enteral
-Formula dietoterapica
-Dieta com restricao de lactose
-Sal hipossodico
-```
-
-Essas categorias alteram o comportamento:
-
-- suplemento força grupo populacional especifico;
-- formula infantil, enteral e dietoterapica desligam a declaracao de `%VD`;
-- dieta com restricao de lactose sugere constituintes extras `Lactose` e `Galactose`;
-- sal hipossodico marca `Potassio`;
-- o sistema mostra avisos de conformidade por categoria.
+Todas as consultas de entidades pertencentes ao cliente devem combinar o
+identificador do recurso com `organizationId`. `userId` representa autoria; não
+substitui a fronteira do tenant.
 
-### 3.12 Constituintes extras
+### 12.5 Migrations e divergência histórica
 
-O sistema permite adicionar constituintes extras na tabela.
-
-Uso previsto:
+Há 20 diretórios de migration. A migration histórica
+`20260515120000_add_saas_billing_modules_marketing` criou estruturas de plano,
+billing, webhook e marketing, além de valores de enum associados. Esses modelos
+não existem no `schema.prisma` atual e não há migration posterior explícita que
+remova todos os objetos históricos.
 
-```text
-Creatina
-Cafeina
-Probióticos
-Enzimas
-Colageno
-Lactase
-Lactose
-Galactose
-Substancias bioativas
-Outros constituintes adicionados ou obrigatorios
-```
+Consequências:
 
-Cada constituinte extra tem:
+- billing e marketing **não são funcionalidades ativas da aplicação**;
+- bancos que receberam toda a história podem conservar tabelas não gerenciadas
+  pelo Prisma Client atual;
+- variáveis Stripe/marketing do `.env.example` são reservas históricas;
+- é necessária decisão futura: reintroduzir formalmente os modelos ou criar
+  migration aditiva de reconciliação após backup e inventário do banco real.
 
-```text
-nome
-quantidade por porcao
-unidade
-```
+Não se deve executar `prisma db push` em produção para “corrigir” essa diferença.
+Produção exige backup, migration revisada e `prisma migrate deploy`.
 
-Eles aparecem na pre-visualizacao e nas exportacoes por imagem.
+## 13. Autenticação e segurança
 
-### 3.13 Modelos de tabela nutricional
+### 13.1 Autenticação
 
-O sistema pre-visualiza e exporta diferentes modelos:
+- Credentials com e-mail e senha;
+- Google, Facebook/Meta e Azure AD habilitados somente com configuração completa;
+- sessão JWT via NextAuth;
+- proteção de `/dashboard` no proxy;
+- segredo de autenticação com tamanho mínimo verificado em produção;
+- recuperação com token aleatório, hash SHA-256, expiração de uma hora, uso único
+  e resposta anti-enumeração;
+- alteração de e-mail exige novo login.
 
-```text
-Vertical
-Horizontal
-Vertical Quebrado
-Horizontal Quebrado
-Linear
-Agregado
-Simplificada
-B2B
-Adicao de Ingredientes
-Porcao = 100 g/ml
-Suplemento Alimentar
-Suplemento por Grupo
-```
+### 13.2 Política de senha
 
-O seletor de modelo ajusta automaticamente os tipos marcados no exportador.
+Senhas têm comprimento aceito de 10 a 256 caracteres e são rejeitadas quando
+comuns ou quando incorporam informações óbvias como nome/e-mail. O hash usa
+bcrypt com fator de custo 12. O limite máximo também protege o hashing contra
+entradas abusivamente grandes.
 
-Comportamentos importantes:
+### 13.3 2FA TOTP
 
-- suplemento mostra modelos de suplemento;
-- modelo `Porcao = 100 g/ml` so fica disponivel quando a porcao e 100;
-- modelos sem `%VD` removem a coluna de verdade, sem deixar espaco vazio;
-- tabelas escalam para caber na janela de pre-visualizacao;
-- preview possui divisorias horizontais e verticais;
-- cabecalhos de colunas sao centralizados.
+O TOTP usa seis dígitos e período de 30 segundos. O secret é cifrado com
+AES-256-GCM, incluindo versão, IV, tag e ciphertext em Base64URL. A chave deriva
+de `TWO_FACTOR_ENCRYPTION_KEY` ou, como fallback, de `NEXTAUTH_SECRET` por
+SHA-256. O banco não armazena o secret em claro.
 
-Arquivo principal:
+### 13.4 CPF/CNPJ
 
-```text
-src/features/tables/components/NutritionalLabel.tsx
-```
+CPF e CNPJ são normalizados e validados pelos dígitos verificadores. Para reduzir
+exposição, o sistema guarda HMAC-SHA-256, últimos quatro dígitos e tipo necessário
+ao domínio. A chave usa `DOCUMENT_HASH_SECRET`, com fallback controlado para
+`NEXTAUTH_SECRET`. A variável dedicada ainda precisa entrar explicitamente no
+`.env.example`; isso é dívida documental/configuracional.
 
-### 3.14 Selo frontal de advertencia
+### 13.5 Autorização e isolamento multi-tenant
 
-Quando aplicavel, o sistema renderiza o selo de lupa frontal.
+Autenticação não implica autorização. Cada operação sensível valida usuário,
+organização, membership, entitlement, função/perfil/grant e ownership pelo
+`organizationId`. IDs do formulário localizam recursos, mas nunca escolhem o
+tenant; o tenant nasce do contexto de sessão verificado.
 
-O selo pode indicar:
+O banco não usa Row-Level Security. Uma consulta sem `organizationId` é falha de
+segurança da aplicação, mesmo que esteja tipada e use Prisma.
 
-```text
-ALTO EM ACUCAR ADICIONADO
-ALTO EM GORDURA SATURADA
-ALTO EM SODIO
-```
+### 13.6 Same-origin, CSP e headers
 
-Arquivo principal:
+Route Handlers mutáveis chamam `rejectCrossOriginRequest`, comparando `Origin`
+com `APP_URL`, `NEXTAUTH_URL` ou o host do deploy. O proxy gera nonce por
+requisição e aplica CSP com `strict-dynamic`, bloqueio de objetos e ancestors.
 
-```text
-src/features/tables/components/MagnifyingGlassLabel.tsx
-```
+Headers adicionais incluem `nosniff`, proteção de frame, política de referrer e
+permissões, COOP/CORP e desativação de prefetch DNS. Estilos inline continuam
+permitidos pelo contrato visual; `unsafe-eval` é restrito ao desenvolvimento.
 
-### 3.15 Exportacao por imagem
+### 13.7 Rate limit
 
-O sistema exporta imagens da tabela em:
+O limite persistente usa `RateLimitBucket` no PostgreSQL. A chave é hash SHA-256
+com salt e a atualização utiliza UPSERT atômico. O contador negado é limitado a
+`max + 1`, evitando crescimento sob ataque, e há limpeza de janelas expiradas.
 
-```text
-PNG
-JPEG
-WEBP
-```
+Login também mantém camada rápida em memória. Ela reduz custo local, mas não é
+suficiente em múltiplas instâncias; o bucket persistente é a camada coordenada.
 
-Quando ha mais de um arquivo, gera ZIP no cliente.
+### 13.8 Uploads e corpos
 
-Tambem permite exportar o selo FOP junto, quando ativo.
+- limites globais/específicos são configuráveis;
+- no Vercel, Server Actions são limitadas efetivamente a 4 MB;
+- tipo declarado e magic bytes são verificados;
+- ficha aceita PDF, PNG, JPEG e WEBP;
+- validação ocorre antes da chamada custosa à IA.
 
-Bibliotecas usadas:
+O menor limite da cadeia sempre prevalece.
 
-```text
-html-to-image
-jszip
-```
+### 13.9 Logs e auditoria
 
-### 3.16 Exportacao Excel oficial
+`SecurityAuditLog` registra ações administrativas e sensíveis, como mudanças de
+configuração, tokens, módulos e lupa. Eventos operacionais usam logs JSON
+estruturados. Segredos, hashes, cookies e conteúdo de documentos não devem ir ao
+log.
 
-O sistema exporta planilha Excel com base em template oficial.
+### 13.10 Guardrails automatizados
 
-Endpoint:
+`scripts/security-check.mjs` rejeita, entre outros:
 
-```text
-POST /api/export/excel
-```
+- rotas de debug proibidas;
+- `$queryRawUnsafe` e `$executeRawUnsafe`;
+- `dangerouslySetInnerHTML`, `eval` e `new Function`;
+- Prisma ou serviços server-only importados pelo cliente;
+- Prisma importado por domínios puros;
+- actions sem `"use server"`;
+- serviços de infraestrutura sem `server-only`;
+- Route Handlers mutáveis sem rejeição cross-origin.
 
-Arquivos principais:
+`scripts/check-validation-boundaries.mjs` evita cópias locais de regex/contratos
+que devem viver em `src/lib/validation`. Os scripts transformam decisões de
+arquitetura em falhas objetivas de CI.
 
-```text
-src/app/api/export/excel/route.ts
-src/lib/export/excel-generator.ts
-Dataset/reference/table-examples/modelos_oficiais_tabelas_excel.xlsx
-```
+## 14. Frontend e design system
 
-A exportacao respeita:
-
-- modelo selecionado;
-- dados por 100 g;
-- dados por porcao;
-- %VD, quando aplicavel;
-- grupo populacional;
-- suplemento;
-- tabelas sem %VD;
-- selecionados de micronutrientes.
+### 14.1 Componentes, tema e tokens
 
-### 3.17 Pacote completo
+Primitives em `src/components/ui` seguem shadcn/Radix, estilo `new-york`, TSX,
+Server Components e ícones Lucide. Componentes de feature compõem as primitives
+sem criar um segundo design system concorrente.
 
-O sistema gera pacote ZIP com Excel e imagens.
+Light/dark usam variáveis semânticas em `src/app/globals.css` e provider local.
+Escala da interface e tema são preferências armazenadas no navegador. Superfícies,
+bordas, foco, estado destrutivo e elevação usam tokens semânticos.
 
-Endpoint:
-
-```text
-POST /api/export/complete
-```
-
-O pacote pode conter:
-
-```text
-planilha_nutricional.xlsx
-tabela_<modelo>.png
-selo_fop.png
-```
-
-### 3.18 Documentos técnicos
-
-O gerador possui quatro downloads técnicos independentes:
-
-```text
-Memorial de cálculo  PDF e XLSX
-Ficha técnica        PDF e XLSX
-```
-
-O Memorial reúne identificação, parâmetros, formulação, contribuição por
-componente, micronutrientes, resultados consolidados e verificações. O XLSX
-entregue ao usuário contém somente a aba `Memorial de Cálculo`.
-
-A Ficha técnica reúne identificação do produto, características
-físico-químicas, microbiológicas, contaminantes, matérias estranhas,
-informação nutricional, apresentação, logística, revisões e aprovações. Seu
-XLSX contém as abas `Ficha Técnica` e `Dados do Sistema`.
-
-Endpoint protegido:
-
-```text
-GET /api/export/memorial?tableId=<id>&document=memorial|technical&format=pdf|xlsx
-```
-
-Os documentos usam os cálculos existentes, exportam valores materializados e
-mantêm campos obrigatórios mesmo quando não há informação cadastrada. Nesses
-casos, o arquivo informa `Não informado no cadastro`. Fórmulas, fatores
-internos, referências de células e estrutura interna do banco não são expostos.
-
-Arquivos principais:
-
-```text
-src/app/api/export/memorial/route.ts
-src/lib/export/memorial-pdf.ts
-src/lib/export/memorial-xlsx.ts
-src/lib/export/technical-sheet-xlsx.ts
-```
-
-### 3.19 Persistencia completa da UI
-
-O sistema salva a tabela gerada e tambem o estado de configuracao da interface.
-
-Dados persistidos em `GeneratedTable`:
-
-```text
-title
-portion
-uom
-householdMeasure
-popGroup
-packageContent
-servingsPerPackage
-suggestedFoodGroup
-suggestedProduct
-uiState
-items
-```
-
-O `uiState` guarda configuracoes como:
-
-```text
-grupo/produto sugerido
-conteudo da embalagem
-modo de porcoes por embalagem
-cenario regulatorio
-categoria regulatoria
-suplemento
-constituintes extras
-nutrientes selecionados
-modelos selecionados
-formatos de imagem
-perfil de conformidade
-base da lupa
-dados do produto pronto para consumo
-frases obrigatorias
-```
-
-Isso permite reabrir uma tabela salva com as configuracoes voltando para a tela.
-
-### 3.20 Perfil de conformidade
-
-O sistema inclui um bloco de conformidade com:
-
-```text
-Modo conformidade
-Perfil regulatorio do produto
-Categoria regulatoria
-Classificacao da base da lupa
-Base de calculo da lupa
-Frases obrigatorias para casos especificos
-Avisos operacionais
-```
-
-Perfis disponiveis:
-
-```text
-Alimento geral
-Agua envasada
-Sal iodado
-Farinha de trigo/milho enriquecida
-Categoria com vedacao de lupa
-```
-
-### 3.21 Importador de fichas tecnicas por IA
-
-O importador recebe PDFs ou imagens de fichas tecnicas, envia o conteudo para Gemini no servidor e grava uma extracao revisavel antes de criar ingrediente.
-
-Fluxo:
-
-1. Usuario envia um ou mais arquivos em `Ingredientes`.
-2. O servidor valida tipo e tamanho.
-3. Gemini retorna JSON estruturado.
-4. O sistema normaliza nutrientes, alergenicos e campos tecnicos.
-5. O usuario revisa os campos extraidos.
-6. Aprovacao humana cria ingrediente em `CustomIngredient`.
-
-Modelos/tabelas envolvidos:
-
-```text
-TechnicalDocument
-TechnicalSheetExtraction
-ExtractedNutrient
-ExtractedAllergen
-ExtractedTechnicalField
-CustomIngredient
-```
-
-Arquivos principais:
-
-```text
-src/features/technical-sheets/actions/technical-sheet-actions.ts
-src/features/technical-sheets/domain/technical-sheet-schema.ts
-src/features/technical-sheets/domain/technical-sheet-normalizer.ts
-src/features/technical-sheets/domain/technical-sheet-validator.ts
-src/features/technical-sheets/services/technical-sheet-ai-service.ts
-src/features/technical-sheets/services/technical-sheet-file-service.ts
-src/app/dashboard/ingredients/technical-sheets/page.tsx
-```
-
-### 3.22 Workspace enterprise
-
-O modulo enterprise permite criar projetos de rotulo a partir de uma tabela base e acompanhar versoes, mercado internacional e aprovacao.
-
-Mercados suportados no dominio atual:
-
-```text
-Brasil
-Estados Unidos
-Uniao Europeia
-Canada
-Mexico
-Chile
-```
-
-O fluxo registra snapshots para preservar o estado do rotulo no momento da revisao.
-
-Modelos/tabelas envolvidos:
-
-```text
-EnterpriseLabelProject
-EnterpriseLabelVersion
-EnterpriseApproval
-EnterpriseExport
-```
-
-Arquivos principais:
-
-```text
-src/features/enterprise/domain/enterprise.ts
-src/features/enterprise/components/EnterpriseWorkspace.tsx
-src/features/enterprise/components/InternationalNutritionLabel.tsx
-src/features/enterprise/actions/enterprise-label-actions.ts
-src/app/dashboard/enterprise/page.tsx
-```
-
-### 3.23 Idioma global da interface
-
-O idioma global fica em `src/features/i18n`. O padrao e `pt-BR`; a selecao de mercado enterprise nao muda automaticamente o idioma global da aplicacao.
-
-Idiomas previstos:
-
-```text
-pt-BR
-en-US
-es-MX
-es-CL
-fr-CA
-```
-
-## 4. Mapa de paginas
-
-Publicas:
-
-```text
-/                Landing page
-/login           Login
-/register        Cadastro
-```
-
-Protegidas:
-
-```text
-/dashboard                         Minhas tabelas
-/dashboard/new                     Nova tabela
-/dashboard/edit/[id]               Editar tabela salva
-/dashboard/ingredients             Ingredientes
-/dashboard/ingredients/my-ingredients Ingredientes do usuario
-/dashboard/ingredients/technical-sheets Fichas tecnicas importadas
-/dashboard/enterprise              Workspace enterprise
-/dashboard/profile                 Perfil e seguranca
-```
-
-## 5. Mapa de APIs
-
-```text
-/api/auth/[...nextauth]    Autenticacao NextAuth
-/api/export/excel         Exportacao Excel
-/api/export/complete      Exportacao ZIP completo
-/api/export/memorial      Memorial e Ficha técnica em PDF/XLSX
-/api/open-food-facts/products Busca segura no Open Food Facts
-```
-
-## 6. Banco de dados
-
-Modelos principais:
-
-```text
-User
-Ingredient
-CustomIngredient
-GeneratedTable
-TableItem
-TechnicalDocument
-TechnicalSheetExtraction
-ExtractedNutrient
-ExtractedAllergen
-ExtractedTechnicalField
-EnterpriseLabelProject
-EnterpriseLabelVersion
-EnterpriseApproval
-EnterpriseExport
-```
-
-Resumo:
-
-- `User`: conta do usuario.
-- `Ingredient`: base oficial/importada de ingredientes.
-- `CustomIngredient`: ingrediente criado/importado pelo usuario.
-- `GeneratedTable`: tabela salva e configuracoes principais.
-- `TableItem`: snapshot dos ingredientes usados na tabela.
-- `TechnicalDocument`: arquivo enviado ao importador de fichas tecnicas e JSON extraido.
-- `TechnicalSheetExtraction`: dados normalizados e revisaveis da ficha.
-- `ExtractedNutrient`, `ExtractedAllergen`, `ExtractedTechnicalField`: detalhes extraidos por categoria.
-- `EnterpriseLabelProject`, `EnterpriseLabelVersion`, `EnterpriseApproval`, `EnterpriseExport`: workspace enterprise, versoes, aprovacao e exportacoes.
-
-Arquivo:
-
-```text
-prisma/schema.prisma
-```
-
-## 7. Arquitetura do codigo
-
-Estrutura principal:
-
-```text
-src/app                  Rotas, paginas e APIs
-src/features             Regras e componentes por dominio
-src/components/ui        Componentes visuais reutilizaveis
-src/lib                  Infraestrutura compartilhada
-prisma                   Schema Prisma
-Dataset                  Bases, templates e referencias
-docs                     Documentacao
-scripts                  Seeds e utilitarios
-```
-
-Dominios em `src/features`:
-
-```text
-auth
-enterprise
-i18n
-ingredients
-open-food-facts
-profile
-tables
-technical-sheets
-```
-
-## 8. Fluxo operacional principal
-
-Fluxo para gerar uma tabela:
-
-1. Usuario entra no painel.
-2. Cria nova tabela.
-3. Escolhe grupo de alimentos ou preenche manualmente.
-4. Define porcao, medida caseira e conteudo da embalagem.
-5. Configura categoria regulatoria, VDR e lupa.
-6. Adiciona ingredientes e quantidades.
-7. Quando quiser usar produto de mercado, busca no Open Food Facts por codigo de barras ou nome, revisa os dados e importa como ingrediente. Ao importar, uma copia normalizada fica salva na base interna.
-8. Marca ingredientes que contam como acucar adicionado, se necessario.
-9. Seleciona micronutrientes e constituintes extras.
-10. Escolhe modelo de tabela.
-11. Confere pre-visualizacao.
-12. Salva a tabela.
-13. Exporta imagem, Excel ou pacote completo.
-14. Opcionalmente importa ficha tecnica com IA, revisa e salva como ingrediente.
-15. Opcionalmente abre o workspace enterprise para versoes e mercado internacional.
-
-## 9. Variaveis de ambiente
-
-Variaveis esperadas:
-
-```text
-POSTGRES_PRISMA_URL
-POSTGRES_URL_NON_POOLING
-NEXTAUTH_SECRET
-NEXTAUTH_URL
-OPEN_FOOD_FACTS_USER_AGENT
-GEMINI_API_KEY
-GEMINI_MODEL
-TECHNICAL_SHEET_MAX_FILE_SIZE_MB
-TECHNICAL_SHEET_MAX_BATCH_FILES
-```
-
-O codigo de autenticacao tambem possui fallback para `DATABASE_URL` em diagnostico, mas o schema Prisma usa `POSTGRES_PRISMA_URL` e `POSTGRES_URL_NON_POOLING`.
-
-`OPEN_FOOD_FACTS_USER_AGENT` e opcional, mas recomendado em producao para identificar a aplicacao nas chamadas ao Open Food Facts. A busca externa deve ser tratada como apoio operacional: o usuario precisa revisar os valores antes de usar no rotulo. Produtos importados ficam cacheados na tabela `Ingredient` com id `off-{codigo_de_barras}` e `origin = Open Food Facts`; as consultas externas normalizadas usam o Data Cache do Next com TTL de 10 minutos para nome e 24 horas para codigo de barras.
-
-Ingredientes mantem o campo normalizado `searchName` para busca sem acentos. Ele e preenchido nas escritas da aplicacao e indexado com `pg_trgm`; a migration correspondente tambem faz o backfill dos registros existentes.
-
-`GEMINI_API_KEY` habilita o importador de fichas tecnicas. `GEMINI_MODEL`, `TECHNICAL_SHEET_MAX_FILE_SIZE_MB` e `TECHNICAL_SHEET_MAX_BATCH_FILES` permitem ajustar modelo, tamanho maximo e lote de upload sem alterar o codigo.
-
-## 10. Scripts
-
-Scripts principais:
+### 14.2 Formulários obrigatórios
+
+Campos obrigatórios usam o atributo HTML `required`; o rótulo recebe asterisco
+visual pelo contrato CSS compartilhado. Depois de interação/tentativa inválida,
+o controle usa `:user-invalid` e borda/anel destrutivo. Não é necessário repetir
+a palavra “obrigatório” em cada label.
+
+O asterisco é comunicação visual, não validação. HTML, DTO/Zod, domínio e banco
+continuam responsáveis por validar a entrada em suas fronteiras.
+
+### 14.3 Internacionalização
+
+A fonte textual é pt-BR. `i18n` aplica catálogo no cliente e persiste a escolha em
+`localStorage`. Idiomas expostos incluem pt-BR, en-US, es-MX e fr-CA; um valor
+antigo `es-CL` é migrado para es-MX.
+
+Como a tradução é aplicada após hidratação, isso não equivale a rotas
+internacionalizadas no servidor e pode produzir transição visual. Mensagens
+tipadas server-side são uma evolução possível.
+
+### 14.4 Estado
+
+- estado efêmero de formulário permanece em React;
+- sessão e tenant são server-backed;
+- preferências visuais não sensíveis usam `localStorage`;
+- organização ativa usa cookie HttpOnly;
+- tabelas persistem núcleo relacional e `uiState` validado;
+- o servidor não confia em estado derivado apenas no cliente.
+
+## 15. Integrações externas
+
+### 15.1 Gemini
+
+Uso: extração estruturada de ficha técnica. Controles: chave server-side, schema
+de resposta, Zod, baixa temperatura, limites de arquivo, retry limitado e revisão
+humana.
+
+### 15.2 Open Food Facts
+
+Uso: busca por texto/código de barras e importação. O serviço normaliza campos,
+restringe hosts de imagem, envia User-Agent adequado e pode cachear o resultado
+como `Ingredient` com origem registrada. Dados externos não recebem confiança
+implícita.
+
+### 15.3 Resend e OAuth
+
+Resend envia recuperação de senha server-side. Google, Facebook/Meta e
+Microsoft/Azure AD são opcionais e só aparecem quando ID e secret correspondentes
+estão presentes. Redirect URIs pertencem ao ambiente, não ao browser.
+
+### 15.4 Serviços não existentes hoje
+
+Não há no runtime atual cobrança Stripe, webhook de billing, marketing analytics,
+object storage próprio, broker/fila/worker ou serviço OCR local separado.
+
+## 16. Configuração por ambiente
+
+| Grupo | Exemplos | Quando é necessário |
+| --- | --- | --- |
+| Banco | `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING` | Desenvolvimento, migrations e runtime. |
+| Auth | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `APP_URL` | Runtime; segredo forte em produção. |
+| Criptografia | `TWO_FACTOR_ENCRYPTION_KEY`, `DOCUMENT_HASH_SECRET` | Chaves dedicadas recomendadas em produção. |
+| Hash operacional | salt de rate limit/analytics | Pseudonimizar chaves de controle. |
+| Master | `INTERNAL_MASTER_EMAILS` | Somente para função interna global. |
+| E-mail | chave/remetente Resend | Recuperação por e-mail. |
+| OAuth | IDs e secrets por provider | Apenas para provider habilitado. |
+| IA | chave Gemini, modelo e limites | Importação de ficha técnica. |
+| Requisições | limites de corpo/arquivo/rate | Ajuste operacional. |
+| Stripe/marketing | placeholders históricos | Sem consumidor ativo atual. |
+
+Segredos nunca devem usar prefixo `NEXT_PUBLIC_`. Valores de CI são fictícios e
+servem para build/checks sem conectar a banco real.
+
+## 17. Desenvolvimento local, build e deploy
+
+### 17.1 Banco local
+
+`docker-compose.local.yml` sobe PostgreSQL 16 Alpine em `127.0.0.1:54329`, com
+volume nomeado e healthcheck. A porta distinta reduz conflito com instalação
+local padrão.
 
 ```bash
+npm run db:local:up
+npm run db:local:migrate
 npm run dev
-npm run build
-npm run start
-npm run lint
-npm run seed
-npm run seed-user
-npm run test-db
 ```
 
-Observacao importante:
+`predev` prepara o banco local conforme os scripts. Antes de apontar para outro
+ambiente, conferir as variáveis efetivas; banco local e remoto não são
+intercambiáveis.
 
-```text
-npm run build
+### 17.2 Scripts principais
+
+| Script | Função |
+| --- | --- |
+| `npm run dev` | Next dev com Webpack. |
+| `npm run build` | Gera Prisma Client e faz build Next.js. |
+| `npm run lint` | ESLint. |
+| `npm run typecheck` | TypeScript sem emissão. |
+| `npm test` | Testes unitários. |
+| `npm run check` | Lint, tipos, fronteiras, testes e `prisma validate`. |
+| `npm run security:check` | Guardrails e auditoria npm em severidade moderada. |
+| `npm run db:local:up/migrate/down` | Ciclo do PostgreSQL local. |
+
+`db:push` é conveniência de desenvolvimento. Não é processo de release de banco
+em produção.
+
+### 17.3 Vercel e publicação
+
+`vercel.json` usa `npm ci` e build Prisma + Next. O runtime depende das variáveis
+do projeto e do PostgreSQL externo. O limite de Server Actions cai para 4 MB.
+
+Uma publicação completa separa:
+
+1. backup compatível do banco;
+2. migrations com conexão direta;
+3. build/deploy;
+4. smoke de health/readiness, login e fluxo crítico;
+5. observação de logs sem payloads sensíveis.
+
+## 18. Qualidade, testes e CI
+
+O repositório possui 18 arquivos `.test.ts`, cobrindo principalmente regras puras,
+validações, módulos e segurança. O conjunto atual executa 56 testes.
+
+O workflow `../.github/workflows/security.yml`, na raiz Git, usa Node 24 e executa:
+
+1. `npm ci --ignore-scripts`;
+2. geração do Prisma Client;
+3. security check;
+4. lint;
+5. typecheck;
+6. testes;
+7. `prisma validate`;
+8. build.
+
+O CI usa URLs/secrets fictícios e não valida banco remoto. Não há suíte E2E no
+`npm check`. A verificação runtime de módulos é opcional, cria dados de teste e
+exige banco/servidor local; não deve ser executada em ambientes compartilhados.
+
+Dependabot verifica npm semanalmente e agrupa patch/minor. Mudanças major exigem
+decisão e validação deliberadas.
+
+## 19. Exemplos representativos do código
+
+Os trechos são simplificados. Os arquivos indicados são a fonte exata.
+
+### 19.1 Action protegida por tenant e módulo
+
+```ts
+"use server";
+
+const context = await getCurrentSaaSContext();
+await requireModuleAccess(context, "TABLES");
+
+const input = tableInputSchema.parse(rawInput);
+const table = await prisma.generatedTable.findFirst({
+  where: { id: input.id, organizationId: context.organization.id },
+});
 ```
 
-executa:
+O ponto central não é apenas validar `id`; é combinar recurso e tenant derivado
+da sessão.
 
-```text
-npx prisma generate --schema=./prisma/schema.prisma && next build
+### 19.2 Domínio puro reutilizável
+
+Padrão de `src/features/tables/domain/nutrients.ts`:
+
+```ts
+export function scaleNutrient(per100g: number, quantityInGrams: number) {
+  return (per100g * quantityInGrams) / 100;
+}
 ```
 
-Ou seja, o build atual apenas gera o Prisma Client e compila o Next.js. Alteracao de schema no banco deve ser feita manualmente e fora do build, usando `npm run db:push` somente quando o alvo do banco estiver conferido.
+Funções assim não importam Prisma, cookies ou React. Podem ser testadas
+isoladamente e reutilizadas na prévia e no recálculo autoritativo.
 
-## 11. Pontos de atencao
+### 19.3 Serviço restrito ao servidor
 
-- A conformidade final de rotulo ainda precisa de revisao tecnica.
-- Categorias especiais podem exigir declaracoes, limites, alegacoes e regras fora da tabela nutricional.
-- Constituintes extras aparecem na pre-visualizacao e exportacao por imagem; a planilha Excel oficial ainda depende da estrutura do template para comportar esses campos como linhas proprias.
-- O fluxo de Excel prioriza preencher template oficial existente.
-- Arquivos de `docs/` nao devem entrar em commits de codigo quando a orientacao for "nao commitar docs".
+```ts
+import "server-only";
+import { prisma } from "@/lib/prisma";
 
-## 12. Arquivos mais importantes
-
-```text
-src/features/tables/components/TableGenerator.tsx
-src/features/tables/components/NutritionalLabel.tsx
-src/features/tables/components/MagnifyingGlassLabel.tsx
-src/features/tables/domain/nutrients.ts
-src/features/tables/domain/anvisa.ts
-src/features/tables/domain/constants.ts
-src/features/tables/domain/micronutrients.ts
-src/features/tables/actions/table-actions.ts
-src/features/ingredients/components/AddIngredientForm.tsx
-src/features/ingredients/components/IngredientSelector.tsx
-src/features/ingredients/actions/custom-ingredient-actions.ts
-src/features/technical-sheets/actions/technical-sheet-actions.ts
-src/features/technical-sheets/services/technical-sheet-ai-service.ts
-src/features/enterprise/components/EnterpriseWorkspace.tsx
-src/features/enterprise/actions/enterprise-label-actions.ts
-src/features/i18n/domain/site-i18n.ts
-src/app/api/export/excel/route.ts
-src/app/api/export/complete/route.ts
-src/lib/export/excel-generator.ts
-prisma/schema.prisma
+export async function loadOrganizationTable(id: string, organizationId: string) {
+  return prisma.generatedTable.findFirst({ where: { id, organizationId } });
+}
 ```
 
-## 13. Resumo final
+### 19.4 Token mostrado uma vez
 
-O sistema hoje faz:
+```ts
+const secret = randomBytes(32).toString("base64url");
+const rawToken = `soizi_${secret}`;
+const tokenHash = createHash("sha256").update(rawToken).digest("hex");
 
-- cadastro/login de usuarios;
-- gestao de perfil e senha;
-- cadastro, importacao, edicao, exclusao e exportacao de ingredientes;
-- busca inteligente de ingredientes oficiais e proprios;
-- calculo nutricional por receita;
-- separacao entre acucares totais e adicionados;
-- calculo por 100 g e por porcao;
-- calculo de %VD por grupo populacional;
-- suporte a Anexo II e Anexo VIII;
-- suporte a categorias especiais;
-- importacao de fichas tecnicas por IA com revisao humana;
-- workspace enterprise com mercado, versoes e aprovacao;
-- desligamento de %VD para formulas que nao devem declarar;
-- selecao de micronutrientes;
-- inclusao de constituintes extras;
-- calculo e renderizacao de lupa frontal;
-- pre-visualizacao de modelos oficiais;
-- exportacao de imagens;
-- exportacao Excel;
-- exportacao de Memorial de calculo em PDF e XLSX;
-- exportacao de Ficha tecnica em PDF e XLSX;
-- pacote ZIP completo;
-- persistencia de tabelas e estado completo da UI.
+await prisma.apiAccessToken.create({ data: { tokenHash, prefix, lastFour } });
+return { token: rawToken }; // única apresentação do segredo completo
+```
 
-Ele e, na pratica, uma plataforma de trabalho para gerar e manter rotulagem nutricional com calculo, regras, visualizacao e exportacao em um unico fluxo.
+Uma leitura posterior lista prefixo/últimos dígitos, mas não reconstrói o token.
+
+### 19.5 Rejeição cross-origin
+
+```ts
+export async function POST(request: Request) {
+  const crossOriginResponse = rejectCrossOriginRequest(request);
+  if (crossOriginResponse) return crossOriginResponse;
+  // autenticação, rate limit, validação e caso de uso
+}
+```
+
+### 19.6 Validação em duas fronteiras
+
+```tsx
+<input name="email" type="email" required />
+```
+
+```ts
+const input = emailSchema.parse(await request.json());
+```
+
+O primeiro melhora a experiência; o segundo protege o servidor.
+
+## 20. Decisões arquiteturais e trade-offs
+
+| Decisão | Motivo | Custo/risco assumido |
+| --- | --- | --- |
+| Monólito modular | Deploy simples e compartilhamento de tipos/regras. | Fronteiras dependem de disciplina e checks. |
+| App Router + Server Actions | Dados/mutações próximos da página. | Serialização e limite de corpo. |
+| Domínios puros | Testabilidade e uso cliente/servidor. | Adaptadores montam entradas completas. |
+| Recálculo no servidor | Impede prévia manipulada como dado oficial. | Trabalho duplicado e consistência entre caminhos. |
+| Prisma + PostgreSQL | Modelo relacional, migrations e transações. | Sem RLS, filtro tenant depende da aplicação. |
+| JWT no NextAuth | Sessão sem consulta em todo request. | Casos de uso revalidam acesso atual. |
+| Snapshot em itens/versões | Preserva histórico técnico. | Duplica dados e exige evolução cuidadosa. |
+| JSON em `uiState` | Evolução rápida da tela. | Menor garantia relacional; requer schema. |
+| IA com revisão humana | Automatiza sem delegar decisão ao modelo. | Etapa operacional e estados intermediários. |
+| Rate limit no PostgreSQL | Coordena instâncias sem serviço adicional. | Escrita/contenção sob escala. |
+| Tokens com hash | Banco vazado não revela bearer token. | Token perdido precisa ser recriado. |
+| HMAC de CPF/CNPJ | Comparação com menor exposição. | Rotação da chave exige estratégia. |
+
+## 21. Limitações e dívidas conhecidas
+
+### Prioridade alta
+
+- reconciliar schema e objetos históricos de billing/marketing por migration
+  segura, após inventário e backup do banco real;
+- manter auditoria de consultas tenant-scoped, pois não há RLS;
+- definir `DOCUMENT_HASH_SECRET` no `.env.example` e no runbook;
+- avaliar registros Enterprise anteriores ao recálculo autoritativo.
+
+### Prioridade média
+
+- declarar Node suportado em `engines` e alinhar local/CI/deploy;
+- implementar ou remover formalmente convites de organização;
+- adicionar E2E para login, workspace, criação/exportação e API;
+- aumentar integração com banco real isolado;
+- decidir storage durável se retenção do arquivo original for requisito;
+- definir segregação formal no Enterprise se aprovação exigir independência;
+- documentar rotação de chaves TOTP/HMAC e tokens operacionais.
+
+### Evoluções de escala
+
+- mover lotes de IA para fila/worker se volume e duração crescerem;
+- considerar rate limit dedicado se PostgreSQL virar gargalo;
+- ampliar versionamento, paginação e escopos da API;
+- migrar i18n para renderização tipada no servidor;
+- assinar artefatos visuais se autenticidade de PNG/SVG for necessária.
+
+## 22. Regras para evoluir o sistema
+
+### 22.1 Nova entidade tenant-scoped
+
+1. adicionar `organizationId`, relação, índice e constraint;
+2. criar migration aditiva;
+3. derivar tenant da sessão, nunca do formulário;
+4. filtrar leituras/mutações por tenant;
+5. testar tentativa cross-tenant;
+6. avaliar auditoria e exclusão;
+7. atualizar documentação e API.
+
+### 22.2 Nova mutação
+
+1. Server Action com `"use server"` ou Route Handler;
+2. same-origin para HTTP mutável;
+3. sessão, workspace e módulo;
+4. DTO e limites explícitos;
+5. regra autoritativa no servidor;
+6. resposta sem detalhes internos;
+7. revalidação, auditoria e testes.
+
+### 22.3 Nova integração
+
+1. segredo server-side e variável documentada;
+2. timeout, limite, retry e indisponibilidade;
+3. schema da resposta externa;
+4. minimização de dados enviados;
+5. log sem conteúdo sensível;
+6. fallback/estado honesto na interface;
+7. teste com adapter/mock, sem produção no CI.
+
+### 22.4 Nova migration
+
+1. confirmar banco e branch;
+2. privilegiar mudança aditiva;
+3. revisar volume, backfill e locks;
+4. fazer backup antes do remoto;
+5. aplicar localmente e validar Prisma;
+6. usar `prisma migrate deploy` na entrega;
+7. nunca substituir migration de produção por `db push`.
+
+## 23. Observabilidade e operação
+
+`/api/health` responde sobre o processo; `/api/ready` verifica a dependência de
+banco. Isso distingue processo vivo de instância pronta para tráfego.
+
+Logs estruturados devem correlacionar tipo, operação, resultado e identificadores
+não sensíveis. O checkout não descreve plataforma completa de tracing, métricas
+ou SLO; isso é capacidade operacional externa, não presumida.
+
+Em incidentes, preservar horário/ambiente, commit implantado, organização/recurso
+por ID não secreto, classe/status do erro, dependência afetada e evento em
+`SecurityAuditLog` quando aplicável.
+
+## 24. Glossário
+
+| Termo | Definição no sistema |
+| --- | --- |
+| Tenant/workspace | Organização ativa que delimita dados e acesso. |
+| Membership | Relação ativa entre usuário e organização. |
+| Entitlement | Módulo habilitado para a organização. |
+| Grant | Concessão explícita de módulo a participante. |
+| Perfil | Conjunto de permissões aplicado a membership. |
+| FOP/lupa | Rotulagem nutricional frontal e suas regras visuais. |
+| Snapshot | Cópia histórica independente da origem mutável. |
+| DTO | Objeto explícito de entrada/saída de uma fronteira. |
+| Server Action | Mutação da UI executada no servidor Next.js. |
+| Route Handler | Endpoint HTTP dentro do App Router. |
+| Autoritativo | Resultado validado/recalculado no servidor. |
+| Internal master | Operador global derivado de allowlist server-side. |
+
+## 25. Fontes internas e leituras complementares
+
+Fontes primárias:
+
+- `src/app` — páginas e APIs;
+- `src/features` — capacidades, domínio e casos de uso;
+- `src/lib` e `src/features/*/services` — auth e infraestrutura;
+- `prisma/schema.prisma` — modelo atual;
+- `prisma/migrations` — história do banco;
+- `scripts/security-check.mjs` — invariantes arquiteturais e de segurança;
+- `../.github/workflows/security.yml` — pipeline obrigatório da raiz Git;
+- `.env.example`, `next.config.ts`, `src/proxy.ts` — contrato operacional.
+
+Leituras complementares:
+
+- `docs/security-business-rules-audit-2026-08-24.md` — fronteiras de autoridade;
+- `docs/operations/DEPLOY.md` — publicação;
+- `docs/operations/LOCAL_DATABASE.md` — PostgreSQL local;
+- `docs/operations/EXPORTACOES.md` — formatos e validação;
+- `docs/operations/IMPORTADOR_FICHAS_TECNICAS_IA.md` — operação da IA;
+- `docs/operations/ROLLOUT-ORGANIZACOES-CPF-CNPJ.md` — rollout e backup.
+
+Em conflito com textos arquiteturais antigos, este documento prevalece para o
+estado de 25/08/2026. Documentos regulatórios específicos continuam sendo a
+referência do próprio assunto e não são substituídos por esta visão geral.

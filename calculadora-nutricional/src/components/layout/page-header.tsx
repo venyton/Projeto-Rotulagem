@@ -21,9 +21,9 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0">
-        <h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{title}</h1>
+        <h1 className="type-heading-medium break-words [overflow-wrap:anywhere]">{title}</h1>
         {description ? (
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+          <p className="type-body-small mt-2 max-w-3xl text-muted-foreground sm:text-base">
             {description}
           </p>
         ) : null}

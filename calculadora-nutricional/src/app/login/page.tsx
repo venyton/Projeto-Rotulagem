@@ -55,7 +55,7 @@ export default function LoginPage() {
 
     return (
         <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center bg-muted/20 px-4 py-8 sm:min-h-[calc(100svh-4.5rem)] sm:py-10">
-            <Card className="app-enter w-full max-w-sm border-border/70 bg-card shadow-sm">
+            <Card className="app-enter w-full max-w-sm bg-card">
                 <CardHeader>
                     <CardTitle>{title}</CardTitle>
                     <CardDescription>{description}</CardDescription>
@@ -73,17 +73,17 @@ export default function LoginPage() {
                         <div className="flex flex-col gap-6">
                             {step === "CREDENTIALS" ? (
                                 <>
-                                    <div className="grid gap-2">
+                                    <Field className="gap-2">
                                         <FieldLabel htmlFor="email">E-mail</FieldLabel>
                                         <Input id="email" type="email" placeholder="voce@empresa.com" required value={email} onChange={(event) => setEmail(event.target.value)} />
-                                    </div>
-                                    <div className="grid gap-2">
+                                    </Field>
+                                    <Field className="gap-2">
                                         <div className="flex items-center">
                                             <FieldLabel htmlFor="password">Senha</FieldLabel>
                                             <Link href="/forgot-password" className="ml-auto inline-block text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Esqueci a senha</Link>
                                         </div>
                                         <Input id="password" type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-                                    </div>
+                                    </Field>
                                 </>
                             ) : (
                                 <FieldGroup className="gap-4">

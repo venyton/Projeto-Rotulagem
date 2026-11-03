@@ -122,14 +122,18 @@ export async function ensureDefaultWorkspaceForUser(user: WorkspaceUser, options
  */
 export async function ensureOrganizationEntitlementsForUser(userId: string) {
   const memberships = await prisma.organizationMember.findMany({
-    where: { userId, active: true, organization: { status: "ACTIVE" } },
+    where: {
+      userId,
+      active: true,
+      organization: { status: "ACTIVE", entitlementPolicyVersion: 1 },
+    },
     select: { organizationId: true },
   });
 
   await Promise.all(
     memberships.map((membership) =>
       prisma.organizationEntitlement.createMany({
-        data: defaultEntitlements(membership.organizationId, ALL_SAAS_MODULES, "SYSTEM_DEFAULT"),
+        data: defaultEntitlements(membership.organizationId, ALL_SAAS_MODULES, "SYSTEM_LEGACY_V1"),
         skipDuplicates: true,
       })
     )

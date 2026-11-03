@@ -51,6 +51,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
                     name: true,
                     source: true,
                     quantity: true,
+                    quantityExact: true,
                     isAddedSugar: true,
                     energy: true,
                     carbs: true,
@@ -113,6 +114,7 @@ export default async function EditTablePage(props: { params: Promise<{ id: strin
 
     const ingredients: SelectedIngredient[] = table.items.map(item => ({
         quantity: item.quantity,
+        quantityExact: item.quantityExact ?? undefined,
         isAddedSugar: item.isAddedSugar,
         ingredient: ({
             id: "snapshot-" + item.id, // Pseudo-ID

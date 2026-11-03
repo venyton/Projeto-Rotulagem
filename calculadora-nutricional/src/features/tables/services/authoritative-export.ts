@@ -8,6 +8,7 @@ import {
   applyManualMicronutrientOverrides,
   calculatePreparedProduct,
   calculateRecipe,
+  getEnergyCalculationIssues,
   type EnergyConstituentInput,
   type SelectedIngredient,
 } from "@/features/tables/domain/nutrients";
@@ -22,6 +23,9 @@ import {
   shouldShowDailyValue,
 } from "@/features/tables/domain/regulatory-declarations";
 import { isSafeResourceId } from "@/lib/validation/identifiers";
+import { isValidExactQuantity } from "@/features/tables/domain/exact-quantity";
+import { decimalText } from "@/features/tables/domain/decimal-display";
+import { includeHistoricalConstituents, reconcileHistoricalConstituents } from "@/features/tables/domain/extra-constituents";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -86,12 +90,12 @@ function readExtraConstituents(value: unknown): EnergyConstituentInput[] {
       ? item.amount
       : readText(item.amount, 40);
     const unit = readText(item.unit, 20) || "g";
-    if (!name || amount === "") return [];
+    if (!name) return [];
     return [{ name, amount, unit }];
   });
 }
 
-type PreparationReference = { id: string; quantity: number; isAddedSugar: boolean };
+type PreparationReference = { id: string; quantity: number; quantityExact?: string; isAddedSugar: boolean };
 
 function readPreparationReferences(value: unknown): PreparationReference[] | null {
   if (!Array.isArray(value)) return [];
@@ -101,7 +105,9 @@ function readPreparationReferences(value: unknown): PreparationReference[] | nul
     if (!isRecord(raw) || !isRecord(raw.ingredient) || !isSafeResourceId(raw.ingredient.id)) return null;
     const quantity = readPositiveNumber(raw.quantity);
     if (quantity <= 0) return null;
-    references.push({ id: raw.ingredient.id, quantity, isAddedSugar: raw.isAddedSugar === true });
+    if (raw.quantityExact !== undefined && (typeof raw.quantityExact !== "string" || !isValidExactQuantity(raw.quantityExact, quantity))) return null;
+    const quantityExact = typeof raw.quantityExact === "string" ? raw.quantityExact : decimalText(quantity);
+    references.push({ id: raw.ingredient.id, quantity, quantityExact, isAddedSugar: raw.isAddedSugar === true });
   }
   return references;
 }
@@ -127,7 +133,7 @@ async function resolvePreparationIngredients(
 
   const resolved = references.flatMap((reference) => {
     const ingredient = trusted.get(reference.id);
-    return ingredient ? [{ ingredient, quantity: reference.quantity, isAddedSugar: reference.isAddedSugar }] : [];
+    return ingredient ? [{ ingredient, quantity: reference.quantity, quantityExact: reference.quantityExact, isAddedSugar: reference.isAddedSugar }] : [];
   });
   return resolved.length === references.length ? resolved : null;
 }
@@ -153,6 +159,7 @@ export async function loadAuthoritativeTableCalculation(tableId: string, organiz
   const ingredients: SelectedIngredient[] = table.items.map((item) => ({
     ingredient: toSnapshotIngredient(item as unknown as UnknownRecord, `snapshot-${item.id}`),
     quantity: item.quantity,
+    quantityExact: item.quantityExact ?? decimalText(item.quantity),
     isAddedSugar: item.isAddedSugar,
   }));
   const references = readPreparationReferences(uiState.preparationIngredients);
@@ -170,6 +177,11 @@ export async function loadAuthoritativeTableCalculation(tableId: string, organiz
   const finalYield = readPositiveNumber(uiState.preparationFinalYield);
   const powderPortionSize = readPositiveNumber(uiState.preparationPowderPortionSize) || table.portion;
   const usePreparation = uiState.enablePreparationSimulator === true && preparationIngredients.length > 0 && powderBatchWeight > 0 && readyPortionSize > 0 && finalYield > 0;
+  const category = isRegulatoryCategory(uiState.regulatoryCategory) ? uiState.regulatoryCategory : uiState.isSupplement === true ? "supplement" : "general-food";
+  const calculationIngredients = usePreparation ? [...ingredients, ...preparationIngredients] : ingredients;
+  const historical = reconcileHistoricalConstituents(extraConstituents.map((item) => ({ ...item, unit: item.unit ?? "g" })), calculationIngredients.map(({ ingredient }) => ingredient.customNutrients), uiState.enablePreparationSimulator === true);
+  const energyIssues = [...getEnergyCalculationIssues(calculationIngredients, category), ...historical.issues];
+  if (energyIssues.length) return { ok: false, error: `Não foi possível determinar o valor energético: ${energyIssues.join(" ")}` } as const;
   const calculated = usePreparation
     ? calculatePreparedProduct({
         powderIngredients: ingredients,
@@ -179,10 +191,10 @@ export async function loadAuthoritativeTableCalculation(tableId: string, organiz
         readyPortionSize,
         finalYield,
         preparationInstructions: readText(uiState.preparationInstructions, 2_000),
-        extraConstituents,
+        category,
       })
-    : calculateRecipe(ingredients, table.portion, extraConstituents);
-  const result = applyManualMicronutrientOverrides(calculated, uiState.manualMicronutrients, table.portion);
+    : calculateRecipe(ingredients, table.portion, historical.accepted, category);
+  const result = includeHistoricalConstituents(applyManualMicronutrientOverrides(calculated, uiState.manualMicronutrients, table.portion), historical.accepted, table.portion);
 
   return {
     ok: true,
@@ -206,7 +218,7 @@ export async function loadAuthoritativeExportBody(tableId: string, organizationI
   const authority = await loadAuthoritativeTableCalculation(tableId, organizationId);
   if (!authority.ok) return authority;
   const { table, uiState, extraConstituents, result } = authority.data;
-  const category = isRegulatoryCategory(uiState.regulatoryCategory) ? uiState.regulatoryCategory : "general-food";
+  const category = isRegulatoryCategory(uiState.regulatoryCategory) ? uiState.regulatoryCategory : uiState.isSupplement === true ? "supplement" : "general-food";
   const isSupplement = category === "supplement";
   const automaticServings = calculateServingsPerPackage(table.portion, table.packageContent || 0);
   const manualServings = readText(uiState.servingsPerPackageManual, 100);

@@ -67,6 +67,7 @@ enum OrganizationStatus {
 enum OrganizationRole {
   OWNER
   ADMIN
+  BILLING
   MEMBER
 }
 
@@ -91,31 +92,203 @@ enum SaaSModuleKey {
   ENTERPRISE_LABELS
   EXPORTS
   AI_IMPORT
+  MARKETING_ANALYTICS
   API_ACCESS
+  BILLING
   SETTINGS
 }
 
+// Tipos preservados do billing/marketing histórico. Novos fluxos comerciais
+// devem evoluir esses contratos por migrations aditivas, sem assumir Stripe.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  UNPAID
+  PAUSED
+}
+
+enum PaymentProvider {
+  STRIPE
+  ASAAS
+  MANUAL
+}
+
+enum BillingCustomerStatus {
+  PENDING
+  ACTIVE
+  SYNC_ERROR
+}
+
+enum BillingCheckoutStatus {
+  CREATING
+  ACTIVE
+  PAID
+  CANCELED
+  EXPIRED
+  FAILED
+  OUTCOME_UNKNOWN
+}
+
+enum BillingChargeStatus {
+  PENDING
+  CONFIRMED
+  RECEIVED
+  OVERDUE
+  CANCELED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum BillingWebhookStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum CommercialCouponStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum CommercialDiscountType {
+  PERCENT
+  FIXED
+}
+
+enum CommercialGrantSourceType {
+  COURTESY
+  PARTNER
+  SUPPORT
+  MIGRATION
+  OTHER
+}
+
+enum FeatureValueType {
+  BOOLEAN
+  QUOTA
+  METERED
+  SEAT_LIMIT
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PlanVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum BillingPriceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  YEARLY
+}
+
+enum EntitlementOverrideMode {
+  ENABLE
+  DISABLE
+  SET_LIMIT
+}
+
+enum PlatformPermissionRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PlatformAssignmentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum PrivilegedSessionStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum MarketingEventType {
+  SIGNUP_STARTED
+  SIGNUP_COMPLETED
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+  CHECKOUT_ABANDONED
+  LOGIN
+  MODULE_USED
+  LEAD_CAPTURED
+}
+
+enum ConfigurationScope {
+  GLOBAL
+  ORGANIZATION
+  USER
+}
+
+enum ConfigurationValueType {
+  STRING
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  JSON
+  URL
+}
+
 model User {
-  id                          String                     @id @default(cuid())
-  email                       String                     @unique
+  id                          String                        @id @default(cuid())
+  email                       String                        @unique
   password                    String?
   name                        String?
-  twoFactorEnabled            Boolean                    @default(false)
-  twoFactorSecret             String?                    @db.Text
-  twoFactorPendingSecret      String?                    @db.Text
+  twoFactorEnabled            Boolean                       @default(false)
+  twoFactorSecret             String?                       @db.Text
+  twoFactorPendingSecret      String?                       @db.Text
   twoFactorConfirmedAt        DateTime?
   twoFactorLastUsedAt         DateTime?
-  resetPasswordToken          String?                    @unique @db.Text
+  twoFactorLastUsedStep       Int?
+  resetPasswordToken          String?                       @unique @db.Text
   resetPasswordExpiresAt      DateTime?
   termsAcceptedAt             DateTime?
   privacyAcceptedAt           DateTime?
   legalDocumentVersion        String?
-  cpfHash                     String?                    @unique
+  cpfHash                     String?                       @unique
   cpfLastFour                 String?
-  ownedOrganizations          Organization[]             @relation("OrganizationOwner")
+  ownedOrganizations          Organization[]                @relation("OrganizationOwner")
   organizationMemberships     OrganizationMember[]
-  sentOrganizationInvitations OrganizationInvitation[]   @relation("OrganizationInvitationSender")
+  billingCustomers            BillingCustomer[]
+  marketingEvents             MarketingEvent[]
+  sentOrganizationInvitations OrganizationInvitation[]      @relation("OrganizationInvitationSender")
   securityAuditLogs           SecurityAuditLog[]
+  platformAdminAssignments    PlatformAdminAssignment[]     @relation("PlatformAdminAssignmentUser")
+  assignedPlatformAdmins      PlatformAdminAssignment[]     @relation("PlatformAdminAssignmentAssigner")
+  requestedPrivilegedSessions PrivilegedSession[]           @relation("PrivilegedSessionRequester")
+  approvedPrivilegedSessions  PrivilegedSession[]           @relation("PrivilegedSessionApprover")
+  createdPlanVersions         PlanVersion[]                 @relation("PlanVersionCreator")
+  createdFeatureGrants        OrganizationFeatureGrant[]    @relation("OrganizationFeatureGrantCreator")
+  createdFeatureOverrides     OrganizationFeatureOverride[] @relation("OrganizationFeatureOverrideCreator")
+  createdBillingCheckouts     BillingCheckoutAttempt[]      @relation("BillingCheckoutCreator")
+  createdCommercialCoupons    CommercialCoupon[]            @relation("CommercialCouponCreator")
+  createdCommercialGrants     CommercialGrant[]             @relation("CommercialGrantCreator")
+  revokedCommercialGrants     CommercialGrant[]             @relation("CommercialGrantRevoker")
   tables                      GeneratedTable[]
   customIngredients           CustomIngredient[]
   technicalDocuments          TechnicalDocument[]
@@ -125,43 +298,176 @@ model User {
   enterpriseApprovals         EnterpriseApproval[]
   enterpriseExports           EnterpriseExport[]
   apiAccessTokens             ApiAccessToken[]
-  createdAt                   DateTime                   @default(now())
-  updatedAt                   DateTime                   @updatedAt
+  usageEvents                 UsageEvent[]
+  externalIdentities          ExternalIdentity[]
+  configurationValues         ConfigurationValue[]          @relation("ConfigurationValueUser")
+  updatedConfigurationValues  ConfigurationValue[]          @relation("ConfigurationValueUpdatedBy")
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+
+  @@index([twoFactorEnabled])
+}
+
+model ExternalIdentity {
+  id                String   @id @default(cuid())
+  provider          String
+  providerAccountId String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model PlatformRole {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String  @db.Text
+  isSystem    Boolean @default(true)
+
+  permissions PlatformRolePermission[]
+  assignments PlatformAdminAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PlatformPermission {
+  id          String                      @id @default(cuid())
+  key         String                      @unique
+  name        String
+  description String                      @db.Text
+  riskLevel   PlatformPermissionRiskLevel @default(LOW)
+
+  roles              PlatformRolePermission[]
+  privilegedSessions PrivilegedSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([riskLevel])
+}
+
+model PrivilegedSession {
+  id                       String                  @id @default(cuid())
+  requestedByUserId        String
+  requestedByUser          User                    @relation("PrivilegedSessionRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  approvedByUserId         String?
+  approvedByUser           User?                   @relation("PrivilegedSessionApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  platformPermissionId     String
+  platformPermission       PlatformPermission      @relation(fields: [platformPermissionId], references: [id], onDelete: Restrict)
+  status                   PrivilegedSessionStatus @default(PENDING_APPROVAL)
+  purpose                  String
+  justification            String                  @db.Text
+  ticketReference          String?
+  targetType               String?
+  targetId                 String?
+  requestedDurationMinutes Int
+  sessionBindingHash       String                  @db.Char(64)
+  correlationId            String
+  ipHash                   String?                 @db.Char(64)
+  userAgent                String?                 @db.Text
+  requestedAt              DateTime                @default(now())
+  mfaVerifiedAt            DateTime
+  approvedAt               DateTime?
+  startedAt                DateTime?
+  expiresAt                DateTime
+  revokedAt                DateTime?
+  auditLogs                SecurityAuditLog[]
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+
+  @@index([requestedByUserId, status, expiresAt], map: "PrivilegedSession_requester_status_expiry_idx")
+  @@index([platformPermissionId, status, expiresAt], map: "PrivilegedSession_permission_status_expiry_idx")
+  @@index([approvedByUserId])
+  @@index([correlationId])
+}
+
+model PlatformRolePermission {
+  platformRoleId       String
+  platformRole         PlatformRole       @relation(fields: [platformRoleId], references: [id], onDelete: Cascade)
+  platformPermissionId String
+  platformPermission   PlatformPermission @relation(fields: [platformPermissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([platformRoleId, platformPermissionId])
+  @@index([platformPermissionId])
+}
+
+model PlatformAdminAssignment {
+  id               String                   @id @default(cuid())
+  userId           String
+  user             User                     @relation("PlatformAdminAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  platformRoleId   String
+  platformRole     PlatformRole             @relation(fields: [platformRoleId], references: [id], onDelete: Restrict)
+  status           PlatformAssignmentStatus @default(ACTIVE)
+  startsAt         DateTime                 @default(now())
+  expiresAt        DateTime?
+  assignedByUserId String?
+  assignedByUser   User?                    @relation("PlatformAdminAssignmentAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status, startsAt, expiresAt])
+  @@index([platformRoleId, status])
+  @@index([assignedByUserId])
 }
 
 model Organization {
-  id              String             @id @default(cuid())
-  ownerId         String
-  owner           User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  name            String
-  slug            String             @unique
-  status          OrganizationStatus @default(ACTIVE)
-  kind            OrganizationKind   @default(UNCLASSIFIED)
-  cpfHash         String?            @unique
-  cpfLastFour     String?
-  cnpjHash        String?            @unique
-  cnpjLastFour    String?
-  legalName       String?
-  tradeName       String?
-  lupaStyleConfig Json?
+  id                       String             @id @default(cuid())
+  ownerId                  String
+  owner                    User               @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  name                     String
+  slug                     String             @unique
+  status                   OrganizationStatus @default(ACTIVE)
+  kind                     OrganizationKind   @default(UNCLASSIFIED)
+  cpfHash                  String?            @unique
+  cpfLastFour              String?
+  cnpjHash                 String?            @unique
+  cnpjLastFour             String?
+  legalName                String?
+  tradeName                String?
+  lupaStyleConfig          Json?
+  entitlementPolicyVersion Int                @default(2)
 
   members                   OrganizationMember[]
   profiles                  OrganizationProfile[]
   invitations               OrganizationInvitation[]
   entitlements              OrganizationEntitlement[]
+  featureGrants             OrganizationFeatureGrant[]
+  featureOverrides          OrganizationFeatureOverride[]
+  couponRedemptions         CouponRedemption[]
+  commercialGrants          CommercialGrant[]
+  billingCustomers          BillingCustomer[]
+  subscriptions             Subscription[]
+  billingCheckoutAttempts   BillingCheckoutAttempt[]
+  billingCharges            BillingCharge[]
+  billingWebhookEvents      BillingWebhookEvent[]
+  marketingKeywords         MarketingKeyword[]
+  marketingEvents           MarketingEvent[]
   securityAuditLogs         SecurityAuditLog[]
   apiAccessTokens           ApiAccessToken[]
   customIngredients         CustomIngredient[]
   tables                    GeneratedTable[]
+  productTechnicalSheets    ProductTechnicalSheet[]
+  productLegislations       ProductLegislation[]
   technicalDocuments        TechnicalDocument[]
   technicalSheetExtractions TechnicalSheetExtraction[]
   enterpriseLabelProjects   EnterpriseLabelProject[]
+  usageEvents               UsageEvent[]
+  usageAggregates           UsageAggregate[]
+  configurationValues       ConfigurationValue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
   @@index([status])
+  @@index([entitlementPolicyVersion])
 }
 
 model OrganizationMember {
@@ -175,7 +481,8 @@ model OrganizationMember {
   role           OrganizationRole     @default(MEMBER)
   active         Boolean              @default(true)
 
-  moduleGrants ParticipantModuleGrant[]
+  moduleGrants    ParticipantModuleGrant[]
+  marketingEvents MarketingEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -213,12 +520,12 @@ model OrganizationInvitation {
 }
 
 model OrganizationProfile {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  description    String?      @db.Text
-  systemKey      String
+  id               String                     @id @default(cuid())
+  organizationId   String
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?                    @db.Text
+  systemKey        String
   globalTemplateId String?
   globalTemplate   GlobalOrganizationProfile? @relation(fields: [globalTemplateId], references: [id], onDelete: SetNull)
 
@@ -259,7 +566,7 @@ model GlobalOrganizationProfilePermission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([globalProfileId, moduleKey])
+  @@unique([globalProfileId, moduleKey], map: "GlobalOrganizationProfilePermission_globalProfileId_moduleKey_k")
   @@index([moduleKey])
 }
 
@@ -273,7 +580,7 @@ model OrganizationProfilePermission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([organizationProfileId, moduleKey])
+  @@unique([organizationProfileId, moduleKey], map: "OrganizationProfilePermission_organizationProfileId_moduleKey_k")
   @@index([moduleKey])
   @@index([enabled])
 }
@@ -296,6 +603,49 @@ model OrganizationEntitlement {
   @@index([enabled])
 }
 
+model OrganizationFeatureGrant {
+  id                  String            @id @default(cuid())
+  organizationId      String
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  featureDefinitionId String
+  featureDefinition   FeatureDefinition @relation(fields: [featureDefinitionId], references: [id], onDelete: Restrict)
+  enabled             Boolean           @default(true)
+  limitValue          Int?
+  source              String
+  reason              String            @db.Text
+  startsAt            DateTime          @default(now())
+  expiresAt           DateTime?
+  createdByUserId     String?
+  createdByUser       User?             @relation("OrganizationFeatureGrantCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([organizationId, featureDefinitionId, startsAt, expiresAt], map: "OrgFeatureGrant_org_feature_validity_idx")
+  @@index([featureDefinitionId, startsAt, expiresAt], map: "OrgFeatureGrant_feature_validity_idx")
+  @@index([createdByUserId])
+}
+
+model OrganizationFeatureOverride {
+  id                  String                  @id @default(cuid())
+  organizationId      String
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  featureDefinitionId String
+  featureDefinition   FeatureDefinition       @relation(fields: [featureDefinitionId], references: [id], onDelete: Restrict)
+  mode                EntitlementOverrideMode
+  limitValue          Int?
+  reason              String                  @db.Text
+  startsAt            DateTime                @default(now())
+  expiresAt           DateTime?
+  createdByUserId     String?
+  createdByUser       User?                   @relation("OrganizationFeatureOverrideCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([organizationId, featureDefinitionId, startsAt, expiresAt], map: "OrgFeatureOverride_org_feature_validity_idx")
+  @@index([featureDefinitionId, startsAt, expiresAt], map: "OrgFeatureOverride_feature_validity_idx")
+  @@index([createdByUserId])
+}
+
 model ParticipantModuleGrant {
   id                   String             @id @default(cuid())
   organizationMemberId String
@@ -311,6 +661,420 @@ model ParticipantModuleGrant {
   @@unique([organizationMemberId, moduleKey])
   @@index([moduleKey])
   @@index([enabled])
+}
+
+// Objetos históricos criados em 20260515120000. Permanecem modelados para que
+// schema e migration history não divirjam; as etapas comerciais seguintes os
+// evoluem sem apagar dados nem tratar plano como permissão de usuário.
+model Plan {
+  id                      String                 @id @default(cuid())
+  code                    String                 @unique
+  name                    String
+  description             String?                @db.Text
+  monthlyPriceCents       Int                    @default(0)
+  quarterlyPriceCents     Int                    @default(0)
+  semiannualPriceCents    Int                    @default(0)
+  yearlyPriceCents        Int                    @default(0)
+  stripeMonthlyPriceId    String?
+  stripeQuarterlyPriceId  String?
+  stripeSemiannualPriceId String?
+  stripeYearlyPriceId     String?
+  active                  Boolean                @default(true)
+  status                  PlanStatus             @default(DRAFT)
+  isPaid                  Boolean                @default(true)
+  archivedAt              DateTime?
+  modules                 PlanModule[]
+  versions                PlanVersion[]
+  subscriptions           Subscription[]
+  couponPlans             CommercialCouponPlan[]
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  @@index([active])
+  @@index([status])
+}
+
+model PlanModule {
+  id         String        @id @default(cuid())
+  planId     String
+  plan       Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  moduleKey  SaaSModuleKey
+  usageLimit Int?
+  enabled    Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+
+  @@unique([planId, moduleKey])
+  @@index([moduleKey])
+}
+
+model FeatureDefinition {
+  id                      String                        @id @default(cuid())
+  key                     String                        @unique
+  name                    String
+  description             String                        @db.Text
+  moduleKey               SaaSModuleKey
+  type                    FeatureValueType              @default(BOOLEAN)
+  unit                    String?
+  isActive                Boolean                       @default(true)
+  defaultValueJson        Json?
+  planVersions            PlanVersionFeature[]
+  organizationGrants      OrganizationFeatureGrant[]
+  organizationOverrides   OrganizationFeatureOverride[]
+  commercialGrantFeatures CommercialGrantFeature[]
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+
+  @@index([moduleKey, isActive])
+  @@index([type, isActive])
+}
+
+model PlanVersion {
+  id              String               @id @default(cuid())
+  planId          String
+  plan            Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  versionNumber   Int
+  status          PlanVersionStatus    @default(DRAFT)
+  publishedAt     DateTime?
+  validFrom       DateTime?
+  retiredAt       DateTime?
+  createdByUserId String?
+  createdByUser   User?                @relation("PlanVersionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  features        PlanVersionFeature[]
+  prices          BillingPrice[]
+  subscriptions   Subscription[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([planId, versionNumber])
+  @@index([planId, status])
+  @@index([status, publishedAt])
+  @@index([createdByUserId])
+}
+
+model PlanVersionFeature {
+  id                  String            @id @default(cuid())
+  planVersionId       String
+  planVersion         PlanVersion       @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+  featureDefinitionId String
+  featureDefinition   FeatureDefinition @relation(fields: [featureDefinitionId], references: [id], onDelete: Restrict)
+  enabled             Boolean           @default(true)
+  limitValue          Int?
+  configJson          Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([planVersionId, featureDefinitionId])
+  @@index([featureDefinitionId])
+}
+
+model BillingPrice {
+  id               String                   @id @default(cuid())
+  planVersionId    String
+  planVersion      PlanVersion              @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  provider         String?
+  providerPriceRef String?
+  currency         String                   @default("BRL")
+  amountMinor      Int
+  billingInterval  BillingInterval
+  status           BillingPriceStatus       @default(ACTIVE)
+  archivedAt       DateTime?
+  subscriptions    Subscription[]
+  checkoutAttempts BillingCheckoutAttempt[]
+  createdAt        DateTime                 @default(now())
+
+  @@index([planVersionId, status])
+  @@index([provider, providerPriceRef])
+  @@index([currency, billingInterval, status])
+}
+
+model CommercialCoupon {
+  id                            String                 @id @default(cuid())
+  codeNormalized                String                 @unique
+  name                          String
+  discountType                  CommercialDiscountType
+  discountValue                 Int
+  currency                      String?
+  startsAt                      DateTime
+  endsAt                        DateTime
+  maxRedemptions                Int?
+  maxRedemptionsPerOrganization Int                    @default(1)
+  status                        CommercialCouponStatus @default(DRAFT)
+  createdByUserId               String
+  createdByUser                 User                   @relation("CommercialCouponCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  plans                         CommercialCouponPlan[]
+  redemptions                   CouponRedemption[]
+  createdAt                     DateTime               @default(now())
+  updatedAt                     DateTime               @updatedAt
+
+  @@index([status, startsAt, endsAt], map: "CommercialCoupon_status_validity_idx")
+  @@index([createdByUserId])
+}
+
+model CommercialCouponPlan {
+  couponId String
+  coupon   CommercialCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  planId   String
+  plan     Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@id([couponId, planId])
+  @@index([planId])
+}
+
+model CouponRedemption {
+  id                   String                  @id @default(cuid())
+  couponId             String
+  coupon               CommercialCoupon        @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  organizationId       String
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId       String                  @unique
+  subscription         Subscription            @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  checkoutAttempt      BillingCheckoutAttempt?
+  redeemedAt           DateTime                @default(now())
+  revokedAt            DateTime?
+  originalAmountMinor  Int
+  appliedDiscountMinor Int
+  finalAmountMinor     Int
+  currency             String                  @default("BRL")
+
+  @@unique([couponId, organizationId, subscriptionId], map: "CouponRedemption_coupon_org_subscription_key")
+  @@index([couponId, revokedAt, redeemedAt], map: "CouponRedemption_coupon_revoked_redeemed_idx")
+  @@index([organizationId, couponId, revokedAt], map: "CouponRedemption_org_coupon_revoked_idx")
+}
+
+model CommercialGrant {
+  id              String                    @id @default(cuid())
+  organizationId  String
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceType      CommercialGrantSourceType
+  reason          String                    @db.Text
+  startsAt        DateTime                  @default(now())
+  expiresAt       DateTime?
+  createdByUserId String
+  createdByUser   User                      @relation("CommercialGrantCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revokedAt       DateTime?
+  revokedByUserId String?
+  revokedByUser   User?                     @relation("CommercialGrantRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  metadataJson    Json?
+  features        CommercialGrantFeature[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([organizationId, startsAt, expiresAt, revokedAt], map: "CommercialGrant_org_validity_revoked_idx")
+  @@index([createdByUserId])
+  @@index([revokedByUserId])
+}
+
+model CommercialGrantFeature {
+  grantId             String
+  grant               CommercialGrant   @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  featureDefinitionId String
+  featureDefinition   FeatureDefinition @relation(fields: [featureDefinitionId], references: [id], onDelete: Restrict)
+  enabled             Boolean           @default(true)
+  limitValue          Int?
+
+  @@id([grantId, featureDefinitionId])
+  @@index([featureDefinitionId])
+}
+
+model BillingCustomer {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider           PaymentProvider       @default(STRIPE)
+  providerCustomerId String?               @unique
+  externalReference  String?
+  status             BillingCustomerStatus @default(PENDING)
+  syncLeaseId        String?               @unique
+  syncLeaseExpiresAt DateTime?
+  lastSyncedAt       DateTime?
+  lastErrorCode      String?
+  email              String?
+  metadata           Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@unique([organizationId, provider])
+  @@index([userId])
+  @@index([provider])
+  @@index([provider, status])
+  @@index([syncLeaseExpiresAt])
+}
+
+model Subscription {
+  id                     String                   @id @default(cuid())
+  organizationId         String
+  organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId                 String?
+  plan                   Plan?                    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planVersionId          String?
+  planVersion            PlanVersion?             @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
+  billingPriceId         String?
+  billingPrice           BillingPrice?            @relation(fields: [billingPriceId], references: [id], onDelete: SetNull)
+  provider               PaymentProvider          @default(STRIPE)
+  providerSubscriptionId String?                  @unique
+  providerPriceId        String?
+  status                 SubscriptionStatus       @default(INCOMPLETE)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean                  @default(false)
+  trialEndsAt            DateTime?
+  metadata               Json?
+  checkoutAttempts       BillingCheckoutAttempt[]
+  charges                BillingCharge[]
+  couponRedemption       CouponRedemption?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@index([planId])
+  @@index([planVersionId])
+  @@index([billingPriceId])
+  @@index([status])
+}
+
+model BillingCheckoutAttempt {
+  id                  String                @id @default(cuid())
+  organizationId      String
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId      String
+  subscription        Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  billingPriceId      String
+  billingPrice        BillingPrice          @relation(fields: [billingPriceId], references: [id], onDelete: Restrict)
+  couponRedemptionId  String?               @unique
+  couponRedemption    CouponRedemption?     @relation(fields: [couponRedemptionId], references: [id], onDelete: SetNull)
+  amountMinorSnapshot Int
+  createdByUserId     String?
+  createdByUser       User?                 @relation("BillingCheckoutCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  provider            PaymentProvider       @default(ASAAS)
+  externalReference   String                @unique
+  providerCheckoutId  String?               @unique
+  status              BillingCheckoutStatus @default(CREATING)
+  providerStatus      String?
+  checkoutUrl         String?               @db.Text
+  callbackStateHash   String                @db.Char(64)
+  expiresAt           DateTime
+  lastErrorCode       String?
+  charges             BillingCharge[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([subscriptionId])
+  @@index([billingPriceId])
+  @@index([createdByUserId])
+  @@index([provider, providerStatus])
+  @@index([expiresAt])
+}
+
+model BillingCharge {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId    String?
+  subscription      Subscription?           @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  checkoutAttemptId String?
+  checkoutAttempt   BillingCheckoutAttempt? @relation(fields: [checkoutAttemptId], references: [id], onDelete: SetNull)
+  provider          PaymentProvider         @default(ASAAS)
+  providerChargeId  String?                 @unique
+  externalReference String                  @unique
+  status            BillingChargeStatus     @default(PENDING)
+  amountMinor       Int
+  currency          String                  @default("BRL")
+  dueDate           DateTime?
+  confirmedAt       DateTime?
+  paidAt            DateTime?
+  lastSyncedAt      DateTime?
+  lastErrorCode     String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([subscriptionId, status])
+  @@index([checkoutAttemptId])
+  @@index([provider, status])
+  @@index([dueDate])
+}
+
+model BillingWebhookEvent {
+  id                       String               @id @default(cuid())
+  organizationId           String?
+  organization             Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  provider                 PaymentProvider      @default(STRIPE)
+  providerEventId          String               @unique
+  type                     String
+  status                   BillingWebhookStatus @default(RECEIVED)
+  payload                  Json
+  payloadHash              String?              @db.Char(64)
+  eventDate                DateTime?
+  processingAttempts       Int                  @default(0)
+  processingLeaseId        String?              @unique
+  processingLeaseExpiresAt DateTime?
+  processedAt              DateTime?
+  lastErrorCode            String?
+  errorMessage             String?              @db.Text
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  @@index([provider])
+  @@index([type])
+  @@index([status])
+  @@index([organizationId, status, createdAt])
+  @@index([status, processingLeaseExpiresAt, createdAt], map: "BillingWebhookEvent_status_lease_created_idx")
+  @@index([eventDate])
+}
+
+model MarketingKeyword {
+  id             String           @id @default(cuid())
+  organizationId String?
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  keyword        String
+  source         String?
+  medium         String?
+  campaign       String?
+  costCents      Int?
+  active         Boolean          @default(true)
+  events         MarketingEvent[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, keyword, source, medium, campaign], map: "MarketingKeyword_organizationId_keyword_source_medium_campaign_")
+  @@index([organizationId])
+  @@index([keyword])
+  @@index([active])
+}
+
+model MarketingEvent {
+  id                   String              @id @default(cuid())
+  organizationId       String?
+  organization         Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  organizationMemberId String?
+  organizationMember   OrganizationMember? @relation(fields: [organizationMemberId], references: [id], onDelete: SetNull)
+  userId               String?
+  user                 User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  keywordId            String?
+  keyword              MarketingKeyword?   @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  eventType            MarketingEventType
+  moduleKey            SaaSModuleKey?
+  anonymousId          String?
+  route                String?
+  source               String?
+  medium               String?
+  campaign             String?
+  checkoutSessionId    String?
+  providerCustomerId   String?
+  metadata             Json?
+  occurredAt           DateTime            @default(now())
+  createdAt            DateTime            @default(now())
+
+  @@index([organizationId])
+  @@index([organizationMemberId])
+  @@index([userId])
+  @@index([keywordId])
+  @@index([eventType])
+  @@index([moduleKey])
+  @@index([occurredAt])
 }
 
 model ApiAccessToken {
@@ -335,23 +1099,40 @@ model ApiAccessToken {
 }
 
 model SecurityAuditLog {
-  id             String        @id @default(cuid())
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  userId         String?
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action         String
-  riskLevel      String        @default("INFO")
-  ipHash         String?
-  userAgent      String?       @db.Text
-  metadata       Json?
+  id                  String             @id @default(cuid())
+  organizationId      String?
+  organization        Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  privilegedSessionId String?
+  privilegedSession   PrivilegedSession? @relation(fields: [privilegedSessionId], references: [id], onDelete: SetNull)
+  action              String
+  riskLevel           String             @default("INFO")
+  actorType           String             @default("USER")
+  actorRole           String?
+  permission          String?
+  targetType          String?
+  targetId            String?
+  result              String             @default("SUCCESS")
+  reason              String?            @db.Text
+  correlationId       String?
+  ipHash              String?
+  userAgent           String?            @db.Text
+  metadata            Json?
+  requestMetadataSafe Json?
+  beforeJsonSafe      Json?
+  afterJsonSafe       Json?
 
   createdAt DateTime @default(now())
 
   @@index([organizationId])
   @@index([userId])
+  @@index([privilegedSessionId])
   @@index([action])
   @@index([riskLevel])
+  @@index([permission])
+  @@index([result])
+  @@index([correlationId])
   @@index([createdAt])
 }
 
@@ -366,6 +1147,86 @@ model RateLimitBucket {
 
   @@unique([scope, keyHash])
   @@index([resetAt])
+}
+
+model ConfigurationDefinition {
+  id           String                 @id @default(cuid())
+  key          String                 @unique
+  category     String
+  label        String
+  description  String?                @db.Text
+  valueType    ConfigurationValueType
+  defaultValue Json
+  validation   Json?
+  editable     Boolean                @default(true)
+  sensitive    Boolean                @default(false)
+  active       Boolean                @default(true)
+  values       ConfigurationValue[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([category, active])
+  @@index([active, key])
+}
+
+model ConfigurationValue {
+  id             String                  @id @default(cuid())
+  definitionId   String
+  definition     ConfigurationDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  scope          ConfigurationScope
+  scopeKey       String
+  organizationId String?
+  organization   Organization?           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?                   @relation("ConfigurationValueUser", fields: [userId], references: [id], onDelete: Cascade)
+  value          Json
+  updatedById    String?
+  updatedBy      User?                   @relation("ConfigurationValueUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([definitionId, scopeKey])
+  @@index([scope, organizationId])
+  @@index([scope, userId])
+  @@index([updatedAt])
+}
+
+model UsageEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  metricKey      String
+  quantity       Int          @default(1)
+  costMinor      Int          @default(0)
+  idempotencyKey String
+  source         String
+  occurredAt     DateTime     @default(now())
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, idempotencyKey], map: "UsageEvent_org_idempotency_key")
+  @@index([organizationId, metricKey, periodStart], map: "UsageEvent_org_metric_period_idx")
+  @@index([occurredAt])
+}
+
+model UsageAggregate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  metricKey      String
+  periodStart    DateTime
+  periodEnd      DateTime
+  quantity       Int          @default(0)
+  costMinor      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, metricKey, periodStart], map: "UsageAggregate_org_metric_period_key")
+  @@index([metricKey, periodStart])
+  @@index([periodEnd])
 }
 
 model Ingredient {
@@ -423,6 +1284,8 @@ model Ingredient {
   choline    Float? @default(0)
 
   @@index([name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Ingredient_name_trgm_idx", type: Gin)
+  @@index([searchName(ops: raw("gin_trgm_ops"))], map: "Ingredient_searchName_trgm_idx", type: Gin)
 }
 
 model CustomIngredient {
@@ -497,6 +1360,8 @@ model CustomIngredient {
   @@index([userId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "CustomIngredient_name_trgm_idx", type: Gin)
+  @@index([searchName(ops: raw("gin_trgm_ops"))], map: "CustomIngredient_searchName_trgm_idx", type: Gin)
   @@index([organizationId])
   @@index([organizationId, createdAt(sort: Desc)])
 }
@@ -518,6 +1383,7 @@ model GeneratedTable {
   suggestedProduct   String?
   uiState            Json?
   items              TableItem[]
+  productTechnicalSheet ProductTechnicalSheet?
   enterpriseProjects EnterpriseLabelProject[]
   enterpriseVersions EnterpriseLabelVersion[]
   createdAt          DateTime                 @default(now())
@@ -539,6 +1405,7 @@ model TableItem {
   name         String
   source       String?
   quantity     Float // g
+  quantityExact String? @db.Text // decimal em gramas; null para versões legadas
   isAddedSugar Boolean @default(false)
 
   // Snapshotted nutritional values (per 100g)
@@ -876,4 +1743,29 @@ model EnterpriseExport {
   @@index([versionId])
   @@index([userId])
   @@index([exportType])
+}
+
+model ProductTechnicalSheet {
+  id             String @id @default(cuid())
+  tableId        String @unique
+  table          GeneratedTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ProductLegislation {
+  id             String @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String
+  title          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
 }

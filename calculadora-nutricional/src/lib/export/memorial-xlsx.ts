@@ -131,11 +131,8 @@ export async function createMemorialXlsx(data: MemorialDocumentData) {
     section(sheet, "01 • IDENTIFICAÇÃO DO PRODUTO", 7);
     keyValueRows(sheet, [
         ["Produto", text(data.title)],
-        ["Código", text(data.technical.code)],
-        ["Revisão", text(data.technical.revision)],
-        ["Data de emissão", text(data.technical.issueDate)],
-        ["Identificação do documento", text(data.technical.documentId)],
-        ["Versão da formulação", text(data.calculationVersion || "")],
+        ["Descrição", text(data.description)],
+        ["Versão do cálculo", text(data.calculationVersion || "")],
         ["Categoria regulatória", text(data.regulatoryCategory)],
         ["Grupo populacional", text(data.populationGroup)],
         ["Base de cálculo", `100 ${data.portionUnit || "g"} e porção`],
@@ -158,7 +155,7 @@ export async function createMemorialXlsx(data: MemorialDocumentData) {
         const row = sheet.addRow([
             index + 1,
             component.name,
-            `${formatNumber(component.quantity)} g`,
+            `${component.quantityExact?.replace(".", ",") ?? formatNumber(component.quantity)} g`,
             `${formatNumber(component.percentage)}%`,
             text(component.function),
             component.source,
@@ -170,7 +167,7 @@ export async function createMemorialXlsx(data: MemorialDocumentData) {
 
     section(sheet, "04 • CONTRIBUIÇÃO DETALHADA POR COMPONENTE", 7);
     for (const component of data.components) {
-        const componentRow = sheet.addRow([component.name, `Fonte: ${component.source}`, `Quantidade: ${formatNumber(component.quantity)} g`, `Percentual: ${formatNumber(component.percentage)}%`]);
+        const componentRow = sheet.addRow([component.name, `Fonte: ${component.source}`, `Quantidade: ${component.quantityExact?.replace(".", ",") ?? formatNumber(component.quantity)} g`, `Percentual: ${formatNumber(component.percentage)}%`]);
         componentRow.font = { name: "Aptos", size: 10, bold: true, color: { argb: COLORS.darkNavy } };
         componentRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleBlue } };
         header(sheet.addRow(["Nutriente", "Un.", "Composição / 100 g", "Contribuição / 100 g", "Contribuição / porção", "", ""]));
@@ -210,12 +207,10 @@ export async function createMemorialXlsx(data: MemorialDocumentData) {
 
     section(sheet, "07 • OBSERVAÇÕES E CRITÉRIOS DE EMISSÃO", 7);
     keyValueRows(sheet, [
-        ["Formulação consolidada", `${formatNumber(data.verification.formulationPercent)}% — ${data.verification.formulationStatus}`],
-        ["Energia somada dos componentes / 100 g", `${formatNumber(data.verification.energySummedPer100)} kcal`],
-        ["Energia estimada pela composição / 100 g", `${formatNumber(data.verification.energyEstimatedPer100)} kcal`],
-        ["Diferença entre energias", `${formatNumber(data.verification.energyDifferencePercent)}% — ${data.verification.energyStatus}`],
+        ...(data.manualMicronutrients?.length ? [["Valores informados manualmente", data.manualMicronutrients.map((item) => `${item.label} (${item.unit})`).join(", ")] as [string, string]] : []),
+        ...(data.preparation ? [["Produto preparado", "Os valores por 100 g referem-se ao produto preparado; os valores por porção referem-se ao pó declarado. Os ingredientes adicionados no preparo não compõem essa porção."] as [string, string]] : []),
         ["Arredondamento", "O cálculo bruto é preservado; a apresentação regulatória é aplicada na tabela nutricional final."],
-        ["Exportação", "PDF e XLSX com layout fixo, cabeçalho, páginas numeradas e rodapé Soul Easy."],
+        ["Revisão", "Confira as fontes, os dados e os resultados antes de usar o rótulo. A validação do produto e da rotulagem é responsabilidade do usuário ou da organização responsável."],
     ]);
     addFooter(sheet, 7);
 
