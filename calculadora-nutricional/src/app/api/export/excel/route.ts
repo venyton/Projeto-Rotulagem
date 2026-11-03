@@ -6,10 +6,13 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { rejectCrossOriginRequest } from "@/lib/security/request-origin";
+import { selectedConstituentRows } from "@/features/tables/domain/extra-constituents";
 import { CalculatedNutrients } from "@/features/tables/domain/nutrients";
 import {
   AnnexIvNutrientKey,
   calculateVD,
+  calculateVDFromDisplay,
+  formatOptionalNutrient,
   formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
@@ -111,11 +114,6 @@ function getVdReference(vdr: ReturnType<typeof withFallbackVdr>, key: keyof Calc
   return vdrValues[key] ?? null;
 }
 
-function formatMicro(val: number): string {
-  if (val === 0) return "0";
-  if (val < 1) return val.toFixed(1).replace(".", ",");
-  return Math.round(val).toString();
-}
 
 function getAnnexIvValues(source: Partial<Record<keyof CalculatedNutrients, unknown>>) {
   return Object.fromEntries(
@@ -176,27 +174,24 @@ function buildSelectedMicroRows(body: ExportBody, vdr: ReturnType<typeof withFal
 
     return {
       label: `${micro.label} (${micro.unit})`,
-      per100: formatMicro(per100Raw),
-      portion: formatMicro(portionRaw),
-      vd100: body.showDailyValue === false ? "" : calculateVD(per100Raw, ref ?? null),
-      vdPortion: body.showDailyValue === false ? "" : calculateVD(portionRaw, ref ?? null),
+      per100: formatOptionalNutrient(per100Raw, micro.unit),
+      portion: formatOptionalNutrient(portionRaw, micro.unit),
+      vd100: body.showDailyValue === false ? "" : calculateVDFromDisplay(formatOptionalNutrient(per100Raw, micro.unit), ref ?? null),
+      vdPortion: body.showDailyValue === false ? "" : calculateVDFromDisplay(formatOptionalNutrient(portionRaw, micro.unit), ref ?? null),
     };
   });
 
-  const extras = Array.isArray(body.extraConstituents)
-      ? body.extraConstituents
-        .filter((item) => item.name?.trim() && item.amount !== undefined)
-        .map((item) => {
-          const amount = typeof item.amount === "number" ? String(item.amount) : item.amount?.trim();
-          return {
-            label: item.name!.trim(),
-            per100: "-",
-            portion: `${amount}${item.unit?.trim() ? ` ${item.unit.trim()}` : ""}`,
-            vd100: "",
-            vdPortion: "",
-          };
-        })
-    : [];
+  const extras = selectedConstituentRows(
+    body.extraConstituents,
+    { customNutrients: body.per100g.customNutrients || {} },
+    { customNutrients: body.perPortion.customNutrients || {} },
+  ).map((item) => ({
+    label: `${item.name}${item.unit ? ` (${item.unit})` : ""}`,
+    per100: item.per100 === undefined ? "-" : formatOptionalNutrient(item.per100, item.unit),
+    portion: item.portion === undefined ? "-" : formatOptionalNutrient(item.portion, item.unit),
+    vd100: "",
+    vdPortion: "",
+  }));
 
   return [...micros, ...extras];
 }

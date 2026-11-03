@@ -1,4 +1,6 @@
 import React from "react";
+import { selectedConstituentRows } from "@/features/tables/domain/extra-constituents";
+import { arrangeAnnexXiExtras } from "@/features/tables/domain/annex-xi-order";
 import { cn } from "@/lib/utils";
 import { MICRONUTRIENTS } from "@/features/tables/domain/micronutrients";
 import { POPULATION_GROUPS, POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
@@ -8,6 +10,8 @@ import type { LupaStyleConfig } from "@/features/tables/domain/fop-lupa";
 import { 
     AnnexIvNutrientKey,
     calculateVD,
+    calculateVDFromDisplay,
+    formatOptionalNutrient,
     formatAnnexIvNutrientPair,
 } from "@/features/tables/domain/anvisa";
 
@@ -86,10 +90,10 @@ const ANNEX_XI_OPTIONAL_ORDER = [
     "thiamin",
     "riboflavin",
     "niacin",
+    "pantothenicAcid",
     "vitaminB6",
     "biotin",
     "folicAcid",
-    "pantothenicAcid",
     "vitaminB12",
     "calcium",
     "chloride",
@@ -113,6 +117,7 @@ const OPTIONAL_INDENT_LEVELS: Partial<Record<(typeof ANNEX_XI_OPTIONAL_ORDER)[nu
     fatPoly: 1,
     omega6: 2,
     omega3: 2,
+    cholesterol: 1,
 };
 const MICRONUTRIENT_BY_NAME = new Map(MICRONUTRIENTS.map((item) => [item.name, item]));
 
@@ -144,8 +149,8 @@ const getAnnexIvValues = (nutrients: CalculatedNutrients) => (
 );
 
 const getIndentClass = (indentLevel: IndentLevel = 0) => {
-    if (indentLevel === 2) return "pl-6";
-    if (indentLevel === 1) return "pl-3";
+    if (indentLevel === 2) return "pl-[2ch]";
+    if (indentLevel === 1) return "pl-[1ch]";
     return "";
 };
 
@@ -340,19 +345,15 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
         const val100 = getNutrientValue(per100g, nutrientKey);
         const valPortion = getNutrientValue(perPortion, nutrientKey);
         const ref = getVdrValue(vdr, nutrientKey);
-        const format = (v: number) => {
-            if (v === 0) return "0";
-            if (v < 1) return v.toFixed(1).replace(".", ",");
-            return Math.round(v).toString();
-        };
+
 
         return [{
             label: `${m.label} (${m.unit})`,
             nutrientKey,
-            per100: format(val100),
-            portion: format(valPortion),
-            vdPortion: getSafeVD(valPortion, ref),
-            vd100: getSafeVD(val100, ref),
+            per100: formatOptionalNutrient(val100, m.unit),
+            portion: formatOptionalNutrient(valPortion, m.unit),
+            vdPortion: calculateVDFromDisplay(formatOptionalNutrient(valPortion, m.unit), ref ?? null),
+            vd100: calculateVDFromDisplay(formatOptionalNutrient(val100, m.unit), ref ?? null),
             indentLevel: OPTIONAL_INDENT_LEVELS[key],
         }];
     });
@@ -363,42 +364,22 @@ export const NutritionalLabel: React.FC<NutritionalLabelProps> = ({
     baseRows.splice(lastFatRowIndex + 1, 0, ...fatDetailRows);
     baseRows.push(...remainingOptionalRows);
 
-    if (perPortion.customNutrients) {
-        Object.keys(perPortion.customNutrients).sort().forEach((key) => {
-            const val100 = per100g.customNutrients[key]?.value || 0;
-            const valPortion = perPortion.customNutrients[key]?.value || 0;
-            const unit = perPortion.customNutrients[key]?.unit || "g";
-
-            const format = (v: number) => {
-                if (v === 0) return "0";
-                if (v < 1) return v.toFixed(1).replace(".", ",");
-                return Math.round(v).toString();
-            };
-
-            baseRows.push({
-                label: `${key} (${unit})`,
-                nutrientKey: "energy" as NutrientKey,
-                per100: format(val100),
-                portion: format(valPortion),
-                vdPortion: "",
-                vd100: ""
-            });
-        });
-    }
-
-    extraConstituents
-        .filter((item) => item.name.trim() && item.amount.trim())
-        .forEach((item) => {
-            const formattedAmount = `${item.amount.trim()}${item.unit.trim() ? ` ${item.unit.trim()}` : ""}`;
-            baseRows.push({
-                label: item.name.trim(),
-                nutrientKey: "energy",
-                per100: "-",
-                portion: formattedAmount,
-                vdPortion: "",
-                vd100: "",
-            });
-        });
+    const extras = arrangeAnnexXiExtras(selectedConstituentRows(extraConstituents, per100g, perPortion));
+    const makeExtraRow = (item: (typeof extras.remaining)[number], indentLevel?: IndentLevel): NutritionalRow => {
+        const format = (value: number | undefined) => value === undefined ? "-" : formatOptionalNutrient(value, item.unit || "g");
+        return {
+            label: `${item.name}${item.unit ? ` (${item.unit})` : ""}`,
+            nutrientKey: "energy",
+            per100: format(item.per100),
+            portion: format(item.portion),
+            vdPortion: "",
+            vd100: "",
+            indentLevel,
+        };
+    };
+    const proteinIndex = baseRows.findIndex((row) => row.nutrientKey === "protein");
+    baseRows.splice(proteinIndex, 0, ...extras.carbohydrates.map(({ item, indentLevel }) => makeExtraRow(item, indentLevel)));
+    baseRows.push(...extras.remaining.map((item) => makeExtraRow(item)));
 
     if (!showDailyValue) {
         baseRows.forEach((row) => {

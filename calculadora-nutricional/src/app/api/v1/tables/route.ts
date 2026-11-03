@@ -12,6 +12,7 @@ import {
 } from "@/lib/security/request-rate-limit";
 import { USAGE_METRICS } from "@/features/saas/domain/usage-metering";
 import { recordServerUsage } from "@/features/saas/services/usage-metering";
+import { decimalText } from "@/features/tables/domain/decimal-display";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
         select: {
           name: true,
           quantity: true,
+          quantityExact: true,
           energy: true,
           carbs: true,
           protein: true,
@@ -102,7 +104,7 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json(
-    { data: tables, meta: { count: tables.length, limit } },
+    { data: tables.map((table) => ({ ...table, items: table.items.map((item) => ({ ...item, quantityExact: item.quantityExact ?? decimalText(item.quantity) })) })), meta: { count: tables.length, limit } },
     { headers: CORS_HEADERS },
   );
 }

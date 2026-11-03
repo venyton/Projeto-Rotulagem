@@ -14,18 +14,22 @@ import { z } from "zod";
 import { getIngredientSourceLabel } from "@/features/tables/domain/memorial";
 import { consumeRequestRateLimit, getRequestRateLimit } from "@/lib/security/request-rate-limit";
 import { databaseIdSchema, safeResourceIdSchema } from "@/lib/validation/identifiers";
+import { optionalPackageContentSchema } from "@/lib/validation/package-content";
 import {
     formatUnitFraction,
     getIndividualPackagePortion,
     getOfficialProductReferencePortion,
 } from "@/features/tables/domain/portion-declarations";
 import { calculateServingsPerPackage } from "@/features/tables/domain/regulatory-declarations";
+import { decimalText } from "@/features/tables/domain/decimal-display";
+import { isValidExactQuantity } from "@/features/tables/domain/exact-quantity";
 
 const ingredientSelectionSchema = z.object({
     ingredient: z.object({ id: safeResourceIdSchema }),
     quantity: z.number().finite().positive().max(10_000_000),
+    quantityExact: z.string().max(90).regex(/^\d+(?:\.\d{1,80})?$/).optional(),
     isAddedSugar: z.boolean(),
-}).strict();
+}).strict().refine((item) => item.quantityExact === undefined || isValidExactQuantity(item.quantityExact, item.quantity), { message: "Quantidade decimal inconsistente." });
 
 const tableInputSchema = z.object({
     id: databaseIdSchema.optional(),
@@ -35,7 +39,7 @@ const tableInputSchema = z.object({
     householdMeasure: z.string().trim().min(1).max(160),
     popGroup: z.enum(Object.values(POPULATION_GROUPS) as [PopGroup, ...PopGroup[]]),
     ingredients: z.array(ingredientSelectionSchema).min(1).max(200),
-    packageContent: z.number().finite().positive().max(10_000_000).optional(),
+    packageContent: optionalPackageContentSchema,
     servingsPerPackage: z.string().trim().max(80).optional(),
     suggestedFoodGroup: z.string().trim().max(160).optional(),
     suggestedProduct: z.string().trim().max(160).optional(),
@@ -159,6 +163,7 @@ export async function saveTable(data: {
                 where: { id: { in: snapshotItemIds }, tableId: safeData.id },
             })
             : [];
+        const snapshotItemsById = new Map(snapshotItems.map((item) => [`snapshot-${item.id}`, item]));
 
         if (
             customIngredients.length > 0 &&
@@ -204,14 +209,13 @@ export async function saveTable(data: {
         const trustedPreparationIngredients = preparationIngredients.map((item) => ({
             ingredient: toTrustedIngredientSnapshot(ingredientsById.get(item.ingredient.id)!),
             quantity: item.quantity,
+            quantityExact: item.quantityExact ?? decimalText(item.quantity),
             isAddedSugar: item.isAddedSugar,
         }));
-        const uiStateValue = safeData.uiState
-            ? ({
-                ...safeData.uiState,
-                preparationIngredients: trustedPreparationIngredients,
-            } as Prisma.InputJsonValue)
-            : undefined;
+        const uiStateValue = {
+            ...safeData.uiState,
+            preparationIngredients: trustedPreparationIngredients,
+        } as Prisma.InputJsonValue;
         let authoritativePortion = safeData.portion;
         let authoritativeHouseholdMeasure = safeData.householdMeasure;
         const useIndividualPackagePortion = safeData.uiState?.useIndividualPackagePortion === true;
@@ -263,6 +267,8 @@ export async function saveTable(data: {
             const trustedIngredient = ingredientsById.get(i.ingredient.id)!;
             const ingredient = trustedIngredient as typeof trustedIngredient & { sugarAdded?: number | null };
             const customNutrients = readCustomNutrientsSnapshot(trustedIngredient);
+            const previousItem = snapshotItemsById.get(i.ingredient.id);
+            const exactQuantity = i.quantityExact ?? (previousItem?.quantity === i.quantity ? previousItem.quantityExact : null) ?? decimalText(i.quantity);
             return {
                 name: trustedIngredient.name,
                 source: getIngredientSourceLabel({
@@ -270,6 +276,7 @@ export async function saveTable(data: {
                     name: trustedIngredient.name,
                 }),
                 quantity: i.quantity,
+                quantityExact: exactQuantity,
                 isAddedSugar: i.isAddedSugar,
                 energy: trustedIngredient.energy || 0,
                 protein: trustedIngredient.protein || 0,

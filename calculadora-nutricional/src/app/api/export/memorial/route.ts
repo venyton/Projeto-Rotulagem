@@ -1,7 +1,11 @@
+import { getComplianceProfileRules, isRegulatoryCategory, shouldShowDailyValue, type ComplianceProfile } from "@/features/tables/domain/regulatory-declarations";
+import { selectedConstituentRows } from "@/features/tables/domain/extra-constituents";
+import { prisma } from "@/lib/prisma";
+import { readProductSheet } from "@/features/product-technical-sheets/domain/product-sheet";
 import { NextRequest, NextResponse } from "next/server";
 
 import { SAAS_MODULES } from "@/features/saas/domain/modules";
-import { ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
+import { contextHasModuleAccess, ModuleAccessError, requireModuleAccess } from "@/features/saas/services/entitlements";
 import {
     calculateRecipe,
     CalculatedNutrients,
@@ -18,12 +22,13 @@ import {
 } from "@/features/tables/domain/memorial";
 import { MICRONUTRIENTS, MICRO_KEYS } from "@/features/tables/domain/micronutrients";
 import { POPULATION_LABELS, PopGroup, VDR } from "@/features/tables/domain/constants";
-import { calculateVD } from "@/features/tables/domain/anvisa";
+import { checkFOP, inferFopFoodType, calculateVDFromDisplay, formatAnnexIvNutrientPair, formatOptionalNutrient, type AnnexIvNutrientKey } from "@/features/tables/domain/anvisa";
 import {
     createMemorialPdf,
     createTechnicalSheetPdf,
     MemorialComponent,
     MemorialDocumentData,
+    MemorialValue,
     MemorialSpecificationRow,
 } from "@/lib/export/memorial-pdf";
 import { createMemorialXlsx } from "@/lib/export/memorial-xlsx";
@@ -69,28 +74,6 @@ function readPositiveNumber(value: unknown) {
 function readText(value: unknown, maxLength: number) {
     if (typeof value !== "string") return "";
     return value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maxLength);
-}
-
-function readExtraConstituents(value: unknown) {
-    if (!Array.isArray(value)) return [];
-
-    return value.flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const name = readText(item.name, 120);
-        if (!name) return [];
-        return [{
-            name,
-            amount: readText(item.amount, 40),
-            unit: readText(item.unit, 20) || "g",
-        }];
-    });
-}
-
-function readAdditionalConstituents(value: unknown) {
-    return readExtraConstituents(value).map((item) => ({
-        ...item,
-        source: "Componente adicional informado no cálculo",
-    }));
 }
 
 function readFirstText(record: SnapshotRecord, keys: string[], maxLength: number) {
@@ -154,14 +137,12 @@ function formatDateOnly(value: unknown, fallback: Date) {
 function buildTechnicalData(
     tableId: string,
     uiState: SnapshotRecord,
-    items: SelectedIngredient[],
     selectedProduct: string,
     regulatoryCategory: string,
     generatedAt: Date,
     preparedBy: string,
 ): MemorialDocumentData["technical"] {
     const source = readTechnicalRecord(uiState);
-    const ingredientNames = items.map((item) => item.ingredient.name).filter(Boolean).join("; ");
     const missingRows = (rows: MemorialSpecificationRow[]) => rows;
 
     return {
@@ -174,21 +155,21 @@ function buildTechnicalData(
         category: readFirstText(source, ["category", "productCategory"], 160) || REGULATORY_CATEGORY_LABELS[regulatoryCategory] || regulatoryCategory,
         designation: readFirstText(source, ["designation"], 240) || selectedProduct,
         description: readFirstText(source, ["description"], 2_000) || readText(uiState.productDescription, 2_000),
-        ingredients: readFirstText(source, ["ingredients", "ingredientsText", "compositionText"], 4_000) || ingredientNames,
+        ingredients: readFirstText(source, ["ingredients", "ingredientsText", "compositionText"], 4_000),
         recommendedUse: readFirstText(source, ["recommendedUse", "applicationAndDosage"], 2_000),
         physicochemical: {
             rows: missingRows(readSpecificationRows(source.physicochemical || source.physicochemicalSpecs)),
         },
         microbiological: {
-            legislation: readFirstText(source, ["microbiologicalLegislation"], 500) || "Legislação aplicada: RDC nº 724, de 01/07/2022 e IN nº 161, de 01/07/2022 / ANVISA / MS",
+            legislation: readFirstText(source, ["microbiologicalLegislation"], 500),
             rows: missingRows(readSpecificationRows(source.microbiological || source.microbiologicalSpecs)),
         },
         contaminants: {
-            legislation: readFirstText(source, ["contaminantsLegislation"], 500) || "Legislação aplicada: RDC nº 722, de 01/07/2022; IN nº 160, de 01/07/2022; e IN nº 351, de 18/03/2025 / ANVISA / MS",
+            legislation: readFirstText(source, ["contaminantsLegislation"], 500),
             rows: missingRows(readSpecificationRows(source.contaminants || source.contaminantSpecs)),
         },
         foreignMatter: {
-            legislation: readFirstText(source, ["foreignMatterLegislation"], 500) || "Legislação aplicada: RDC nº 623, de 09/03/2022 / ANVISA / MS",
+            legislation: readFirstText(source, ["foreignMatterLegislation"], 500),
             rows: missingRows(readSpecificationRows(source.foreignMatter || source.foreignMatterSpecs)),
         },
         presentation: readFirstText(source, ["presentation"], 1_000),
@@ -287,26 +268,33 @@ function buildComponent(
     prepared: {
         finalYield: number;
         powderTotalWeight: number;
+        powderBatchWeight: number;
         powderPortionSize: number;
         isPowder: boolean;
     } | null,
     selectedMicronutrients: Set<string>
 ): MemorialComponent {
     const composition = calculateRecipe([item], 100).per100g;
+    const powderWeight = prepared?.powderTotalWeight || 1;
+    const finalWeight = (prepared ? prepared.finalYield : totalWeight) || 1;
     const per100Factor = prepared
-        ? (prepared.isPowder ? item.quantity / Math.max(prepared.finalYield, 1) : item.quantity / Math.max(prepared.finalYield, 1))
-        : item.quantity / Math.max(totalWeight, 1);
+        ? (prepared.isPowder ? item.quantity * prepared.powderBatchWeight / powderWeight : item.quantity) / finalWeight
+        : item.quantity / finalWeight;
     const perPortionFactor = prepared
         ? (prepared.isPowder
-            ? (item.quantity * prepared.powderPortionSize) / Math.max(100 * prepared.powderTotalWeight, 1)
+            ? (item.quantity * prepared.powderPortionSize) / (100 * powderWeight)
             : 0)
-        : (item.quantity * portionSize) / Math.max(100 * totalWeight, 1);
-    const percentageBase = prepared ? Math.max(prepared.finalYield, 1) : Math.max(totalWeight, 1);
+        : (item.quantity * portionSize) / (100 * finalWeight);
+    const usedQuantity = prepared?.isPowder
+        ? item.quantity * prepared.powderBatchWeight / powderWeight
+        : item.quantity;
+    const percentageBase = finalWeight;
 
     return {
         name: item.ingredient.name,
-        quantity: item.quantity,
-        percentage: (item.quantity / percentageBase) * 100,
+        quantity: usedQuantity,
+        quantityExact: prepared?.isPowder ? undefined : item.quantityExact,
+        percentage: (usedQuantity / percentageBase) * 100,
         function: "Não informado no cadastro",
         source,
         composition: buildRows(composition, selectedMicronutrients).map((row) => ({
@@ -325,23 +313,30 @@ function buildResultValues(
     totalWeight: number,
     selectedMicronutrients: Set<string>,
     popGroup: PopGroup,
+    isSupplement: boolean,
 ) {
     const vdr = VDR[popGroup] || VDR.adultos;
-    const dailyValuePercent = (key: string, value: number) => {
+    const dailyValuePercent = (key: string, value: number, unit = "g") => {
         const record = vdr as Record<string, number | null | undefined>;
         let reference = record[key];
         if (key === "sugarAdded" && reference === undefined) reference = 50;
         if (key === "fatTrans" && reference === undefined) reference = 2;
-        return calculateVD(value, reference ?? null);
+        const coreKeys: string[] = ["energy", "carbs", "sugarTotal", "sugarAdded", "protein", "fatTotal", "fatSat", "fatTrans", "fiber", "sodium"];
+        const display = coreKeys.includes(key)
+            ? formatAnnexIvNutrientPair(key as AnnexIvNutrientKey, { per100g, perPortion }, { isSupplement }).portion
+            : formatOptionalNutrient(value, unit);
+        return calculateVDFromDisplay(display, reference ?? null);
     };
     const totalRecipeValue = (value: number) => value * totalWeight / 100;
-    const rows = MEMORIAL_CORE_NUTRIENTS.map((definition) => ({
+    const rows: MemorialValue[] = MEMORIAL_CORE_NUTRIENTS.map((definition) => ({
         label: definition.label,
         unit: definition.unit,
         totalRecipe: totalRecipeValue(nutrientNumber(per100g, definition.key as string)),
         per100: nutrientNumber(per100g, definition.key as string),
         perPortion: nutrientNumber(perPortion, definition.key as string),
-        dailyValuePercent: dailyValuePercent(definition.key as string, nutrientNumber(perPortion, definition.key as string)),
+        dailyValuePercent: dailyValuePercent(definition.key as string, nutrientNumber(perPortion, definition.key as string), definition.unit),
+        display100: formatAnnexIvNutrientPair(definition.key as AnnexIvNutrientKey, { per100g, perPortion }, { isSupplement }).per100,
+        displayPortion: formatAnnexIvNutrientPair(definition.key as AnnexIvNutrientKey, { per100g, perPortion }, { isSupplement }).portion,
     }));
 
     rows.push(
@@ -353,7 +348,9 @@ function buildResultValues(
                 totalRecipe: totalRecipeValue(nutrientNumber(per100g, definition.key as string)),
                 per100: nutrientNumber(per100g, definition.key as string),
                 perPortion: nutrientNumber(perPortion, definition.key as string),
-                dailyValuePercent: dailyValuePercent(definition.key as string, nutrientNumber(perPortion, definition.key as string)),
+                dailyValuePercent: dailyValuePercent(definition.key as string, nutrientNumber(perPortion, definition.key as string), definition.unit),
+                display100: formatOptionalNutrient(nutrientNumber(per100g, definition.key as string), definition.unit),
+                displayPortion: formatOptionalNutrient(nutrientNumber(perPortion, definition.key as string), definition.unit),
             }))
     );
 
@@ -484,6 +481,7 @@ export async function GET(req: NextRequest) {
                     ? {
                         finalYield: preparationFinalYield,
                         powderTotalWeight,
+                        powderBatchWeight: preparationPowderBatchWeight,
                         powderPortionSize: preparationPowderPortionSize || table.portion,
                         isPowder: true,
                     }
@@ -499,6 +497,7 @@ export async function GET(req: NextRequest) {
                     {
                         finalYield: preparationFinalYield,
                         powderTotalWeight,
+                        powderBatchWeight: preparationPowderBatchWeight,
                         powderPortionSize: preparationPowderPortionSize || table.portion,
                         isPowder: false,
                     },
@@ -508,7 +507,13 @@ export async function GET(req: NextRequest) {
         ];
 
         const popGroup = table.popGroup as PopGroup;
-        const values = buildResultValues(calculation.per100g, calculation.perPortion, totalWeight, selectedMicronutrients, popGroup);
+        const values = buildResultValues(calculation.per100g, calculation.perPortion, totalWeight, selectedMicronutrients, popGroup, Boolean(uiState.isSupplement));
+        const selectedForLabel = new Set(Array.isArray(uiState.selectedNutrients) ? uiState.selectedNutrients.filter((item): item is string => typeof item === "string") : []);
+        const labelValues = buildResultValues(calculation.per100g, calculation.perPortion, totalWeight, selectedForLabel, popGroup, Boolean(uiState.isSupplement));
+        const knownLabelCount = MEMORIAL_CORE_NUTRIENTS.length + MEMORIAL_MICRONUTRIENTS.filter(item => selectedForLabel.has(item.key)).length;
+        const rawExtras = Array.isArray(uiState.extraConstituents) ? uiState.extraConstituents.flatMap(item => isRecord(item) ? [{ name: readText(item.name, 120) }] : []) : [];
+        const extras = selectedConstituentRows(rawExtras, calculation.per100g, calculation.perPortion);
+        const technicalValues = [...labelValues.slice(0, knownLabelCount), ...extras.map(item => ({ label: item.name, unit: item.unit, totalRecipe: 0, per100: item.per100 ?? 0, perPortion: item.portion ?? 0, display100: item.per100 === undefined ? "-" : formatOptionalNutrient(item.per100, item.unit), displayPortion: item.portion === undefined ? "-" : formatOptionalNutrient(item.portion, item.unit), dailyValuePercent: "-" }))];
         const portionUnit = table.uom === "ml" ? "ml" : "g";
         const selectedGroup = readText(uiState.selectedGroup, 120) || readText(table.suggestedFoodGroup, 120);
         const selectedProduct = readText(uiState.selectedProduct, 160) || readText(table.suggestedProduct, 160);
@@ -519,12 +524,34 @@ export async function GET(req: NextRequest) {
         const technical = buildTechnicalData(
             tableId,
             uiState,
-            items,
             selectedProduct,
             regulatoryCategory,
             generatedAt,
             preparedBy,
         );
+
+        const requestedTechnical = req.nextUrl.searchParams.get("document") === "technical";
+        const savedSheet = requestedTechnical ? await prisma.productTechnicalSheet.findFirst({ where: { tableId, organizationId: context.organization.id }, select: { data: true } }) : null;
+        let productSheet = savedSheet ? readProductSheet(savedSheet.data) : undefined;
+        if (productSheet && contextHasModuleAccess(context, SAAS_MODULES.ENTERPRISE_LABELS)) {
+            const approved = await prisma.enterpriseLabelVersion.findFirst({ where: { baseTableId: tableId, approvalStatus: "APPROVED", project: { organizationId: context.organization.id, market: "br" } }, orderBy: { updatedAt: "desc" }, select: { legalData: true } });
+            const legal = isRecord(approved?.legalData) ? approved.legalData : {};
+            productSheet = { ...productSheet, fields: { ...productSheet.fields, ...(typeof legal.ingredientsStatement === "string" && legal.ingredientsStatement ? { ingredients: legal.ingredientsStatement } : {}), ...(typeof legal.allergenStatement === "string" && legal.allergenStatement ? { allergens: legal.allergenStatement } : {}) } };
+        }
+        if (productSheet) {
+            const profile: ComplianceProfile = ["general", "bottled-water", "annex-xvi", "iodized-salt", "flour"].includes(String(uiState.complianceProfile)) ? uiState.complianceProfile as ComplianceProfile : "general";
+            const rules = getComplianceProfileRules(profile);
+            const automaticStatements = [rules.requiresIodizedSaltStatement ? readText(uiState.iodizedSaltStatement, 1000) : "", rules.requiresFlourStatement ? readText(uiState.flourStatement, 1000) : ""].filter(Boolean);
+            const usePrepared = uiState.fopReferenceMode === "prepared" && !canUsePreparation;
+            const reference = usePrepared ? { sugarAdded: readPositiveNumber(uiState.preparedSugarAdded), fatSat: readPositiveNumber(uiState.preparedFatSat), sodium: readPositiveNumber(uiState.preparedSodium) } : calculation.per100g;
+            const type = uiState.fopFoodType === "liquid" || uiState.fopFoodType === "solid" ? uiState.fopFoodType : inferFopFoodType(table.householdMeasure);
+            const status = checkFOP(reference, type);
+            const active = [status.highSugar ? "AÇÚCAR ADICIONADO" : "", status.highFat ? "GORDURA SATURADA" : "", status.highSodium ? "SÓDIO" : ""].filter(Boolean);
+            const frontal = !rules.excludedFromRdc429 && !rules.fopForbiddenByCategory && uiState.enableFopLupa !== false && active.length ? `ALTO EM ${active.join(", ")}` : "";
+            const original = productSheet.fields.otherStatements || "";
+            productSheet = { ...productSheet, fields: { ...productSheet.fields, issueDate: productSheet.fields.issueDate || formatDateOnly(undefined, generatedAt), preparedBy: productSheet.fields.preparedBy || preparedBy, ...(frontal ? { frontal } : {}), ...(automaticStatements.length ? { otherStatements: [original, ...automaticStatements.filter(item => !original.includes(item))].filter(Boolean).join(" ") } : {}) } };
+        }
+        const productLaws = productSheet ? await prisma.productLegislation.findMany({ where: { organizationId: context.organization.id, id: { in: productSheet.laws.map(law => law.id) } }, select: { id: true, number: true, title: true } }) : undefined;
 
         const data: MemorialDocumentData = {
             title: readText(table.title, 160),
@@ -543,11 +570,14 @@ export async function GET(req: NextRequest) {
             generatedAt,
             calculationVersion: CALCULATION_VERSION,
             preparedBy,
-            values,
+            values: requestedTechnical ? technicalValues : values,
             components,
             technical,
+            showDailyValue: shouldShowDailyValue(isRegulatoryCategory(regulatoryCategory) ? regulatoryCategory : "general-food"),
+            productSheet,
+            productLaws,
             verification: buildVerification(components, calculation.per100g, totalWeight),
-            additionalConstituents: readAdditionalConstituents(uiState.extraConstituents),
+            additionalConstituents: [],
             manualMicronutrients: MICRONUTRIENTS.flatMap((nutrient) => (
                 manualMicronutrients[nutrient.name]
                     ? [{ label: nutrient.label, unit: nutrient.unit }]
@@ -564,7 +594,7 @@ export async function GET(req: NextRequest) {
                     preparationLossPercent: Math.max(0, preparationPowderBatchWeight + preparationIngredients.reduce((sum, item) => sum + item.quantity, 0) - preparationFinalYield) / Math.max(preparationPowderBatchWeight + preparationIngredients.reduce((sum, item) => sum + item.quantity, 0), 1) * 100,
                     readyPortionSize: preparationReadyPortionSize,
                     powderPortionSize: preparationPowderPortionSize || table.portion,
-                    addedIngredients: preparationIngredients.map((item) => ({ name: item.ingredient.name, quantity: item.quantity })),
+                    addedIngredients: preparationIngredients.map((item) => ({ name: item.ingredient.name, quantity: item.quantity, quantityExact: item.quantityExact })),
                 }
                 : undefined,
         };
@@ -590,7 +620,7 @@ export async function GET(req: NextRequest) {
             status: 200,
             headers: {
                 "Content-Type": contentType,
-                "Content-Disposition": `attachment; filename="${documentName}-${safeFileName(data.title)}.${extension}"`,
+                "Content-Disposition": `${req.nextUrl.searchParams.get("preview") === "1" && format === "pdf" ? "inline" : "attachment"}; filename="${documentName}-${safeFileName(data.title)}.${extension}"`,
                 "Cache-Control": "private, no-store",
             },
         });
