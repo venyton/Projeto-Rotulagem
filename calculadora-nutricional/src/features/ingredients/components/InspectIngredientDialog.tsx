@@ -29,7 +29,7 @@ const MICRONUTRIENTS = [
     { name: "fatMono", label: "Gord. Mono (g)" },
     { name: "fatPoly", label: "Gord. Poli (g)" },
     { name: "omega6", label: "Ômega 6 (g)" },
-    { name: "omega3", label: "Ômega 3 (g)" },
+    { name: "omega3", label: "Ômega 3 (mg)" },
     { name: "cholesterol", label: "Colesterol (mg)" },
     { name: "calcium", label: "Cálcio (mg)" },
     { name: "magnesium", label: "Magnésio (mg)" },

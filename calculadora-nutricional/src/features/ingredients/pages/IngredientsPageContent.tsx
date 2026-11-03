@@ -1,18 +1,7 @@
-import Link from 'next/link';
-import { ChevronDown, FileSearch } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { AddIngredientForm } from '@/features/ingredients/components/AddIngredientForm';
 import { IngredientsTable, type IngredientTableRow } from '@/features/ingredients/components/IngredientsTable';
+import { IngredientsSectionTabs } from '@/features/ingredients/components/IngredientsSectionTabs';
 import { getUserIngredients } from '@/features/ingredients/actions/import-ingredient-actions';
-import { TechnicalSheetImportDialog } from '@/features/technical-sheets/components/TechnicalSheetImportDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { PageHeader } from '@/components/layout/page-header';
 
@@ -21,7 +10,6 @@ type IngredientsPageContentProps = {
   description: string;
   showAddButton?: boolean;
   canUseTechnicalSheets?: boolean;
-  canUseAiImport?: boolean;
   canExport?: boolean;
 };
 
@@ -30,7 +18,6 @@ export async function IngredientsPageContent({
   description,
   showAddButton = false,
   canUseTechnicalSheets = false,
-  canUseAiImport = false,
   canExport = false,
 }: IngredientsPageContentProps) {
   let ingredients: IngredientTableRow[] = [];
@@ -46,7 +33,12 @@ export async function IngredientsPageContent({
 
   if (error) {
     return (
-      <div className="app-page">
+      <div className="app-page flex flex-col gap-6">
+        <IngredientsSectionTabs
+          activeTab="ingredients"
+          canUseIngredients
+          canUseTechnicalSheets={canUseTechnicalSheets}
+        />
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar ingredientes</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -60,41 +52,12 @@ export async function IngredientsPageContent({
       <PageHeader
         title={title}
         description={description}
-        actions={showAddButton ? (
-          <>
-            <AddIngredientForm />
-            {canUseTechnicalSheets ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    Fichas técnicas
-                    <ChevronDown data-icon="inline-end" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/ingredients/technical-sheets">
-                        <FileSearch />
-                        Ver fichas técnicas
-                      </Link>
-                    </DropdownMenuItem>
-                    {canUseAiImport ? (
-                      <TechnicalSheetImportDialog
-                        trigger={(
-                          <DropdownMenuItem>
-                            <FileSearch />
-                            Importar ficha com IA
-                          </DropdownMenuItem>
-                        )}
-                      />
-                    ) : null}
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </>
-        ) : undefined}
+        actions={showAddButton ? <AddIngredientForm /> : undefined}
+      />
+      <IngredientsSectionTabs
+        activeTab="ingredients"
+        canUseIngredients
+        canUseTechnicalSheets={canUseTechnicalSheets}
       />
       <IngredientsTable ingredients={ingredients} canExport={canExport} />
     </div>

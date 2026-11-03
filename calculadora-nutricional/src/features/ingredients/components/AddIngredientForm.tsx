@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, X } from "lucide-react";
+import { normalizeMicrogramSymbol } from "@/features/tables/domain/units";
 
 
 const initialState: { error?: string; success?: boolean } = {};
@@ -268,7 +269,7 @@ export function AddIngredientForm({ initialData, trigger, open: controlledOpen, 
                                                 {Object.entries(customNutrients).map(([key, data]) => (
                                                     <div key={key} className="flex items-center gap-2 bg-input-background p-2 rounded-md border">
                                                         <span className="flex-1 text-sm font-medium">{key}</span>
-                                                        <span className="text-sm text-muted-foreground">{data.value} {data.unit}</span>
+                                                        <span className="text-sm text-muted-foreground">{data.value} {normalizeMicrogramSymbol(data.unit)}</span>
                                                         <Button type="button" variant="destructive" size="icon" className="h-6 w-6" onClick={() => removeCustomNutrient(key)}><X className="h-4 w-4" /></Button>
                                                     </div>
                                                 ))}
