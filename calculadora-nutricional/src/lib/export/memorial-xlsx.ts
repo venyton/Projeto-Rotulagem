@@ -214,6 +214,25 @@ export async function createMemorialXlsx(data: MemorialDocumentData) {
     ]);
     addFooter(sheet, 7);
 
+    // The reference workbook separates ingredient data from its contribution to
+    // the finished product. Export server-calculated values as a fixed snapshot.
+    const base = workbook.addWorksheet("Base de Ingredientes");
+    setupSheet(base, [32, 18, 35, ...MEMORIAL_CORE_NUTRIENTS.map(() => 19)]);
+    title(base, "BASE DE INGREDIENTES", 13);
+    header(base.addRow(["Ingrediente", "Quantidade (g)", "Fonte", ...MEMORIAL_CORE_NUTRIENTS.map(item => `${item.label} (${item.unit}) / 100 g`)]));
+    data.components.forEach((component, index) => {
+        const values = MEMORIAL_CORE_NUTRIENTS.map(item => component.composition.find(nutrient => nutrient.label === item.label)?.value ?? null);
+        bodyBorder(base.addRow([component.name, component.quantity, component.source, ...values]), index % 2 === 1);
+    });
+    const contributions = workbook.addWorksheet("Contribuição por ingrediente");
+    setupSheet(contributions, [32, 18, 18, 35, ...MEMORIAL_CORE_NUTRIENTS.map(() => 19)]);
+    title(contributions, "CONTRIBUIÇÃO POR 100 G OU ML DE PRODUTO", 14);
+    header(contributions.addRow(["Ingrediente", "Quantidade (g)", "% formulação", "Fonte", ...MEMORIAL_CORE_NUTRIENTS.map(item => `${item.label} (${item.unit})`)]));
+    data.components.forEach((component, index) => {
+        const values = MEMORIAL_CORE_NUTRIENTS.map(item => component.contributionPer100.find(nutrient => nutrient.label === item.label)?.value ?? null);
+        bodyBorder(contributions.addRow([component.name, component.quantity, component.percentage, component.source, ...values]), index % 2 === 1);
+    });
+
     const result = await workbook.xlsx.writeBuffer();
     return new Uint8Array(result);
 }
