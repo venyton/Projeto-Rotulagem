@@ -46,7 +46,7 @@ const OVERRIDES = {
   "Início": ["Início", "Home", "Inicio"],
   "Sair": ["Sair", "Sign out", "Cerrar sesión"],
   "Workspace": ["Workspace", "Workspace", "Área de trabajo"],
-  "Abrir Enterprise": ["Abrir Enterprise", "Open Enterprise", "Abrir Enterprise"],
+  "Abrir Internacional": ["Abrir Internacional", "Open International", "Abrir Internacional"],
   "Abrir fichas": ["Abrir fichas", "Open technical sheets", "Abrir fichas técnicas"],
   "Abrir tabelas": ["Abrir tabelas", "Open nutrition labels", "Abrir etiquetas nutricionales"],
   "30 dias": ["30 dias", "30 days", "30 días"],
@@ -110,7 +110,12 @@ const OVERRIDES = {
   "Voltar ao início": ["Voltar ao início", "Back to home", "Volver al inicio"],
   "Workspace atual": ["Workspace atual", "Current workspace", "Espacio de trabajo actual"],
   "Workspace inválido": ["Workspace inválido", "Invalid workspace", "Espacio de trabajo no válido"],
-  "Workspaces": ["Workspaces", "Workspaces", "Espacios de trabajo"],
+  "Internacional": ["Internacional", "International", "Internacional"],
+  "Projeto internacional não encontrado.": ["Projeto internacional não encontrado.", "International project not found.", "No se encontró el proyecto internacional."],
+  "Usar o fluxo de aprovação e o passaporte digital para apoiar operações internacionais.": ["Usar o fluxo de aprovação e o passaporte digital para apoiar operações internacionais.", "Use the approval flow and digital passport to support international operations.", "Utilice el flujo de aprobación y el pasaporte digital para apoyar las operaciones internacionales."],
+  "Versão internacional inválida.": ["Versão internacional inválida.", "Invalid international version.", "Versión internacional inválida."],
+  "Vitamin D, cálcio, ferro e potássio exigem dados que hoje não entram no resumo nutricional.": ["Vitamin D, cálcio, ferro e potássio exigem dados que hoje não entram no resumo nutricional.", "Vitamin D, calcium, iron and potassium require data that are not currently included in the nutrition summary.", "La vitamina D, el calcio, el hierro y el potasio requieren datos que actualmente no están incluidos en el resumen nutricional."],
+  "Vitamina D, cálcio, ferro e potássio não estão completos no resumo nutricional atual. Não liberar arte dos EUA sem esses dados.": ["Vitamina D, cálcio, ferro e potássio não estão completos no resumo nutricional atual. Não liberar arte dos EUA sem esses dados.", "Vitamin D, calcium, iron and potassium are not complete in the current nutrition summary. Do not release US artwork without this data.", "La vitamina D, el calcio, el hierro y el potasio no están completos en el resumen nutricional actual. No libere el arte de EE. UU. sin estos datos."],
 };
 
 const FRENCH_OVERRIDES = {
@@ -162,6 +167,13 @@ const FRENCH_OVERRIDES = {
   "Workspace atual": "Espace de travail actuel",
   "Workspace inválido": "Espace de travail invalide",
   "Workspaces": "Espaces de travail",
+  "Abrir Internacional": "Ouvrir International",
+  "Internacional": "International",
+  "Projeto internacional não encontrado.": "Projet international introuvable.",
+  "Usar o fluxo de aprovação e o passaporte digital para apoiar operações internacionais.": "Utilisez le flux d’approbation et le passeport numérique pour soutenir les opérations internationales.",
+  "Versão internacional inválida.": "Version internationale invalide.",
+  "Vitamin D, cálcio, ferro e potássio exigem dados que hoje não entram no resumo nutricional.": "La vitamine D, le calcium, le fer et le potassium nécessitent des données qui ne sont pas actuellement incluses dans le résumé nutritionnel.",
+  "Vitamina D, cálcio, ferro e potássio não estão completos no resumo nutricional atual. Não liberar arte dos EUA sem esses dados.": "La vitamine D, le calcium, le fer et le potassium ne sont pas complets dans le résumé nutritionnel actuel. Ne publiez pas l’art des États-Unis sans ces données.",
 };
 
 function walkFiles(directory) {
