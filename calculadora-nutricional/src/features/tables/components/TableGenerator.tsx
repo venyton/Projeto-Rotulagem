@@ -1832,13 +1832,13 @@ export function TableGenerator({
                             <div className={`${PANEL_EYEBROW_CLASS} md:col-span-2`}>
                                 Porção e medida caseira
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex min-w-0 flex-col gap-2">
                                 {selectedOfficialProduct?.portionDescription && (
                                     <p className="text-sm text-muted-foreground">
                                         Referência do Anexo V: {selectedOfficialProduct.portionDescription}. Informe a porção do produto conforme essa regra.
                                     </p>
                                 )}
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                                     <Label className="inline-flex items-center gap-1.5">
                                         Porção (g)
                                         <HelpTip>Quantidade de alimento usada como referência no rótulo. Ela aparece na tabela e define o cálculo por porção.</HelpTip>
@@ -1866,7 +1866,7 @@ export function TableGenerator({
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            className="type-caption h-auto rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 font-medium text-muted-foreground hover:bg-muted/60"
+                                            className="type-caption h-auto max-w-full whitespace-normal rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-left font-medium text-muted-foreground hover:bg-muted/60"
                                             onClick={() => {
                                                 const measure = parseHouseholdMeasureValue(selectedOfficialProduct.measure);
                                                 setUseIndividualPackagePortion(false);
@@ -1888,7 +1888,7 @@ export function TableGenerator({
                                     placeholder="ex: 20"
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex min-w-0 flex-col gap-2">
                                 <Label className="inline-flex items-center gap-1.5">
                                     Medida Caseira
                                     <HelpTip>Forma simples de explicar a porção para o consumidor, como colher, fatia, unidade ou copo.</HelpTip>
@@ -2059,13 +2059,13 @@ export function TableGenerator({
                             </div>
                         </div>
 
-                        <div className="elevation-bordered space-y-4 rounded-lg border-information-border bg-information-subtle p-4">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                        <div className="elevation-bordered flex flex-col gap-5 rounded-lg border-information-border bg-information-subtle p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <Label className="inline-flex items-start gap-1.5 text-sm font-semibold">
                                     Categoria do produto
                                     <HelpTip>Área para ajustar regras especiais do rótulo, como lupa frontal, suplementos e categorias com declarações obrigatórias.</HelpTip>
                                 </Label>
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center gap-2 self-start">
                                     <Checkbox
                                         id="strict-compliance"
                                         checked={enableStrictCompliance}
@@ -2078,8 +2078,8 @@ export function TableGenerator({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
+                            <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="flex min-w-0 flex-col gap-2">
                                     <Label className="inline-flex items-center gap-1.5">
                                         Categoria regulatória
                                         <HelpTip>Define se o produto é alimento geral, suplemento ou outra categoria com regra própria de rotulagem.</HelpTip>
@@ -2100,7 +2100,7 @@ export function TableGenerator({
                                     </Select>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="flex min-w-0 flex-col gap-2">
                                     <Label className="inline-flex items-center gap-1.5">
                                         Exceção à rotulagem frontal
                                         <HelpTip>Use para casos especiais, como sal iodado, farinha enriquecida ou produtos que não devem exibir lupa frontal.</HelpTip>
@@ -2121,7 +2121,7 @@ export function TableGenerator({
                                     </Select>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="flex min-w-0 flex-col gap-2">
                                     <Label className="inline-flex items-center gap-1.5">
                                         Classificação da base da lupa
                                         <HelpTip>Escolhe se os limites da lupa serão avaliados como alimento sólido/semissólido ou líquido.</HelpTip>
@@ -2138,10 +2138,7 @@ export function TableGenerator({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
+                                <div className="flex min-w-0 flex-col gap-2">
                                     <Label className="inline-flex items-center gap-1.5">
                                         Base de cálculo da lupa
                                         <HelpTip>Normalmente é o produto como vendido. Use pronto para consumo quando a regra exigir avaliação após preparo.</HelpTip>
@@ -2158,9 +2155,9 @@ export function TableGenerator({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="elevation-bordered flex flex-col justify-between gap-3 rounded-lg bg-card px-3 py-2 text-xs">
-                                    <span>{effectiveHasFopSeal ? "Lupa disponível para este produto." : "Lupa não aplicável para este produto."}</span>
-                                    <div className="flex items-center justify-between gap-3">
+                                <div className="elevation-bordered flex min-w-0 flex-col gap-3 rounded-lg bg-card p-3 text-xs md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <span className="min-w-0">{effectiveHasFopSeal ? "Lupa disponível para este produto." : "Lupa não aplicável para este produto."}</span>
+                                    <div className="flex items-center justify-between gap-3 sm:shrink-0">
                                         <label htmlFor="enable-fop-lupa" className="cursor-pointer font-medium text-foreground">Exibir lupa frontal</label>
                                         <Switch
                                             id="enable-fop-lupa"

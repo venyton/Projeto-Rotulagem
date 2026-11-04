@@ -3,6 +3,7 @@ import test from "node:test";
 import ExcelJS from "exceljs";
 import { createMemorialPdf, type MemorialDocumentData } from "./memorial-pdf";
 import { createMemorialXlsx } from "./memorial-xlsx";
+import { createTechnicalSheetXlsx } from "./technical-sheet-xlsx";
 
 const data = {
   title: "Produto teste", description: "Descrição do produto", regulatoryCategory: "Alimento",
@@ -28,4 +29,19 @@ test("memorial PDF e planilha apresentam valores sem fórmulas", async () => {
   assert.ok(values.includes("Laudo"));
   assert.ok(values.includes("Descrição do produto"));
   assert.ok(values.includes("5"));
+  assert.equal(workbook.getWorksheet("Base de Ingredientes")?.getCell("A3").value, "Ingrediente");
+  assert.equal(workbook.getWorksheet("Contribuição por ingrediente")?.getCell("E3").value, null);
+});
+
+test("ficha XLSX usa campos salvos, legislação selecionada e resultado calculado", async () => {
+  const bytes = await createTechnicalSheetXlsx({ ...data, productSheet: { template: "complete", hidden: ["storage"], fields: { brand: "Marca salva", allergens: "CONTÉM LEITE" }, laws: [{ id: "lei", section: "labeling", note: "Revisada" }] }, productLaws: [{ id: "lei", number: "Norma 1", title: "Título" }] });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  const values: string[] = [];
+  workbook.eachSheet(sheet => sheet.eachRow(row => row.eachCell(cell => values.push(String(cell.value ?? "")))));
+  assert.ok(values.includes("Marca salva"));
+  assert.ok(values.includes("CONTÉM LEITE"));
+  assert.ok(values.includes("Norma 1 — Título • Revisada"));
+  assert.ok(values.includes("5"));
+  assert.ok(!values.includes("Armazenamento e conservação"));
 });

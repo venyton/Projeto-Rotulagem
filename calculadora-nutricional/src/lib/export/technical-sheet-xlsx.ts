@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 
 import type { MemorialDocumentData, MemorialSpecificationRow } from "@/lib/export/memorial-pdf";
+import { sectionKeys, sections, type SectionKey } from "@/features/product-technical-sheets/domain/product-sheet";
 
 const COLORS = {
     navy: "0136A7",
@@ -144,6 +145,31 @@ export async function createTechnicalSheetXlsx(data: MemorialDocumentData) {
     const sheet = workbook.addWorksheet("Ficha Técnica");
     setupSheet(sheet, [34, 22, 22, 22, 22]);
     title(sheet, "SO IZI  |  FICHA TÉCNICA DE PRODUTO ACABADO", 5);
+    if (data.productSheet) {
+        const productSheet = data.productSheet;
+        const summarySections: SectionKey[] = ["identification", "labeling", "storage", "validity", "document"];
+        for (const key of sectionKeys) {
+            if (productSheet.hidden.includes(key) || (key !== "nutrition" && productSheet.template === "summary" && !summarySections.includes(key))) continue;
+            section(sheet, sheet.rowCount + 2, sections[key].label, 5);
+            if (key === "nutrition") {
+                keyValueRows(sheet, [["Porções por embalagem", text(data.servingsPerPackage)], ["Porção", `${formatNumber(data.portionSize)} ${data.portionUnit || "g"}`], ["Medida caseira", text(data.householdMeasure)]]);
+                header(sheet.addRow(data.showDailyValue === false ? ["Nutriente", "Unidade", "100 g/ml", "Porção"] : ["Nutriente", "Unidade", "100 g/ml", "Porção", "%VD*"]));
+                data.values.forEach((value, index) => bodyBorder(sheet.addRow(data.showDailyValue === false
+                    ? [value.label, value.unit, value.display100 ?? formatNumber(value.per100), value.displayPortion ?? formatNumber(value.perPortion)]
+                    : [value.label, value.unit, value.display100 ?? formatNumber(value.per100), value.displayPortion ?? formatNumber(value.perPortion), value.dailyValuePercent || "-"]), index % 2 === 1));
+            } else {
+                const rows: Array<[string, string]> = Object.entries(sections[key].fields).map(([field, label]) => [label, text(productSheet.fields[field] || "")]);
+                if (key === "identification") rows.unshift(["Produto", text(data.title)], ["Peso líquido / conteúdo", text(data.netContent)]);
+                keyValueRows(sheet, rows);
+            }
+            for (const selection of productSheet.laws.filter(law => law.section === key)) {
+                const law = data.productLaws?.find(item => item.id === selection.id);
+                if (law) keyValueRows(sheet, [["Legislação", `${law.number} — ${law.title}${selection.note ? ` • ${selection.note}` : ""}`]]);
+            }
+        }
+        addFooter(sheet, 5);
+        return new Uint8Array(await workbook.xlsx.writeBuffer());
+    }
     let row = 3;
     section(sheet, row++, "01 • IDENTIFICAÇÃO DO PRODUTO", 5);
     keyValueRows(sheet, [
